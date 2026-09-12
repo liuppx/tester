@@ -15,11 +15,43 @@ const products = [
   'marketplace',
   'books',
   'agent',
+  'wallet',
 ] as const;
 
 type ProductName = (typeof products)[number];
 
 const chatOverrides = { navigationTimeout: 60_000, actionTimeout: 15_000 };
+
+/**
+ * Wallet is a Chromium MV3 extension loaded from disk via `--load-extension`.
+ * The path is resolved from `WALLET_EXTENSION_PATH` (preferred) or
+ * `WALLET_REPO_PATH` (matches marketplace/books convention).
+ *
+ * MV3 service workers don't fully load in headless Chromium, so wallet tests
+ * run headed by default. The `PWHEADLESS=0` env still works for any
+ * already-headed session.
+ */
+const walletExtensionPath =
+  process.env['WALLET_EXTENSION_PATH']?.trim() || process.env['WALLET_REPO_PATH']?.trim() || '';
+
+const walletOverrides: NonNullable<Project['use']> = {
+  // Persistent context with the extension loaded; the persistent context is
+  // what gives us a real `chrome.runtime.id` and lets the SW keep state.
+  launchOptions: walletExtensionPath
+    ? {
+        channel: 'chromium',
+        headless: false,
+        args: [
+          `--disable-extensions-except=${walletExtensionPath}`,
+          `--load-extension=${walletExtensionPath}`,
+        ],
+      }
+    : { channel: 'chromium', headless: false },
+  // Extension service workers can take several seconds to register on first
+  // launch; give some headroom for the initial UI assertions.
+  actionTimeout: 20_000,
+  navigationTimeout: 60_000,
+};
 
 const projects: Project[] = products.map((product: ProductName) => ({
   name: product,
@@ -34,6 +66,7 @@ const projects: Project[] = products.map((product: ProductName) => ({
     screenshot: 'only-on-failure',
     video: 'off',
     ...(product === 'chat' ? chatOverrides : {}),
+    ...(product === 'wallet' ? walletOverrides : {}),
   },
 }));
 
