@@ -49,7 +49,7 @@ export default defineConfig({
   workers: process.env.PWWORKERS ? Number(process.env.PWWORKERS) : undefined,
   reporter: defaultReporters(),
   // Snapshot env once so each spec sees a consistent view.
-  globalSetup: undefined,
+  globalSetup: './scripts/global-setup.ts',
   use: {
     headless: !HEADED,
     trace: 'on-first-retry',
