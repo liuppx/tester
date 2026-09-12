@@ -39,7 +39,17 @@ const EXTRA_KEYS: Record<ProductName, string[]> = {
   node: ['NODE_API_URL', 'NODE_WALLET_PRIVATE_KEY', 'NODE_EXPECTED_ADDRESS'],
   router: ['ROUTER_WALLET_PRIVATE_KEY', 'ROUTER_EXPECTED_ADDRESS'],
   chat: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY'],
-  social: ['SOCIAL_USER', 'SOCIAL_PASS'],
+  social: [
+    'SOCIAL_USER',
+    'SOCIAL_PASS',
+    /**
+     * URL of the Vue 2 SPA that fronts the social backend. Defaults to
+     * 8082 in the standard dev layout. `SOCIAL_BASE_URL` points to the
+     * Spring Boot backend (8888) for actuator / API tests; SPA tests
+     * need `SOCIAL_WEB_URL` instead.
+     */
+    'SOCIAL_WEB_URL',
+  ],
   project: ['APP_DEV_PORT', 'PROJECT_USER', 'PROJECT_PASS'],
   knowledge: ['KNOWLEDGE_API_URL'],
   marketplace: ['MARKETPLACE_BASE_URL', 'MARKETPLACE_REPO_PATH'],
