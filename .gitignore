@@ -7,7 +7,7 @@ node_modules/
 /test-results/
 /blob-report/
 /playwright/.cache/
-/junit-*.xml
+/junit*.xml
 
 # Build artefacts
 /dist/
