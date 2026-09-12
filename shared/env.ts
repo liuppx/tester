@@ -36,7 +36,7 @@ const EXTRA_KEYS: Record<ProductName, string[]> = {
     'WAREHOUSE_WALLET_PRIVATE_KEY',
     'WAREHOUSE_EXPECTED_ADDRESS',
   ],
-  node: ['NODE_API_URL'],
+  node: ['NODE_API_URL', 'NODE_WALLET_PRIVATE_KEY', 'NODE_EXPECTED_ADDRESS'],
   router: [],
   chat: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY'],
   social: ['SOCIAL_USER', 'SOCIAL_PASS'],
