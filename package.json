@@ -24,6 +24,7 @@
     "test:all": "playwright test",
     "env:check": "tsx scripts/check-env.ts",
     "env:list": "tsx scripts/list-projects.ts",
+    "manual:build": "tsx scripts/build-manual.ts",
     "browsers:install": "playwright install --with-deps chromium",
     "browsers:list": "playwright install --dry-run chromium",
     "list": "playwright test --list",
@@ -32,7 +33,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc -b",
-    "clean": "rimraf playwright-report test-results *.tsbuildinfo junit-*.xml"
+    "clean": "rimraf playwright-report test-results manual *.tsbuildinfo junit-*.xml"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",

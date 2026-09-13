@@ -7,6 +7,10 @@
  * that's where to look for context.
  *
  * Selectors, viewport, and password match the smoke test verbatim.
+ *
+ * Annotated with `recorder.step(...)` calls — opt-in to user-manual
+ * generation. Each call captures a full-page screenshot of the popup
+ * state at that point; `pnpm manual:build` renders them into Markdown.
  */
 import { test, expect } from '../fixtures';
 
@@ -17,7 +21,7 @@ import { POPUP_HEIGHT, POPUP_WIDTH, byId, openPopup } from '../helpers/popup';
 const TEST_PASSWORD = 'E2E-password-2026';
 const TEST_WALLET_NAME = 'E2E Wallet';
 
-test('welcome → create wallet → set password lands on #walletPage', async () => {
+test('welcome → create wallet → set password lands on #walletPage', async ({ recorder }) => {
   const ctx = await loadWalletContext();
   try {
     await stubPublicEndpoints(ctx.context);
@@ -27,9 +31,15 @@ test('welcome → create wallet → set password lands on #walletPage', async ()
 
     await byId(popup, 'welcomePage').waitFor({ state: 'visible' });
     await expect(byId(popup, 'welcomeCreateWalletBtn')).toHaveText('新建钱包');
+    await recorder.step(popup, '欢迎页（首次打开）', {
+      note: '新装钱包插件后第一次打开看到的页面。两个入口：新建钱包、导入钱包。',
+    });
 
     await byId(popup, 'welcomeCreateWalletBtn').click();
     await byId(popup, 'setPasswordPage').waitFor({ state: 'visible' });
+    await recorder.step(popup, '设置密码页', {
+      note: '钱包名自动填好 `hd-NNNN` 形式，可改名。',
+    });
 
     // The wallet auto-fills `hd-NNNN`; we overwrite it before continuing.
     await expect(byId(popup, 'setWalletName')).toHaveValue(/^hd-\d{4}$/);
@@ -40,6 +50,9 @@ test('welcome → create wallet → set password lands on #walletPage', async ()
     await byId(popup, 'passwordPromptConfirm').click();
 
     await byId(popup, 'walletPage').waitFor({ state: 'visible', timeout: 30_000 });
+    await recorder.step(popup, '钱包主页（创建完成）', {
+      note: '顶部为账户地址（已截断），下方为功能入口。',
+    });
 
     // Address is rendered truncated (`0x1234…abcd`) — accept either
     // ellipsis form (the wallet uses `…` since v1.4.x).
@@ -51,6 +64,9 @@ test('welcome → create wallet → set password lands on #walletPage', async ()
     await popup.close();
     const reopened = await openPopup(ctx.context, ctx.extensionId);
     await byId(reopened, 'walletPage').waitFor({ state: 'visible', timeout: 15_000 });
+    await recorder.step(reopened, '关闭后重新打开，仍在主页', {
+      note: '说明 wallet state 已经持久化到 chrome.storage。',
+    });
   } finally {
     await teardownWalletContext(ctx);
   }
