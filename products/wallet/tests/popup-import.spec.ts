@@ -21,15 +21,21 @@ const TEST_MNEMONIC = 'test test test test test test test test test test test ju
 const TEST_PASSWORD = 'E2E-password-2026';
 const TEST_WALLET_NAME = 'Imported E2E Wallet';
 
-test('import mnemonic lands on #walletPage with the expected account address', async () => {
+test('import mnemonic lands on #walletPage with the expected account address', async ({ recorder }) => {
   const ctx = await loadWalletContext();
   try {
     await stubPublicEndpoints(ctx.context);
     const popup = await openPopup(ctx.context, ctx.extensionId);
 
     await byId(popup, 'welcomePage').waitFor({ state: 'visible' });
+    await recorder.step(popup, '欢迎页（点击导入）', {
+      note: '已有钱包的用户从这里导入助记词 / 私钥。',
+    });
     await byId(popup, 'welcomeImportWalletBtn').click();
     await byId(popup, 'importPage').waitFor({ state: 'visible' });
+    await recorder.step(popup, '导入页', {
+      note: '默认在助记词 tab；可切换私钥 / Keystore。',
+    });
 
     // The mnemonic tab is active by default. If the wallet ever changes
     // its default tab, assert the data-type instead of just clicking
@@ -42,6 +48,9 @@ test('import mnemonic lands on #walletPage with the expected account address', a
     await byId(popup, 'importBtn').click();
 
     await byId(popup, 'walletPage').waitFor({ state: 'visible', timeout: 30_000 });
+    await recorder.step(popup, '导入完成，回到主页', {
+      note: '地址是 Anvil/Hardhat 测试账户 #0 的截断形式。',
+    });
 
     // The popup renders the address in truncated form (e.g. `0xf39...92266`),
     // matching the Anvil/Hardhat default account #0. Asserting on the

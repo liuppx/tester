@@ -74,6 +74,35 @@ export function byId(page: Page, key: keyof typeof SELECTORS) {
   return page.locator(sel);
 }
 
+/** Default password + wallet name used by setup helpers. */
+export const TEST_PASSWORD = 'E2E-password-2026';
+export const TEST_WALLET_NAME = 'E2E Wallet';
+
+/**
+ * Create + unlock a fresh wallet in the given context and return the
+ * popup page once `#walletPage` is visible. Used by all popup specs
+ * that need a ready state without re-implementing the welcome →
+ * set-password dance.
+ */
+export async function createAndUnlockWallet(
+  context: BrowserContext,
+  extensionId: string,
+  options?: { password?: string; walletName?: string },
+): Promise<Page> {
+  const password = options?.password ?? TEST_PASSWORD;
+  const walletName = options?.walletName ?? TEST_WALLET_NAME;
+  const popup = await openPopup(context, extensionId);
+  await byId(popup, 'welcomePage').waitFor({ state: 'visible' });
+  await byId(popup, 'welcomeCreateWalletBtn').click();
+  await byId(popup, 'setPasswordPage').waitFor({ state: 'visible' });
+  await byId(popup, 'setWalletName').fill(walletName);
+  await byId(popup, 'setPasswordBtn').click();
+  await byId(popup, 'passwordPromptInput').fill(password);
+  await byId(popup, 'passwordPromptConfirm').click();
+  await byId(popup, 'walletPage').waitFor({ state: 'visible', timeout: 30_000 });
+  return popup;
+}
+
 /**
  * Wait for the next approval window to open, return it.
  *

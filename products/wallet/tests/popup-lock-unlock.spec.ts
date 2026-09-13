@@ -20,31 +20,15 @@ import { test, expect } from '../fixtures';
 
 import { loadWalletContext, teardownWalletContext } from '../helpers/extension';
 import { stubPublicEndpoints } from '../helpers/network';
-import { byId, openPopup } from '../helpers/popup';
+import { TEST_PASSWORD, byId, createAndUnlockWallet, openPopup } from '../helpers/popup';
 
-const TEST_PASSWORD = 'E2E-password-2026';
-const TEST_WALLET_NAME = 'E2E Wallet';
-
-async function createAndUnlockWallet(ctx: Awaited<ReturnType<typeof loadWalletContext>>) {
-  const popup = await openPopup(ctx.context, ctx.extensionId);
-  await byId(popup, 'welcomePage').waitFor({ state: 'visible' });
-  await byId(popup, 'welcomeCreateWalletBtn').click();
-  await byId(popup, 'setPasswordPage').waitFor({ state: 'visible' });
-  await byId(popup, 'setWalletName').fill(TEST_WALLET_NAME);
-  await byId(popup, 'setPasswordBtn').click();
-  await byId(popup, 'passwordPromptInput').fill(TEST_PASSWORD);
-  await byId(popup, 'passwordPromptConfirm').click();
-  await byId(popup, 'walletPage').waitFor({ state: 'visible', timeout: 30_000 });
-  return popup;
-}
-
-test('lock + unlock + SW-kill recovery preserves wallet access', async () => {
+test('lock + unlock + SW-kill recovery preserves wallet access', async ({ recorder }) => {
   const ctx = await loadWalletContext();
   try {
     await stubPublicEndpoints(ctx.context);
 
     // -- Step 1: create + unlock a fresh wallet -------------------------
-    const popup = await createAndUnlockWallet(ctx);
+    const popup = await createAndUnlockWallet(ctx.context, ctx.extensionId);
 
     // Capture the address so we can verify the SW-kill path returns the
     // same one (i.e. the keyring actually survived chrome.storage).
@@ -54,17 +38,26 @@ test('lock + unlock + SW-kill recovery preserves wallet access', async () => {
     // -- Step 2: lock from the header menu ------------------------------
     await byId(popup, 'walletHeaderMenuBtn').click();
     await expect(byId(popup, 'walletHeaderMenuBtn')).toHaveAttribute('aria-expanded', 'true');
+    await recorder.step(popup, '钱包菜单展开（点锁屏）', {
+      note: '右上角三点菜单；点击"锁屏钱包"立即锁住。',
+    });
     await byId(popup, 'lockWalletBtn').click();
     await byId(popup, 'unlockPage').waitFor({ state: 'visible', timeout: 15_000 });
 
     await popup.close();
     const locked = await openPopup(ctx.context, ctx.extensionId);
     await byId(locked, 'unlockPage').waitFor({ state: 'visible', timeout: 15_000 });
+    await recorder.step(locked, '解锁页（重新打开弹窗）', {
+      note: '锁屏后弹窗需输入密码。',
+    });
 
     // -- Step 3: wrong password → toast ----------------------------------
     await byId(locked, 'unlockPassword').fill('incorrect-password');
     await byId(locked, 'unlockBtn').click();
     await expect(byId(locked, 'globalToast')).toContainText('密码错误', { timeout: 10_000 });
+    await recorder.step(locked, '输错密码 → 红色 toast "密码错误"', {
+      note: '错误输入只提示，不清空密码框，方便用户直接改正。',
+    });
 
     // -- Step 4: correct password → wallet page in 5s -------------------
     await byId(locked, 'unlockPassword').fill(TEST_PASSWORD);
@@ -97,6 +90,9 @@ test('lock + unlock + SW-kill recovery preserves wallet access', async () => {
     await byId(afterKill, 'unlockPassword').fill(TEST_PASSWORD);
     await byId(afterKill, 'unlockBtn').click();
     await byId(afterKill, 'walletPage').waitFor({ state: 'visible', timeout: 15_000 });
+    await recorder.step(afterKill, 'SW 被强杀后再次解锁，回到主页', {
+      note: 'MV3 SW 可能随时被 Chromium 回收，必须能凭密码 + chrome.storage 恢复到同一账户。',
+    });
 
     const addressAfter = ((await byId(afterKill, 'accountAddress').textContent())?.trim() ?? '').toLowerCase();
     // Both are truncated, so we can't compare full addresses; check the
