@@ -51,6 +51,7 @@ export const SELECTORS = {
   transferBtn: '#transferBtn',
   recipientAddress: '#recipientAddress',
   amount: '#amount',
+  sendBtn: '#sendBtn',
 
   importPage: '#importPage',
   importMnemonic: '#importMnemonic',
