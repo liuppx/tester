@@ -29,6 +29,11 @@ import { join } from 'node:path';
 import { chromium, type BrowserContext, type LaunchOptions } from '@playwright/test';
 
 const HEADED = process.env.PWHEADLESS === '0';
+// Slow-motion delay (ms) between actions, so a headed run is watchable by
+// eye. `PWSLOWMO=500` ≈ half a second per step. 0 = off. Wallet specs build
+// their own persistent context here, so the config's launchOptions don't
+// reach them — read the env directly.
+const SLOW_MO = process.env.PWSLOWMO ? Number(process.env.PWSLOWMO) : 0;
 
 export interface WalletContext {
   context: BrowserContext;
@@ -92,6 +97,7 @@ export async function loadWalletContext(options: WalletContextOptions = {}): Pro
   const launchOptions: LaunchOptions = {
     channel: 'chromium',
     headless,
+    slowMo: SLOW_MO,
     args: [
       `--disable-extensions-except=${extensionPath}`,
       `--load-extension=${extensionPath}`,

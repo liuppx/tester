@@ -3,6 +3,11 @@ import { baseURLFor, loadEnv } from './shared/env';
 import { defaultReporters } from './shared/reporters';
 
 const HEADED = process.env.PWHEADLESS === '0';
+// Slow-motion: delay (ms) inserted between each action so a headed run is
+// watchable by eye. `PWSLOWMO=500` ≈ half a second per step. 0 = off.
+// Only meaningful together with a headed run (PWHEADLESS=0, or wallet which
+// is always headed).
+const SLOW_MO = process.env.PWSLOWMO ? Number(process.env.PWSLOWMO) : 0;
 
 const products = [
   'warehouse',
@@ -41,12 +46,13 @@ const walletOverrides: NonNullable<Project['use']> = {
     ? {
         channel: 'chromium',
         headless: false,
+        slowMo: SLOW_MO,
         args: [
           `--disable-extensions-except=${walletExtensionPath}`,
           `--load-extension=${walletExtensionPath}`,
         ],
       }
-    : { channel: 'chromium', headless: false },
+    : { channel: 'chromium', headless: false, slowMo: SLOW_MO },
   // Extension service workers can take several seconds to register on first
   // launch; give some headroom for the initial UI assertions.
   actionTimeout: 20_000,
@@ -62,6 +68,7 @@ const projects: Project[] = products.map((product: ProductName) => ({
     ...devices['Desktop Chrome'],
     baseURL: baseURLFor(product),
     headless: !HEADED,
+    launchOptions: { slowMo: SLOW_MO },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'off',
@@ -85,6 +92,7 @@ export default defineConfig({
   globalSetup: './scripts/global-setup.ts',
   use: {
     headless: !HEADED,
+    launchOptions: { slowMo: SLOW_MO },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'off',
