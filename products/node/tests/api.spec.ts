@@ -127,9 +127,9 @@ test('auth/refresh + auth/logout keep the refresh-cookie contract', async () => 
   // 1) Sign in — refresh cookie should be set
   const initial = await loginWithWallet(env['baseURL']!, env['NODE_WALLET_PRIVATE_KEY']!);
 
-  // 2) Hit /refresh with the same session cookies; build a context that
-  //    keeps cookies across requests to mirror the SDK.
-  const ctx = await apiContext(api, { storageState: undefined });
+  // 2) Hit /refresh with a fresh request context; apiContext builds its
+  //    own cookie jar per instance, so this one has no refresh cookie.
+  const ctx = await apiContext(api);
   try {
     const refresh = await ctx.post('/api/v1/public/auth/refresh', {
       data: {},

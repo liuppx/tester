@@ -64,9 +64,9 @@ export async function seedAuthenticatedSession(
         body: JSON.stringify({ address: addr }),
       });
       if (!cRes.ok) throw new Error(`challenge ${cRes.status}`);
-      const cBody = await cRes.json();
+      const cBody = (await cRes.json()) as { data: { challenge: string } };
       const message: string = cBody.data.challenge;
-      const signature: string = await (window as unknown as {
+      const signature: string = await (globalThis as unknown as {
         __e2e_signPersonal: (m: string) => Promise<string>;
       }).__e2e_signPersonal(message);
       const vRes = await fetch(`${apiBase}/api/v1/public/auth/verify`, {
@@ -75,17 +75,20 @@ export async function seedAuthenticatedSession(
         body: JSON.stringify({ address: addr, signature }),
       });
       if (!vRes.ok) throw new Error(`verify ${vRes.status}`);
-      const vBody = await vRes.json();
+      const vBody = (await vRes.json()) as { data: { token: string } };
       const token: string = vBody.data.token;
 
       // Mirror what the SDK's login flow writes on a real login so the
-      // post-reload bootstrap picks up the session.
-      localStorage.setItem('authToken', token);
-      document.cookie = `authToken=${encodeURIComponent(token)}; path=/; SameSite=Lax`;
-      localStorage.setItem('currentAccount', addr);
-      localStorage.setItem('walletAddress', addr);
+      // post-reload bootstrap picks up the session. This runs inside the
+      // page (browser) context; the test tsconfig omits the DOM lib, so
+      // reach the browser globals through `globalThis as any`.
+      const g = globalThis as any;
+      g.localStorage.setItem('authToken', token);
+      g.document.cookie = `authToken=${encodeURIComponent(token)}; path=/; SameSite=Lax`;
+      g.localStorage.setItem('currentAccount', addr);
+      g.localStorage.setItem('walletAddress', addr);
       try {
-        localStorage.setItem(
+        g.localStorage.setItem(
           'warehouse:accountHistory',
           JSON.stringify([{ address: addr, lastUsedAt: Date.now() }]),
         );
@@ -93,7 +96,7 @@ export async function seedAuthenticatedSession(
         // localStorage quota / serialization edge cases — non-fatal.
       }
       // Tell any listeners that auth state changed.
-      window.dispatchEvent(new CustomEvent('warehouse:auth-changed'));
+      g.dispatchEvent(new g.CustomEvent('warehouse:auth-changed'));
       return { token, address: addr };
     },
     { apiBase: baseURL, addr: checksum },
