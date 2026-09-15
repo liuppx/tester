@@ -36,9 +36,60 @@ export const SELECTORS = {
 
   walletPage: '#walletPage',
   accountAddress: '#accountAddress',
+  accountName: '#accountName',
   walletHeaderMenuBtn: '#walletHeaderMenuBtn',
   walletHeaderMenu: '#walletHeaderMenu',
   lockWalletBtn: '#lockWalletBtn',
+
+  // Account switcher (header) + accounts management page.
+  accountHeader: '#accountHeader',
+  accountDropdownBtn: '#accountDropdownBtn',
+  accountSwitcherMenu: '#accountSwitcherMenu',
+  accountSwitcherList: '#accountSwitcherList',
+  manageAccountsBtn: '#manageAccountsBtn',
+  accountsPage: '#accountsPage',
+  walletList: '#walletList',
+  createAccountModal: '#createAccountModal',
+  newAccountName: '#newAccountName',
+  confirmCreateAccount: '#confirmCreateAccount',
+
+  // Account detail page (rename + QR / receive).
+  accountDetailPage: '#accountDetailPage',
+  accountDetailNameText: '#accountDetailNameText',
+  editAccountNameBtn: '#editAccountNameBtn',
+  accountDetailNameInput: '#accountDetailNameInput',
+  saveAccountNameBtn: '#saveAccountNameBtn',
+  accountDetailAddress: '#accountDetailAddress',
+  accountDetailQr: '#accountDetailQr',
+
+  // Network management page + add/edit form.
+  networkManagePage: '#networkManagePage',
+  networkAddBtn: '#networkAddBtn',
+  networkManageList: '#networkManageList',
+  networkFormPage: '#networkFormPage',
+  networkNameInput: '#networkNameInput',
+  networkRpcInput: '#networkRpcInput',
+  networkChainIdInput: '#networkChainIdInput',
+  networkSymbolInput: '#networkSymbolInput',
+  networkExplorerInput: '#networkExplorerInput',
+  saveNetworkBtn: '#saveNetworkBtn',
+
+  // Settings + security modals.
+  settingsBtn: '#settingsBtn',
+  settingsPage: '#settingsPage',
+  changePasswordBtn: '#changePasswordBtn',
+  changePasswordModal: '#changePasswordModal',
+  oldPasswordInput: '#oldPasswordInput',
+  newPasswordInput: '#newPasswordInput',
+  confirmNewPasswordInput: '#confirmNewPasswordInput',
+  confirmChangePasswordBtn: '#confirmChangePasswordBtn',
+  secretDisplayModal: '#secretDisplayModal',
+  secretDisplayValue: '#secretDisplayValue',
+  confirmSecretDisplayBtn: '#confirmSecretDisplayBtn',
+
+  // Dynamic password-prompt modal (created on demand).
+  passwordPromptModal: '#passwordPromptModal',
+  passwordPromptClose: '#passwordPromptClose',
 
   unlockPage: '#unlockPage',
   unlockPassword: '#unlockPassword',
