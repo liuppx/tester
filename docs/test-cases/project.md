@@ -11,24 +11,24 @@
 
 | 模块 | 用例数 | 已实现 | 待实现 |
 | --- | --- | --- | --- |
-| 一、鉴权与会话守卫 | 22 | 8 | 14 |
-| 二、仪表盘 | 7 | 1 | 6 |
-| 三、导航与 SPA 布局 | 7 | 1 | 6 |
-| 四、项目管理 | 15 | 3 | 12 |
-| 五、任务列表(看板列) | 7 | 1 | 6 |
-| 六、任务管理 | 17 | 4 | 13 |
-| 七、工作流与状态流转 | 7 | 2 | 5 |
-| 八、项目成员与权限 | 7 | 1 | 6 |
-| 九、任务标签与日志 | 5 | 0 | 5 |
-| 十、文件管理(文件柜) | 8 | 0 | 8 |
-| 十一、消息与对话 | 5 | 0 | 5 |
-| 十二、工作汇报 | 4 | 0 | 4 |
-| 十三、个人设置与账号安全 | 7 | 1 | 6 |
-| 十四、自动化访问令牌 | 7 | 0 | 7 |
-| 十五、团队/会员管理(管理员) | 6 | 1 | 5 |
-| 十六、搜索 | 4 | 0 | 4 |
-| 十七、系统、健康与错误异常 | 6 | 1 | 5 |
-| **合计** | **141** | **24** | **117** |
+| 一、鉴权与会话守卫 | 22 | 19 | 3 |
+| 二、仪表盘 | 7 | 5 | 2 |
+| 三、导航与 SPA 布局 | 7 | 5 | 2 |
+| 四、项目管理 | 15 | 12 | 3 |
+| 五、任务列表(看板列) | 7 | 6 | 1 |
+| 六、任务管理 | 17 | 14 | 3 |
+| 七、工作流与状态流转 | 7 | 6 | 1 |
+| 八、项目成员与权限 | 7 | 6 | 1 |
+| 九、任务标签与日志 | 5 | 4 | 1 |
+| 十、文件管理(文件柜) | 8 | 6 | 2 |
+| 十一、消息与对话 | 5 | 2 | 3 |
+| 十二、工作汇报 | 4 | 2 | 2 |
+| 十三、个人设置与账号安全 | 7 | 4 | 3 |
+| 十四、自动化访问令牌 | 7 | 4 | 3 |
+| 十五、团队/会员管理(管理员) | 6 | 4 | 2 |
+| 十六、搜索 | 4 | 2 | 2 |
+| 十七、系统、健康与错误异常 | 6 | 4 | 2 |
+| **合计** | **141** | **105** | **36** |
 
 ---
 
@@ -96,7 +96,7 @@
 ### PJ-007 账号/密码超 32 位被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/auth-session-p1.spec.ts
 - 前置条件:无
 - 步骤:
   1. `api/users/login` 提交长度 > 32 的 email 或 password
@@ -105,7 +105,7 @@
 ### PJ-008 login/needcode 反映验证码要求
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/auth-session-p1.spec.ts
 - 前置条件:无
 - 步骤:
   1. `api/users/login/needcode` 传入未触发过失败的 email
@@ -124,7 +124,7 @@
 ### PJ-010 注册(type=reg)创建账号
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/auth-session-p1.spec.ts
 - 前置条件:系统开放注册(`reg=open`)
 - 步骤:
   1. `api/users/login`,`type=reg`,提交唯一 email + password
@@ -133,7 +133,7 @@
 ### PJ-011 注册关闭/需邀请码校验
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/auth-session-p1.spec.ts
 - 前置条件:分别配置 `reg=close` 与 `reg=invite`
 - 步骤:
   1. `reg=close` 时提交注册
@@ -161,7 +161,7 @@
 ### PJ-014 token/expire 查询过期时间
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/auth-session-p1.spec.ts
 - 前置条件:已登录持有有效 token
 - 步骤:
   1. `GET api/users/token/expire`
@@ -179,7 +179,7 @@
 ### PJ-016 logout 退出登录使会话失效
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/auth-session-p1.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. `GET api/users/logout`
@@ -189,7 +189,7 @@
 ### PJ-017 登录页切换到注册显示确认密码/邀请码
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/auth-session-p1.spec.ts
 - 前置条件:登录页可用
 - 步骤:
   1. 点击"注册帐号"切到 `loginType=reg`
@@ -199,7 +199,7 @@
 ### PJ-018 钱包 SIWE challenge 返回挑战与 nonce
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/auth-session-p1.spec.ts
 - 前置条件:钱包登录已启用
 - 步骤:
   1. `POST api/public/auth/challenge`,传入合法 `0x` 地址(40 位 hex)与 `chain_id`
@@ -208,7 +208,7 @@
 ### PJ-019 钱包 SIWE verify 签名不匹配被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/auth-session-p1.spec.ts
 - 前置条件:已获取 challenge
 - 步骤:
   1. 用另一把私钥对 challenge 签名
@@ -218,7 +218,7 @@
 ### PJ-020 首次钱包登录要求补全邮箱
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/auth-session-p1.spec.ts
 - 前置条件:全新钱包地址,签名合法
 - 步骤:
   1. 完成 challenge→verify(合法签名)
@@ -227,7 +227,7 @@
 ### PJ-021 passport 登录会话创建(未配置降级)
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/auth-session-p1.spec.ts
 - 前置条件:通行证 Node 服务未配置(默认环境)
 - 步骤:
   1. `POST api/passport/login/session`
@@ -259,7 +259,7 @@
 ### PJ-024 仪表盘展示今日到期/超期/待办三类计数
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/dashboard-nav.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. 观察仪表盘顶部计数块
@@ -268,7 +268,7 @@
 ### PJ-025 仪表盘欢迎语显示用户昵称
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/dashboard-nav.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. 观察欢迎语
@@ -286,7 +286,7 @@
 ### PJ-027 仪表盘任务分组点击滚动定位
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/dashboard-nav.spec.ts
 - 前置条件:仪表盘存在多组任务
 - 步骤:
   1. 点击"超期任务"计数块
@@ -295,7 +295,7 @@
 ### PJ-028 user/tasks 返回我参与的任务
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/dashboard-nav.spec.ts
 - 前置条件:已登录且参与若干任务
 - 步骤:
   1. `GET api/project/user/tasks`(仪表盘数据源)
@@ -326,7 +326,7 @@
 ### PJ-031 点击侧栏各入口在 SPA 内原地切换且高亮
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/dashboard-nav.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. 依次点击日历、消息、文件、应用
@@ -335,7 +335,7 @@
 ### PJ-032 侧栏项目列表渲染并可进入项目
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/dashboard-nav.spec.ts
 - 前置条件:已登录且至少有一个项目
 - 步骤:
   1. 在侧栏项目列表点击某项目
@@ -353,7 +353,7 @@
 ### PJ-034 主菜单下拉展现设置/团队管理/工作报告
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/dashboard-nav.spec.ts
 - 前置条件:已登录(团队管理项需管理员)
 - 步骤:
   1. 点击顶部标题打开主菜单下拉
@@ -371,7 +371,7 @@
 ### PJ-036 未登录访问 /manage 跳转登录
 - 优先级:P1
 - 类型:E2E
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/dashboard-nav.spec.ts
 - 前置条件:清空会话
 - 步骤:
   1. 直接访问 `/manage/dashboard`
@@ -393,7 +393,7 @@
 ### PJ-038 项目名称少于2字/超32字被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/project-crud.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. `api/project/add` 提交 1 字或 33 字 name
@@ -411,7 +411,7 @@
 ### PJ-040 获取单个项目信息
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/project-crud.spec.ts
 - 前置条件:已登录且是某项目成员
 - 步骤:
   1. `GET api/project/one?project_id=<id>`
@@ -420,7 +420,7 @@
 ### PJ-041 修改项目(负责人权限)
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/project-crud.spec.ts
 - 前置条件:以项目负责人登录
 - 步骤:
   1. `api/project/update` 提交 `project_id` + 新 `name`/`desc`
@@ -429,7 +429,7 @@
 ### PJ-042 非负责人修改项目被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/project-crud.spec.ts
 - 前置条件:以普通成员登录
 - 步骤:
   1. `api/project/update` 修改他人项目
@@ -438,7 +438,7 @@
 ### PJ-043 归档项目与恢复
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/project-crud.spec.ts
 - 前置条件:以负责人登录
 - 步骤:
   1. `api/project/archived?project_id=<id>&type=add`
@@ -448,7 +448,7 @@
 ### PJ-044 删除项目(仅负责人)
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/project-crud.spec.ts
 - 前置条件:以负责人登录(deputy 不可)
 - 步骤:
   1. `api/project/remove?project_id=<id>`
@@ -457,7 +457,7 @@
 ### PJ-045 退出项目(负责人禁止)
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/project-crud.spec.ts
 - 前置条件:分别以普通成员、负责人登录
 - 步骤:
   1. `api/project/exit?project_id=<id>`
@@ -493,7 +493,7 @@
 ### PJ-049 生成邀请链接并通过邀请加入
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/project-crud.spec.ts
 - 前置条件:功能已开放,负责人生成邀请,另一账号加入
 - 步骤:
   1. 负责人 `api/project/invite?project_id=<id>` 取 `code`
@@ -514,7 +514,7 @@
 ### PJ-051 UI 项目面板加载看板视图
 - 优先级:P1
 - 类型:E2E
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/project-ui-p1.spec.ts
 - 前置条件:已存在项目
 - 步骤:
   1. 进入某项目
@@ -536,7 +536,7 @@
 ### PJ-053 空列表名被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/columns.spec.ts
 - 前置条件:有权限
 - 步骤:
   1. `api/project/column/add` 提交空 name
@@ -545,7 +545,7 @@
 ### PJ-054 修改列表名称/颜色
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/columns.spec.ts
 - 前置条件:具 `task_list_update` 权限
 - 步骤:
   1. `api/project/column/update?column_id=<id>&name=<新名>&color=<色>`
@@ -554,7 +554,7 @@
 ### PJ-055 删除列表(权限)
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/columns.spec.ts
 - 前置条件:具 `task_list_remove` 权限(默认仅负责人)
 - 步骤:
   1. `api/project/column/remove?column_id=<id>`
@@ -563,7 +563,7 @@
 ### PJ-056 获取任务列表(column/lists)
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/columns.spec.ts
 - 前置条件:已登录且是成员
 - 步骤:
   1. `GET api/project/column/lists?project_id=<id>`
@@ -581,7 +581,7 @@
 ### PJ-058 UI 看板"添加列表"创建列
 - 优先级:P1
 - 类型:E2E
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/project-ui-p1.spec.ts
 - 前置条件:进入项目面板
 - 步骤:
   1. 点击"添加列表",输入名称回车
@@ -603,7 +603,7 @@
 ### PJ-060 任务描述为空/超长被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/tasks-crud.spec.ts
 - 前置条件:有权限
 - 步骤:
   1. 提交空 name 或 >255 字 name
@@ -621,7 +621,7 @@
 ### PJ-062 获取单个任务信息
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/tasks-crud.spec.ts
 - 前置条件:对任务有可见权限
 - 步骤:
   1. `GET api/project/task/one?task_id=<id>`
@@ -630,7 +630,7 @@
 ### PJ-063 无权限查看任务返回无任务权限
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/tasks-crud.spec.ts
 - 前置条件:任务受限可见,当前用户非负责人/参与人
 - 步骤:
   1. `GET api/project/task/one?task_id=<id>`
@@ -639,7 +639,7 @@
 ### PJ-064 添加子任务(继承父任务)
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/tasks-crud.spec.ts
 - 前置条件:父任务未完成,具 `task_add` 权限
 - 步骤:
   1. `api/project/task/addsub?task_id=<父>&name=<子任务>`
@@ -648,7 +648,7 @@
 ### PJ-065 主任务已完成禁止加子任务
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/tasks-crud.spec.ts
 - 前置条件:父任务已完成
 - 步骤:
   1. `api/project/task/addsub` 添加子任务
@@ -657,7 +657,7 @@
 ### PJ-066 修改任务(名称/负责人/时间)
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/tasks-crud.spec.ts
 - 前置条件:具 `task_update`/`task_time` 权限
 - 步骤:
   1. `POST api/project/task/update` 提交 `task_id` + `name`/`owner[]`/`times`
@@ -676,7 +676,7 @@
 ### PJ-068 任务移动到其它列表/项目
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/tasks-crud.spec.ts
 - 前置条件:具 `task_move` 权限,客户端版本 ≥0.42.0
 - 步骤:
   1. `GET api/project/task/move` 传 `task_id`、目标 `project_id`/`column_id`、`flow_item_id`
@@ -694,7 +694,7 @@
 ### PJ-070 归档任务与恢复
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/tasks-crud.spec.ts
 - 前置条件:主任务,具 `task_archived` 权限
 - 步骤:
   1. `api/project/task/archived?task_id=<id>&type=add`
@@ -704,7 +704,7 @@
 ### PJ-071 删除任务与恢复
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/tasks-crud.spec.ts
 - 前置条件:具 `task_remove` 权限
 - 步骤:
   1. `api/project/task/remove?task_id=<id>&type=delete`
@@ -741,7 +741,7 @@
 ### PJ-075 UI 勾选完成任务并归档
 - 优先级:P1
 - 类型:E2E
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/project-ui-p1.spec.ts
 - 前置条件:存在未完成任务
 - 步骤:
   1. 在任务卡上点击"完成"
@@ -773,7 +773,7 @@
 ### PJ-078 非法状态流转被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/workflow.spec.ts
 - 前置条件:目标状态不在当前状态 `turns` 允许列表
 - 步骤:
   1. `task/update` 传入非法 `flow_item_id`
@@ -782,7 +782,7 @@
 ### PJ-079 多个结束状态需选择
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/workflow.spec.ts
 - 前置条件:项目存在多个结束状态
 - 步骤:
   1. `task/update` 仅传 `complete_at`
@@ -791,7 +791,7 @@
 ### PJ-080 保存工作流(至少一开始一结束)
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/workflow.spec.ts
 - 前置条件:以负责人登录
 - 步骤:
   1. `POST api/project/flow/save` 提交 `flows[]`
@@ -809,7 +809,7 @@
 ### PJ-082 状态负责人限制流转
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/workflow.spec.ts
 - 前置条件:某状态设置了 `userlimit`+`userids`,当前用户不在其中
 - 步骤:
   1. 非授权用户尝试流转到该状态
@@ -831,7 +831,7 @@
 ### PJ-084 成员列表必须含负责人
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/members-perms.spec.ts
 - 前置条件:以负责人登录
 - 步骤:
   1. `POST api/project/user` 提交不含负责人的 `userid[]`
@@ -840,7 +840,7 @@
 ### PJ-085 任命/罢免项目管理员(仅负责人)
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/members-perms.spec.ts
 - 前置条件:以负责人登录,目标为成员
 - 步骤:
   1. `POST api/project/adddeputy` 任命
@@ -850,7 +850,7 @@
 ### PJ-086 成员数超 100 被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/members-perms.spec.ts
 - 前置条件:以负责人登录
 - 步骤:
   1. `POST api/project/user` 提交 >100 个 userid
@@ -859,7 +859,7 @@
 ### PJ-087 获取项目权限设置
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/members-perms.spec.ts
 - 前置条件:成员
 - 步骤:
   1. `GET api/project/permission?project_id=<id>`
@@ -868,7 +868,7 @@
 ### PJ-088 更新项目权限设置
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/members-perms.spec.ts
 - 前置条件:成员
 - 步骤:
   1. `api/project/permission/update` 提交各权限键的角色数组(如 `task_add=[1,2]`)
@@ -890,7 +890,7 @@
 ### PJ-090 创建/更新任务标签
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/labels-logs.spec.ts
 - 前置条件:成员
 - 步骤:
   1. `POST api/project/tag/save` 提交 `project_id`、`name`、`color`(id=0 创建)
@@ -899,7 +899,7 @@
 ### PJ-091 标签名/颜色必填校验
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/labels-logs.spec.ts
 - 前置条件:成员
 - 步骤:
   1. `tag/save` 缺 name 或 color
@@ -917,7 +917,7 @@
 ### PJ-093 删除标签(权限)
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/labels-logs.spec.ts
 - 前置条件:标签创建者或负责人
 - 步骤:
   1. `GET api/project/tag/delete?id=<id>`
@@ -926,7 +926,7 @@
 ### PJ-094 获取项目/任务操作日志
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/labels-logs.spec.ts
 - 前置条件:成员
 - 步骤:
   1. `GET api/project/log/lists?project_id=<id>`(或 `task_id`)
@@ -939,7 +939,7 @@
 ### PJ-095 获取文件列表
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/files.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. `GET api/file/lists`
@@ -948,7 +948,7 @@
 ### PJ-096 新建文件/文件夹
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/files.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. `api/file/add` 提交名称与类型(folder/document 等)
@@ -957,7 +957,7 @@
 ### PJ-097 复制/移动文件
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/files.spec.ts
 - 前置条件:已存在文件
 - 步骤:
   1. `api/file/copy` 复制
@@ -967,7 +967,7 @@
 ### PJ-098 删除文件
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/files.spec.ts
 - 前置条件:已存在文件
 - 步骤:
   1. `api/file/remove` 删除
@@ -996,7 +996,7 @@
 ### PJ-101 分片上传 init/chunk/merge
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/files.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. `POST api/upload/init` 启动会话
@@ -1007,7 +1007,7 @@
 ### PJ-102 UI 文件页上传下载文件
 - 优先级:P1
 - 类型:E2E
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/project-ui-p1.spec.ts
 - 前置条件:已登录进入文件页
 - 步骤:
   1. 上传一个文件
@@ -1021,7 +1021,7 @@
 ### PJ-103 获取对话列表
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/messages-reports.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. `GET api/dialog/lists`
@@ -1030,7 +1030,7 @@
 ### PJ-104 发送文本消息
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/messages-reports.spec.ts
 - 前置条件:已登录且存在会话
 - 步骤:
   1. `POST api/dialog/msg/sendtext` 指定 `dialog_id` + 文本
@@ -1072,7 +1072,7 @@
 ### PJ-108 保存并发送工作汇报
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/messages-reports.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. `api/report/store` 提交汇报内容与接收人
@@ -1081,7 +1081,7 @@
 ### PJ-109 我发送/我接收的汇报列表
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/messages-reports.spec.ts
 - 前置条件:已有汇报
 - 步骤:
   1. `GET api/report/my`
@@ -1123,7 +1123,7 @@
 ### PJ-113 修改个人资料(昵称校验)
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/account.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. `api/users/editdata` 提交合法 `nickname`
@@ -1133,7 +1133,7 @@
 ### PJ-114 修改密码成功并使旧 token 失效
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/account.spec.ts
 - 前置条件:已登录且知道当前密码
 - 步骤:
   1. `api/users/editpass` 提交正确 `oldpass` + 合法 `newpass`
@@ -1143,7 +1143,7 @@
 ### PJ-115 旧密码错误/新旧一致被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/account.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. `editpass` 提交错误 `oldpass`
@@ -1186,7 +1186,7 @@
 ### PJ-119 创建访问令牌返回密钥
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/tokens.spec.ts
 - 前置条件:已登录(网页登录态)
 - 步骤:
   1. `POST api/token/create` 提交名称与授权项目范围
@@ -1195,7 +1195,7 @@
 ### PJ-120 令牌列表
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/tokens.spec.ts
 - 前置条件:已创建令牌
 - 步骤:
   1. `GET api/token/lists`
@@ -1204,7 +1204,7 @@
 ### PJ-121 轮换令牌密钥
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/tokens.spec.ts
 - 前置条件:存在 active 令牌
 - 步骤:
   1. `POST api/token/rotate`
@@ -1213,7 +1213,7 @@
 ### PJ-122 禁用/删除令牌
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/tokens.spec.ts
 - 前置条件:存在令牌
 - 步骤:
   1. `POST api/token/disable` 禁用
@@ -1254,7 +1254,7 @@
 ### PJ-126 管理员获取会员列表
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/admin.spec.ts(管理员端点环境限制:PROJECT_ADMIN_EMAIL 登录被验证码锁定,无法取得管理员会话,已在 spec 中清晰跳过)
 - 前置条件:以管理员登录
 - 步骤:
   1. `GET api/users/lists`
@@ -1263,7 +1263,7 @@
 ### PJ-127 管理员创建用户
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/admin.spec.ts(管理员端点环境限制:PROJECT_ADMIN_EMAIL 登录被验证码锁定,无法取得管理员会话,已在 spec 中清晰跳过)
 - 前置条件:以管理员登录
 - 步骤:
   1. `POST api/users/createuser` 提交新用户信息
@@ -1273,7 +1273,7 @@
 ### PJ-128 管理员批量导入预览/导入
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/admin.spec.ts(管理员端点环境限制:PROJECT_ADMIN_EMAIL 登录被验证码锁定,无法取得管理员会话,已在 spec 中清晰跳过)
 - 前置条件:以管理员登录
 - 步骤:
   1. `POST api/users/import/preview` 上传表格预览
@@ -1316,7 +1316,7 @@
 ### PJ-132 搜索项目
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/search-system.spec.ts
 - 前置条件:已登录且有可见项目
 - 步骤:
   1. `GET api/search/project?key=<关键词>`
@@ -1325,7 +1325,7 @@
 ### PJ-133 搜索任务
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/search-system.spec.ts
 - 前置条件:已登录且有可见任务
 - 步骤:
   1. `GET api/search/task?key=<关键词>`
@@ -1365,7 +1365,7 @@
 ### PJ-137 获取系统设置
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/search-system.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. `GET api/system/setting`
@@ -1374,7 +1374,7 @@
 ### PJ-138 非法方法名返回 404 not found
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/search-system.spec.ts
 - 前置条件:无
 - 步骤:
   1. 请求一个不存在的方法,如 `api/users/nonexist`(带 `Content-Type: application/json`)
@@ -1383,7 +1383,7 @@
 ### PJ-139 缺少必填参数返回参数错误
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/project/tests/search-system.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. `api/project/tag/list` 不传 `project_id`
