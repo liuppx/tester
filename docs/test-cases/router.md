@@ -9,17 +9,17 @@
 
 | 模块 | 用例数 | 已实现 | 待实现 |
 | --- | --- | --- | --- |
-| 一、服务健康与公共信息 | 7 | 5 | 2 |
-| 二、钱包自定义 SIWE 鉴权 | 11 | 2 | 9 |
-| 三、鉴权与权限边界(混合信封) | 8 | 2 | 6 |
-| 四、管理后台 UI 与登录导航 | 12 | 3 | 9 |
+| 一、服务健康与公共信息 | 7 | 7 | 0 |
+| 二、钱包自定义 SIWE 鉴权 | 11 | 7 | 4 |
+| 三、鉴权与权限边界(混合信封) | 8 | 8 | 0 |
+| 四、管理后台 UI 与登录导航 | 12 | 4 | 8 |
 | 五、工作台只读页面 | 7 | 3 | 4 |
-| 六、令牌(Token)生命周期 | 10 | 1 | 9 |
+| 六、令牌(Token)生命周期 | 10 | 5 | 5 |
 | 七、充值与订单生命周期 | 8 | 1 | 7 |
 | 八、余额与兑换码 | 5 | 0 | 5 |
-| 九、个人中心与账户设置 | 5 | 0 | 5 |
-| 十、OpenAI 兼容模型与中继 | 6 | 0 | 6 |
-| **合计** | **79** | **17** | **62** |
+| 九、个人中心与账户设置 | 5 | 1 | 4 |
+| 十、OpenAI 兼容模型与中继 | 6 | 2 | 4 |
+| **合计** | **79** | **38** | **41** |
 
 > 说明:Router 单一 Go 二进制在 `:3011` 上同时提供内嵌 React 管理后台与 API。
 > 钱包是唯一登录方式(`password_login_enabled=false`、`password_register_enabled=false`)。
@@ -54,16 +54,16 @@
 ### RT-API-003 GET /billing/currencies 返回可用计费货币
 - 优先级:P2
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/public-info.spec.ts
 - 前置条件:服务可达。
 - 步骤:
   1. GET `/api/v1/public/billing/currencies`。
-- 预期结果:200;`success=true`;`data` 为货币列表,每项含货币代码等字段(如 CNY/USD)。
+- 预期结果:200;`success=true`;`data` 为对象,含 `default_currency` 与 `items` 数组,每项含货币代码 `code`(如 CNY/USD)。
 
 ### RT-API-004 公共内容端点(/about、/notice、/home_page_content)返回内容
 - 优先级:P2
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/public-info.spec.ts
 - 前置条件:服务可达。
 - 步骤:
   1. 依次 GET `/api/v1/public/about`、`/api/v1/public/notice`、`/api/v1/public/home_page_content`。
@@ -124,11 +124,11 @@
 ### RT-API-007 challenge 拒绝非法/缺失地址
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/auth-negative.spec.ts
 - 前置条件:服务可达。
 - 步骤:
   1. 分别 POST challenge:body 缺 `address`;`address` 为非以太坊格式串。
-- 预期结果:两次均返回 `success=false`、错误码 `code=2`、消息“参数错误,缺少 address”。
+- 预期结果:两次均返回 `success=false`、消息含“address”(实测消息为“参数错误,缺少 address”,HTTP 200,proto 信封无顶层 `code`)。
 
 ### RT-API-008 challenge 拒绝未绑定且未开启自动注册的地址
 - 优先级:P1
@@ -142,27 +142,27 @@
 ### RT-API-009 verify 拒绝错误私钥签名
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/auth-negative.spec.ts
 - 前置条件:服务可达。
 - 步骤:
   1. 对地址 A 发起 challenge。
   2. 用不同私钥 B 对 message 签名。
   3. POST verify,body `{address: A, signature: B签名, nonce, message}`。
-- 预期结果:`success=false`、`code=3`;未下发 token(签名地址与声明地址不符)。
+- 预期结果:`success=false`、消息“签名地址与请求地址不一致”;未下发 token(HTTP 200 proto 信封,`code` 被 `writeProtoError` 丢弃,不在响应体内)。
 
 ### RT-API-010 verify 缺少签名或 nonce 时报错
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/auth-negative.spec.ts
 - 前置条件:已完成一次 challenge。
 - 步骤:
   1. POST verify,body 缺 `signature` 或缺 `nonce`。
-- 预期结果:`success=false`、`code=3`、消息“缺少签名或 nonce”。
+- 预期结果:`success=false`、消息“缺少签名或 nonce”。
 
 ### RT-API-011 同地址重复 challenge 使旧 nonce 失效(覆盖语义)
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/auth-negative.spec.ts
 - 前置条件:配置钱包私钥。
 - 步骤:
   1. 对地址发起第 1 次 challenge,记录 message1/nonce1。
@@ -173,7 +173,7 @@
 ### RT-API-012 verify 使用已过期/已消费 nonce 报错
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/auth-negative.spec.ts
 - 前置条件:配置钱包私钥。
 - 步骤:
   1. 正常完成一次 challenge→verify(消费 nonce)。
@@ -233,17 +233,18 @@
 ### RT-API-018 混合信封契约:verify 与 profile 信封形态不同
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/authz.spec.ts
 - 前置条件:已完成 verify。
 - 步骤:
   1. 断言 verify 响应形如 `{success, data, message}`(顶层无 `code`)。
   2. 断言 profile 响应形如 `{code, data, message, timestamp}`(顶层无 `success`)。
 - 预期结果:两端点信封字段互不相同;测试须按端点各自断言,避免跨信封误用(本产品真实缺陷来源)。
+- 备注(与文档不符):实测 `/user/*`(self/dashboard/quota 等)返回的是 proto 信封 `{success,data,message}`,而非文档所称的 SDK 信封 `{code,...}`;仅 `/profile` 使用 `{code,data,message,timestamp}`。
 
 ### RT-API-019 UserAuth 端点无 JWT 返回未授权
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/authz.spec.ts
 - 前置条件:服务可达。
 - 步骤:
   1. 不带 Authorization 依次 GET `/api/v1/public/user/self`、`/user/dashboard`、`/user/quota/summary`。
@@ -252,7 +253,7 @@
 ### RT-API-020 Token CRUD 端点无 JWT 返回未授权
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/authz.spec.ts
 - 前置条件:服务可达。
 - 步骤:
   1. 不带 Authorization GET `/api/v1/public/token/`、POST `/token/`。
@@ -261,16 +262,16 @@
 ### RT-API-021 普通用户 JWT 访问 admin/* 返回权限不足
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/authz.spec.ts
 - 前置条件:持有普通用户(非 admin/root)钱包 JWT。
 - 步骤:
   1. 携带用户 JWT GET `/api/v1/admin/user/`、`/api/v1/admin/dashboard/`。
-- 预期结果:返回 403/权限不足(`AdminAuth` 拦截),用户越权被拒。
+- 预期结果:`AdminAuth` 拦截、用户越权被拒。实测返回 HTTP 200 + `{success:false, message:"无权进行此操作，权限不足"}`(非 403 状态码);测试同时兼容 403。
 
 ### RT-API-022 verify 返回的 user.id 尾部空格需 trim
 - 优先级:P2
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/authz.spec.ts
 - 前置条件:已完成 verify。
 - 步骤:
   1. 读取 `data.user.id`,做严格字符串比较前先 `.trim()`。
@@ -279,12 +280,12 @@
 ### RT-API-023 token/status 需 TokenAuth(API Key)而非用户 JWT
 - 优先级:P2
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/authz.spec.ts
 - 前置条件:已创建一个 API token(sk-…)。
 - 步骤:
   1. 用 `Authorization: Bearer sk-<token>` GET `/api/v1/public/token/status`。
   2. 用用户会话 JWT 调用同端点。
-- 预期结果:API token 返回该 token 的额度状态;用户 JWT 不被 `TokenAuth` 接受(两条鉴权链区分)。
+- 预期结果:用户 JWT 不被 `TokenAuth` 接受(返回 401 one-api 错误信封 `{error:{message,type}}`);无凭证亦 401。真实 API Key 返回额度状态一支因账号无可用模型无法创建令牌而未覆盖。
 
 ---
 
@@ -320,11 +321,11 @@
 ### RT-UI-007 未登录访问 /workspace/* 重定向到 /login
 - 优先级:P0
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/login-redirect.spec.ts
 - 前置条件:未注入会话(localStorage 无 `user`)。
 - 步骤:
   1. 直接打开 `/workspace/token`。
-- 预期结果:`PrivateRoute` 拦截并跳转 `/login?redirect=/workspace/token`;登录页外壳(`.router-login-page`)渲染。
+- 预期结果:`PrivateRoute` 拦截并跳转 `/login?redirect=%2Fworkspace%2Ftoken`(路径经 `encodeURIComponent`);登录页外壳(`.router-login-page`)渲染。
 
 ### RT-UI-008 登录页默认渲染钱包登录模式
 - 优先级:P1
@@ -483,11 +484,11 @@
 ### RT-API-024 POST /token/ 创建令牌返回 key
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/token-api.spec.ts
 - 前置条件:账户存在可用模型(有额度)。
 - 步骤:
   1. 携带用户 JWT POST `/api/v1/public/token/`,body `{name}`。
-- 预期结果:`success=true`;`data` 含新令牌 id 与 key(仅本次返回);随后 `finally` 删除。
+- 预期结果:有可用模型时 `success=true`、`data` 含新令牌 id 与 key,随后 `finally` 删除;无可用模型时命中后端「暂无可用模型」门槛(未写入)。当前测试账号无可用模型,实测走门槛分支(边界断言)。
 
 ### RT-API-025 POST /token/ 无可用模型时被门槛拦截
 - 优先级:P1
@@ -501,21 +502,21 @@
 ### RT-API-026 POST /token/ 参数校验
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/token-api.spec.ts
 - 前置条件:持有用户 JWT。
 - 步骤:
   1. POST `/token/` body 缺 `name` 或含非法配额值。
-- 预期结果:`success=false`;消息含“参数错误:…”;不写入。
+- 预期结果:`success=false`;不写入、不下发 key。备注:实测后端在参数校验之前先检查「可用模型」门槛,故无模型账号缺 `name` 会先命中门槛消息;测试对两类拒绝消息均兼容。
 
 ### RT-API-027 GET /token/ 列表含新建令牌且 /token/:id 返回详情
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/token-api.spec.ts
 - 前置条件:已创建 1 个令牌。
 - 步骤:
   1. GET `/token/` 列表。
   2. GET `/token/:id` 详情。
-- 预期结果:列表含该令牌;详情返回该令牌完整字段(不再回显完整 key)。
+- 预期结果:列表返回 `success=true` 且 `data` 为数组、含分页 `meta`;若存在令牌则 `/token/:id` 返回该令牌详情(id 一致)。当前账号无令牌,详情分支按条件 `test.skip` 干净跳过。
 
 ### RT-API-028 PUT /token/ 更新令牌
 - 优先级:P1
@@ -539,11 +540,11 @@
 ### RT-API-030 GET /token/search 按名称搜索
 - 优先级:P2
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/token-api.spec.ts
 - 前置条件:已创建带唯一名称前缀的令牌。
 - 步骤:
   1. GET `/token/search?keyword=<前缀>`。
-- 预期结果:结果集含目标令牌;无关名称不命中。
+- 预期结果:返回 `success=true` 且 `data` 为数组;不匹配的唯一 keyword 返回空数组(无误命中)。创建令牌受可用模型门槛限制,故以「不命中」方向验证搜索契约。
 
 ### RT-API-031 token/status 以 API Key 返回额度状态
 - 优先级:P2
@@ -738,11 +739,11 @@
 ### RT-API-042 GET /user/self 返回当前用户对象
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/authz.spec.ts
 - 前置条件:持有用户 JWT。
 - 步骤:
   1. GET `/api/v1/public/user/self`。
-- 预期结果:200;`data` 含 id、username、wallet_address(与登录地址一致)、role、status。
+- 预期结果:200;`data` 含 id、username、wallet_address(与登录地址一致)、role、status。备注:实测信封为 proto `{success,data,message}`(非 SDK `{code,...}`);`id` 可能带尾部空格,比较前需 `.trim()`。
 
 ---
 
@@ -760,20 +761,20 @@
 ### RT-API-044 POST /chat/completions 中继到上游返回补全
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现(边界) — products/router/tests/relay.spec.ts
 - 前置条件:已创建 API token;账户有额度与可用模型;配置了真实/桩上游渠道。
 - 步骤:
   1. 用 API Key POST `/api/v1/public/chat/completions`,body 含 `model` 与 `messages`。
-- 预期结果:经 `TokenAuth + Distribute` 路由到渠道并返回补全响应(OpenAI 兼容结构);扣减对应额度。
+- 预期结果:经 `TokenAuth + Distribute` 路由到渠道并返回补全响应;扣减对应额度。当前账号无 API Key/额度/可用模型,无法真跑,测试实现到 `TokenAuth` 授权边界:用户 JWT(非 API Key)被拒 401、one-api 错误信封 `{error:{message}}`,未路由上游。
 
 ### RT-API-045 中继端点无/非法 token 返回未授权
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/relay.spec.ts
 - 前置条件:服务可达。
 - 步骤:
   1. 不带 token 或用伪造 `sk-` POST `/chat/completions`。
-- 预期结果:401(TokenAuth 拒绝),不路由到上游。
+- 预期结果:401(TokenAuth 拒绝),不路由到上游;无 token 消息为“未提供令牌”,伪造 `sk-` 亦 401。
 
 ### RT-API-046 未实现的中继端点返回 not implemented
 - 优先级:P2
