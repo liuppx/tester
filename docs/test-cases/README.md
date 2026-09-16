@@ -11,7 +11,7 @@
 | 仓库 Warehouse | [warehouse.md](warehouse.md) | 91 | 26 | 65 | 29% |
 | 节点 Node | [node.md](node.md) | 50 | 15 | 35 | 30% |
 | 路由 Router | [router.md](router.md) | 79 | 17 | 62 | 22% |
-| 钱包 Wallet | [wallet.md](wallet.md) | 56 | 17 | 39 | 30% |
+| 钱包 Wallet | [wallet.md](wallet.md) | 56 | 24 | 32 | 43% |
 | 对话 Chat | [chat.md](chat.md) | 92 | 5 | 87 | 5% |
 | 社交 Social | [social.md](social.md) | 87 | 10 | 77 | 11% |
 | 项目 Project | [project.md](project.md) | 141 | 4 | 137 | 3% |
@@ -19,7 +19,7 @@
 | 智能体 Agent | [agent.md](agent.md) | 58 | 4 | 54 | 7% |
 | 应用市场 Marketplace | [marketplace.md](marketplace.md) | 59 | 5 | 54 | 8% |
 | 文档 Books | [books.md](books.md) | 35 | 4 | 31 | 11% |
-| **合计** | | **858** | **112** | **746** | **13%** |
+| **合计** | | **858** | **119** | **739** | **14%** |
 
 ## 使用方式
 

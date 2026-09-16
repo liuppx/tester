@@ -106,6 +106,7 @@ export const SELECTORS = {
 
   importPage: '#importPage',
   importMnemonic: '#importMnemonic',
+  importPrivateKey: '#importPrivateKey',
   importWalletPassword: '#importWalletPassword',
   importBtn: '#importBtn',
   importAccountName: '#importAccountName',

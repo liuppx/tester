@@ -10,15 +10,15 @@
 | 模块 | 用例数 | 已实现 | 待实现 |
 | --- | --- | --- | --- |
 | 一、钱包创建与初始化 | 5 | 4 | 1 |
-| 二、钱包导入 | 5 | 1 | 4 |
+| 二、钱包导入 | 5 | 2 | 3 |
 | 三、账户管理 | 5 | 2 | 3 |
 | 四、网络管理 | 5 | 1 | 4 |
 | 五、安全与锁定恢复 | 5 | 3 | 2 |
-| 六、转账与交易 | 9 | 2 | 7 |
-| 七、消息签名与授权 | 5 | 1 | 4 |
-| 八、dApp 连接与 Provider | 13 | 3 | 10 |
+| 六、转账与交易 | 9 | 3 | 6 |
+| 七、消息签名与授权 | 5 | 4 | 1 |
+| 八、dApp 连接与 Provider | 13 | 5 | 8 |
 | 九、错误、异常与安全边界 | 4 | 0 | 4 |
-| **合计** | **56** | **17** | **39** |
+| **合计** | **56** | **24** | **32** |
 
 > 编号说明:`WL-UI-*` 为 popup 内交互;`WL-DAPP-*` 为经 `window.ethereum` / 审批窗的 dApp 交互;`WL-E2E-*` 为跨真实链/网络的端到端流程。
 > 通用前置(除特别说明外均适用):已通过 `WALLET_EXTENSION_PATH` 指向钱包源码目录;用 `loadWalletContext()` 启动带扩展的持久化 Chromium;`stubPublicEndpoints` 屏蔽 YeYing 公共端点以保证用例可离线运行。
@@ -98,7 +98,7 @@
 ### WL-UI-007 私钥导入得到对应账户
 - 优先级:P0
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/popup-import-privatekey.spec.ts
 - 前置条件:准备一个已知私钥及其期望地址。
 - 步骤:
   1. 进入 `#importPage`,点击「私钥」tab(`.import-tab[data-type=privateKey]`)。
@@ -322,7 +322,7 @@
 ### WL-UI-027 收款地址非法(EIP-55 校验和)被拒绝
 - 优先级:P0
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/popup-transfer-address-validation.spec.ts
 - 前置条件:钱包已解锁并进入转账页。
 - 步骤:
   1. `#recipientAddress` 填入混合大小写但校验和错误的地址(改动某一位),填合法金额,`#sendBtn`。
@@ -402,7 +402,7 @@
 ### WL-DAPP-002 dApp `personal_sign` 用户拒绝返回 4001
 - 优先级:P0
 - 类型:DAPP
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/dapp-reject.spec.ts
 - 前置条件:同 WL-DAPP-001,已连接。
 - 步骤:
   1. 发起 `personal_sign`,在签名审批窗点 `#rejectSign`。
@@ -411,7 +411,7 @@
 ### WL-DAPP-003 `eth_signTypedData_v4` 审批通过(EIP-712)
 - 优先级:P1
 - 类型:DAPP
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/dapp-typed-data.spec.ts
 - 前置条件:已连接。
 - 步骤:
   1. 以合法 EIP-712 typed data 调 `eth_signTypedData_v4`。
@@ -421,7 +421,7 @@
 ### WL-DAPP-004 SIWE(EIP-4361)消息结构化展示并签名
 - 优先级:P1
 - 类型:DAPP
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/dapp-siwe.spec.ts
 - 前置条件:已连接。
 - 步骤:
   1. 以标准 SIWE 文本发起 `personal_sign`。
@@ -475,7 +475,7 @@
 ### WL-DAPP-009 连接请求被拒绝返回 4001
 - 优先级:P0
 - 类型:DAPP
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/dapp-reject.spec.ts
 - 前置条件:钱包已解锁。
 - 步骤:
   1. dApp 调 `eth_requestAccounts`,在审批窗点 `#rejectConnect`。
@@ -484,7 +484,7 @@
 ### WL-DAPP-010 EIP-2255 权限:request / get / revoke
 - 优先级:P1
 - 类型:DAPP
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/dapp-permissions.spec.ts
 - 前置条件:钱包已解锁。
 - 步骤:
   1. `wallet_requestPermissions({ eth_accounts: {} })` → 审批批准。
