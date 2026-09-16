@@ -16,10 +16,22 @@ function skipIfNoService() {
   test.skip(!baseURLFor('project'), 'PROJECT_BASE_URL not configured');
 }
 
+// DooTask serves a Vue SPA: `/` redirects to `/#/login` and the shell paints
+// before the view mounts. The "邮箱密码登录" toggle is a concrete element of the
+// fully-rendered login view — once it is visible, the surrounding links/buttons
+// have painted too. (Note: `<body class="window-landscape">` itself computes as
+// hidden because content lives in a fixed overlay, so assert on view elements,
+// not on `body`.)
+async function waitForLoginView(page: import('@playwright/test').Page) {
+  await page
+    .getByRole('button', { name: /邮箱密码登录/ })
+    .waitFor({ state: 'visible', timeout: 15_000 });
+}
+
 test('landing renders the project home', async ({ page }) => {
   skipIfNoService();
   await page.goto('/');
-  await expect(page.locator('body')).toBeVisible();
+  await waitForLoginView(page);
   const text = (await page.locator('body').innerText()).trim();
   expect(text.length).toBeGreaterThan(50);
 });
@@ -27,9 +39,8 @@ test('landing renders the project home', async ({ page }) => {
 test('navigation surfaces at least one link or menu entry', async ({ page }) => {
   skipIfNoService();
   await page.goto('/');
-  // SPA mounts may not have rendered every header link to "visible"
-  // yet. Assert DOM-attached, which matches what a user perceives:
-  // an entry to navigate to.
+  await waitForLoginView(page);
+  // Login view carries "Register account" / "Reset Password" as <a href>.
   const entries = page.locator('a[href], [role="link"], [role="menuitem"]');
   expect(await entries.count()).toBeGreaterThan(0);
 });
@@ -37,10 +48,11 @@ test('navigation surfaces at least one link or menu entry', async ({ page }) => 
 test('auth or wallet-connect affordance is discoverable', async ({ page }) => {
   skipIfNoService();
   await page.goto('/');
+  await waitForLoginView(page);
   // Loose: any input field, button, or link. Asserting DOM-attached
-  // (not visible) — Element Plus and similar frameworks wrap `<input>`
-  // in hidden containers, so visibility checks are fragile. The user's
-  // perception is just "is there something here to interact with".
+  // (not visible) — the login view wraps inputs behind a toggle, so a
+  // strict visibility check on inputs is fragile. The user's perception
+  // is just "is there something here to interact with".
   const affordance = page.locator('input, button, a, [role="button"], [role="link"]');
   expect(await affordance.count()).toBeGreaterThan(0);
 });
