@@ -79,34 +79,49 @@ export async function loginWithWallet(
   // checksum form; the returned `address` is normalized to lowercase.
   const checksum = getAddress(wallet.address);
 
+  // The backend keeps a single active challenge/nonce per address, so two
+  // concurrent SIWE logins for the SAME wallet (parallel spec files) can clobber
+  // each other's nonce and yield a transient "Signature verification failed".
+  // Retry the whole challenge→sign→verify a few times with small jitter; every
+  // attempt is a full real handshake (never faked).
+  const maxAttempts = 5;
+  let lastError = '';
   const ctx = await request.newContext({ baseURL });
   try {
-    const challengeRes = await ctx.post('/api/v1/public/auth/challenge', {
-      data: { address: checksum },
-    });
-    const challengeText = await challengeRes.text();
-    if (challengeRes.status() !== 200) {
-      throw new Error(`challenge failed: ${challengeRes.status()} ${challengeText}`);
-    }
-    const challengeBody = JSON.parse(challengeText);
-    const message: string = challengeBody.data.challenge;
-    const signature = await wallet.signMessage(message);
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const challengeRes = await ctx.post('/api/v1/public/auth/challenge', {
+        data: { address: checksum },
+      });
+      const challengeText = await challengeRes.text();
+      if (challengeRes.status() !== 200) {
+        lastError = `challenge failed: ${challengeRes.status()} ${challengeText}`;
+        await new Promise((r) => setTimeout(r, 50 + Math.floor(Math.random() * 100)));
+        continue;
+      }
+      const challengeBody = JSON.parse(challengeText);
+      const message: string = challengeBody.data.challenge;
+      const signature = await wallet.signMessage(message);
 
-    const verifyRes = await ctx.post('/api/v1/public/auth/verify', {
-      data: { address: checksum, signature },
-    });
-    const verifyText = await verifyRes.text();
-    if (verifyRes.status() !== 200) {
-      throw new Error(`verify failed: ${verifyRes.status()} ${verifyText}`);
+      const verifyRes = await ctx.post('/api/v1/public/auth/verify', {
+        data: { address: checksum, signature },
+      });
+      const verifyText = await verifyRes.text();
+      if (verifyRes.status() !== 200) {
+        lastError = `verify failed: ${verifyRes.status()} ${verifyText}`;
+        // 401 here is the transient nonce-clobber; back off and retry.
+        await new Promise((r) => setTimeout(r, 50 + Math.floor(Math.random() * 150)));
+        continue;
+      }
+      const body = JSON.parse(verifyText);
+      return {
+        token: body.data.token,
+        address,
+        username: '',
+        expiresAt: body.data.expiresAt,
+        source: 'wallet',
+      };
     }
-    const body = JSON.parse(verifyText);
-    return {
-      token: body.data.token,
-      address,
-      username: '',
-      expiresAt: body.data.expiresAt,
-      source: 'wallet',
-    };
+    throw new Error(lastError || 'SIWE login failed');
   } finally {
     await ctx.dispose();
   }
@@ -137,6 +152,42 @@ export async function authedRequest(baseURL: string, token: string) {
     baseURL,
     extraHTTPHeaders: { Authorization: `Bearer ${token}` },
   });
+}
+
+export interface WarehouseUserInfo {
+  username: string;
+  walletAddress?: string;
+  hasPassword: boolean;
+  capabilities: { manageUsers: boolean };
+}
+
+/**
+ * GET /api/v1/public/webdav/user/info. `capabilities.manageUsers` is true only
+ * when the caller's wallet address is in the server's Security.AdminAddresses
+ * allowlist — the authoritative gate for the admin-only endpoints.
+ */
+export async function getUserInfo(baseURL: string, token: string): Promise<WarehouseUserInfo> {
+  const ctx = await authedRequest(baseURL, token);
+  try {
+    const res = await ctx.get('/api/v1/public/webdav/user/info');
+    if (res.status() !== 200) {
+      throw new Error(`user/info failed: ${res.status()} ${await res.text()}`);
+    }
+    const b = (await res.json()) as {
+      username: string;
+      wallet_address?: string;
+      has_password?: boolean;
+      capabilities?: { manageUsers?: boolean };
+    };
+    return {
+      username: b.username,
+      walletAddress: b.wallet_address,
+      hasPassword: Boolean(b.has_password),
+      capabilities: { manageUsers: Boolean(b.capabilities?.manageUsers) },
+    };
+  } finally {
+    await ctx.dispose();
+  }
 }
 
 /** Re-export verifyMessage for tests that want to sanity-check signatures. */

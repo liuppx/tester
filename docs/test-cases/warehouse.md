@@ -10,21 +10,21 @@
 
 | 模块 | 用例数 | 已实现 | 待实现 |
 | --- | --- | --- | --- |
-| 一、鉴权与会话 | 16 | 9 | 7 |
-| 二、WebDAV 文件访问协议 | 11 | 4 | 7 |
-| 三、WebDAV 目录访问密钥(AccessKey) | 7 | 5 | 2 |
-| 四、S3 凭证与 S3 协议 | 8 | 6 | 2 |
+| 一、鉴权与会话 | 16 | 12 | 4 |
+| 二、WebDAV 文件访问协议 | 11 | 8 | 3 |
+| 三、WebDAV 目录访问密钥(AccessKey) | 7 | 6 | 1 |
+| 四、S3 凭证与 S3 协议 | 8 | 8 | 0 |
 | 五、文件管理 UI | 9 | 4 | 5 |
-| 六、回收站 | 5 | 1 | 4 |
-| 七、公开分享 | 6 | 2 | 4 |
-| 八、定向分享(给指定用户) | 8 | 2 | 6 |
-| 九、配额 | 4 | 1 | 3 |
-| 十、用户资料与密码 | 4 | 1 | 3 |
+| 六、回收站 | 5 | 4 | 1 |
+| 七、公开分享 | 6 | 5 | 1 |
+| 八、定向分享(给指定用户) | 8 | 7 | 1 |
+| 九、配额 | 4 | 2 | 2 |
+| 十、用户资料与密码 | 4 | 4 | 0 |
 | 十一、通知 | 4 | 0 | 4 |
 | 十二、分组管理 | 2 | 0 | 2 |
-| 十三、管理员用户管理 | 5 | 1 | 4 |
+| 十三、管理员用户管理 | 5 | 4 | 1 |
 | 十四、健康检查与冒烟 | 2 | 2 | 0 |
-| **合计** | **91** | **38** | **53** |
+| **合计** | **91** | **66** | **25** |
 
 ---
 
@@ -65,7 +65,7 @@
 ### WH-API-004 SIWE nonce 一次性 / 防重放
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/siwe-replay.spec.ts
 - 前置条件:已完成一次成功的 challenge→verify
 - 步骤:
   1. 复用同一个 `nonce`/challenge 再次 `POST /auth/verify`
@@ -101,7 +101,7 @@
 ### WH-API-008 受保护接口非法/过期 JWT 返回 401
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/auth-token-refresh.spec.ts
 - 前置条件:无
 - 步骤:
   1. 携带伪造/已过期的 `Authorization: Bearer xxx` 请求 `GET /webdav/user/info`
@@ -110,7 +110,7 @@
 ### WH-API-009 auth/refresh 刷新令牌
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/auth-token-refresh.spec.ts
 - 前置条件:已通过登录获得 refresh cookie/token
 - 步骤:
   1. `POST /api/v1/public/auth/refresh` 携带刷新凭证
@@ -218,7 +218,7 @@
 ### WH-API-017 DELETE 文件后再 GET 返回 404
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/webdav-mutations.spec.ts
 - 前置条件:已 PUT 一个测试文件
 - 步骤:
   1. `DELETE /dav/test-<stamp>.txt`
@@ -228,7 +228,7 @@
 ### WH-API-018 MKCOL 创建目录
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/webdav-mutations.spec.ts
 - 前置条件:Basic 认证
 - 步骤:
   1. `MKCOL /dav/dir-<stamp>/`
@@ -238,7 +238,7 @@
 ### WH-API-019 MOVE 重命名/移动文件
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/webdav-mutations.spec.ts
 - 前置条件:已 PUT 源文件
 - 步骤:
   1. `MOVE /dav/a-<stamp>.txt`,`Destination: /dav/b-<stamp>.txt`
@@ -275,7 +275,7 @@
 ### WH-API-023 PUT 到他人个人空间返回 403
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/webdav-mutations.spec.ts
 - 前置条件:admin 不拥有 `/personal/<otherUser>`
 - 步骤:
   1. admin Basic 认证下 `PUT /dav/personal/<otherUser>/x.txt`
@@ -344,7 +344,7 @@
 ### WH-API-030 AccessKey 访问未绑定路径被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/access-keys-scope.spec.ts
 - 前置条件:AccessKey 仅绑定 `/personal`
 - 步骤:
   1. 用该 key 对未绑定的其它路径 `PROPFIND`
@@ -404,7 +404,7 @@
 ### WH-API-036 未签名 S3 请求返回 403 AccessDenied
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/s3-sigv4-negative.spec.ts
 - 前置条件:S3 服务可用
 - 步骤:
   1. 对 6066 发起无 SigV4 签名的 `GET /`(ListBuckets)
@@ -422,7 +422,7 @@
 ### WH-API-038 撤销后 SigV4 请求被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/s3-sigv4-negative.spec.ts
 - 前置条件:S3 凭证已被 revoke
 - 步骤:
   1. 用已撤销凭证做 SigV4 ListBuckets
@@ -485,7 +485,7 @@
 ### WH-UI-009 上传大文件显示进度(分片上传)
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:⬜ 待实现(降级跳过)— products/warehouse/tests/ui-large-upload-rename.spec.ts(warehouse frontend (5173) not running)
 - 前置条件:已认证会话,后端 `uploads/sessions` 分片上传可用
 - 步骤:
   1. 上传较大文件
@@ -513,7 +513,7 @@
 ### WH-UI-012 重命名文件/文件夹
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:⬜ 待实现(降级跳过)— products/warehouse/tests/ui-large-upload-rename.spec.ts(warehouse frontend (5173) not running)
 - 前置条件:已存在文件/文件夹
 - 步骤:
   1. 对条目执行重命名
@@ -545,7 +545,7 @@
 ### WH-API-039 删除文件进入回收站列表
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/recycle.spec.ts
 - 前置条件:JWT 登录,已删除某文件
 - 步骤:
   1. 删除文件后 `GET /api/v1/public/webdav/recycle/list`
@@ -554,7 +554,7 @@
 ### WH-API-040 从回收站恢复文件
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/recycle.spec.ts
 - 前置条件:回收站中存在条目
 - 步骤:
   1. `POST /webdav/recycle/recover` 指定条目
@@ -564,7 +564,7 @@
 ### WH-API-041 永久删除单个回收站条目
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/recycle.spec.ts
 - 前置条件:回收站中存在条目
 - 步骤:
   1. `POST /webdav/recycle/permanent` 指定条目
@@ -597,7 +597,7 @@
 ### WH-API-044 我的分享列表
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/share-public-lifecycle.spec.ts
 - 前置条件:已创建至少一个分享
 - 步骤:
   1. `GET /api/v1/public/share/list`
@@ -615,7 +615,7 @@
 ### WH-API-046 过期分享访问返回 410 Gone
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/share-public-lifecycle.spec.ts(运行时因后端 expires_at 无时区列缺陷降级跳过)
 - 前置条件:创建一个立即/短期过期的分享
 - 步骤:
   1. 过期后 `GET /share/<shareId>`
@@ -624,7 +624,7 @@
 ### WH-API-047 撤销分享后访问被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/share-public-lifecycle.spec.ts
 - 前置条件:已创建分享
 - 步骤:
   1. `POST /api/v1/public/share/revoke`
@@ -656,7 +656,7 @@
 ### WH-API-050 我发起的定向分享列表
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/share-user-lifecycle.spec.ts
 - 前置条件:已创建定向分享
 - 步骤:
   1. `GET /api/v1/public/share/user/list`
@@ -665,7 +665,7 @@
 ### WH-API-051 我收到的定向分享列表
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/share-user-lifecycle.spec.ts
 - 前置条件:当前用户为某定向分享受众
 - 步骤:
   1. `GET /api/v1/public/share/user/received`
@@ -674,7 +674,7 @@
 ### WH-API-052 撤销定向分享
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/share-user-lifecycle.spec.ts
 - 前置条件:已创建定向分享
 - 步骤:
   1. `POST /api/v1/public/share/user/revoke`
@@ -693,7 +693,7 @@
 ### WH-API-054 定向分享资源浏览 entries
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/share-user-lifecycle.spec.ts
 - 前置条件:受众身份,存在收到的分享
 - 步骤:
   1. `GET /api/v1/public/share/user/entries`(或 `/share/resource/entries`)
@@ -711,7 +711,7 @@
 ### WH-API-056 可写定向分享的下载/上传/新建/重命名/删除
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/share-user-writable.spec.ts
 - 前置条件:创建含写权限的定向分享
 - 步骤:
   1. 受众依次调用 `share/user/download`、`upload`、`folder`、`rename`、`item`(删除)
@@ -751,7 +751,7 @@
 ### WH-API-060 超配额上传被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/quota-enforcement.spec.ts(需管理员配额供给能力,非管理员身份下按能力降级跳过)
 - 前置条件:账号配额接近上限
 - 步骤:
   1. 上传超过剩余配额的文件
@@ -773,7 +773,7 @@
 ### WH-API-062 修改密码成功
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/password-change.spec.ts
 - 前置条件:已知当前密码的账号
 - 步骤:
   1. `POST /webdav/user/password` 提交正确 oldPassword + 合法 newPassword
@@ -783,7 +783,7 @@
 ### WH-API-063 新密码少于 6 位被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/password-change.spec.ts
 - 前置条件:JWT 登录
 - 步骤:
   1. `POST /webdav/user/password` 提交长度 < 6 的 newPassword
@@ -792,7 +792,7 @@
 ### WH-API-064 旧密码错误被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/password-change.spec.ts
 - 前置条件:账号已设置密码
 - 步骤:
   1. `POST /webdav/user/password` 提交错误 oldPassword
@@ -874,7 +874,7 @@
 ### WH-API-071 管理员列出用户
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/admin-users.spec.ts(需管理员身份,非管理员下按能力降级跳过)
 - 前置条件:管理员 JWT(地址在 AdminAddresses 白名单)
 - 步骤:
   1. `GET /api/v1/admin/users/list`
@@ -883,7 +883,7 @@
 ### WH-API-072 管理员创建用户
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/admin-users.spec.ts(需管理员身份,非管理员下按能力降级跳过)
 - 前置条件:管理员 JWT
 - 步骤:
   1. `POST /api/v1/admin/users/create` 提交新用户信息
@@ -893,7 +893,7 @@
 ### WH-API-073 管理员重置用户密码
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/admin-users.spec.ts(需管理员身份,非管理员下按能力降级跳过)
 - 前置条件:管理员 JWT,目标用户存在
 - 步骤:
   1. `POST /api/v1/admin/users/reset-password`
