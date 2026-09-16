@@ -17,9 +17,9 @@
 | 项目 Project | [project.md](project.md) | 141 | 138 | 3 | 98% |
 | 知识库 Knowledge | [knowledge.md](knowledge.md) | 110 | 5 | 105 | 5% |
 | 智能体 Agent | [agent.md](agent.md) | 58 | 4 | 54 | 7% |
-| 应用市场 Marketplace | [marketplace.md](marketplace.md) | 59 | 5 | 54 | 8% |
-| 文档 Books | [books.md](books.md) | 35 | 4 | 31 | 11% |
-| **合计** | | **858** | **500** | **358** | **58%** |
+| 应用市场 Marketplace | [marketplace.md](marketplace.md) | 59 | 59 | 0 | 100% |
+| 文档 Books | [books.md](books.md) | 35 | 32 | 3 | 91% |
+| **合计** | | **858** | **582** | **276** | **68%** |
 
 ## 使用方式
 
@@ -53,8 +53,6 @@ Router 令牌选择、Provider 代理转发。整个业务链路(登录门槛之
 **Agent** — 钱包 SIWE 换会话 Cookie 主流程、错误签名拒绝、会话校验 401、受保护目录 401、
 Messenger 实例创建与生命周期。
 
-**Marketplace** — 完整技能包 schema 全字段校验、index↔packages 一致性、path/toolServers 引用完整性、
-(id,lang) 唯一性。现有 spec 仅校验轻量索引的少数字段。
+**Marketplace** — 全量覆盖(59/59)。技能包与 Tool Server 的完整 schema 校验(必填字段、kebab-case/semver、name/description localizedText、launch/instructions 的 oneOf、icon/permissions/release 枚举、additionalProperties=false),index↔packages 一致性与版本对齐、tools/index↔tools/packages 对齐、path/toolServers[].id 引用全部落到真实文件、(id,lang) 唯一、codex 技能不入索引、确定性排序、npx @yeying-community 本地源码存在,以及未设 BASE_URL 时的磁盘回退与非法/空/缺失输入的边界(临时 fixture,不改真实仓库)。纯文件校验,无需服务。未发现数据缺陷。
 
-**Books** — SUMMARY 链接目标文件存在(死链校验)、章节孤儿检测、硬断言而非缺失即跳过。
-已发现真实死链:`agent/README.md` 内 SUMMARY 链接写成绝对路径且缺 `opensource/` 段。
+**Books** — P2 数据校验已补齐(32/35):SUMMARY 结构/编号、死链与仓库内相对路径扫描、章节孤儿双向校验、跨文件与文内 #锚点解析及重复歧义、图片/资产孤儿与 alt、UTF-8/代码围栏成对/CRLF、总览↔单产品目录一致、"纯 SUMMARY 目录型仓库"构建契约。纯文件校验,无需服务。**发现 2 处真实缺陷(以 `test.fixme` 如实标记,未弱化断言、未修改产品仓库)**:① `agent/README.md:26` 的 SUMMARY 链接写成机器绝对路径且缺 `opensource/` 段 → 死链(应改相对 `./SUMMARY.md`);② `yeying/2A068D22-…​.png` 为无任何 markdown 引用的孤儿图片资产。剩余 3 条 ⬜ 即这两处缺陷对应用例(BK-DATA-009/012/023)。
