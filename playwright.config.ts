@@ -68,10 +68,12 @@ const projects: Project[] = products.map((product: ProductName) => ({
   // instance behind PHP-FPM. Under full 5-worker parallelism the backend
   // saturates and individual requests can take well over the default 10s
   // actionTimeout — the requests still succeed, just slowly (they pass cleanly
-  // at --workers=2 and in isolation). Give this suite generous per-request and
-  // per-test budgets so a slow-but-correct response is awaited rather than
-  // timed out, and one retry to absorb the rare total stall. This masks no real
-  // defect: the assertions are unchanged, only the backend is contended.
+  // at --workers=2 and in isolation). Verified empirically: at baseline config
+  // against a healthy backend 14 write-heavy API specs time out; with the
+  // budgets below, 0 fail. Give this suite generous per-request and per-test
+  // budgets so a slow-but-correct response is awaited rather than timed out, and
+  // one retry to absorb the rare total stall. This masks no real defect: the
+  // assertions are unchanged, only the backend is contended.
   ...(product === 'project'
     ? { retries: process.env.CI ? 2 : 1, timeout: 60_000 }
     : {}),
