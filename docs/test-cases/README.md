@@ -8,18 +8,18 @@
 
 | 产品 | 文档 | 用例数 | ✅ 已实现 | ⬜ 待实现 | 完成度 |
 | --- | --- | ---: | ---: | ---: | ---: |
-| 仓库 Warehouse | [warehouse.md](warehouse.md) | 91 | 38 | 53 | 42% |
-| 节点 Node | [node.md](node.md) | 50 | 26 | 24 | 52% |
-| 路由 Router | [router.md](router.md) | 79 | 38 | 41 | 48% |
-| 钱包 Wallet | [wallet.md](wallet.md) | 56 | 24 | 32 | 43% |
+| 仓库 Warehouse | [warehouse.md](warehouse.md) | 91 | 66 | 25 | 73% |
+| 节点 Node | [node.md](node.md) | 50 | 38 | 12 | 76% |
+| 路由 Router | [router.md](router.md) | 79 | 47 | 32 | 60% |
+| 钱包 Wallet | [wallet.md](wallet.md) | 56 | 41 | 15 | 73% |
 | 对话 Chat | [chat.md](chat.md) | 92 | 5 | 87 | 5% |
-| 社交 Social | [social.md](social.md) | 87 | 29 | 58 | 33% |
-| 项目 Project | [project.md](project.md) | 141 | 24 | 117 | 17% |
+| 社交 Social | [social.md](social.md) | 87 | 65 | 22 | 75% |
+| 项目 Project | [project.md](project.md) | 141 | 105 | 36 | 74% |
 | 知识库 Knowledge | [knowledge.md](knowledge.md) | 110 | 5 | 105 | 5% |
 | 智能体 Agent | [agent.md](agent.md) | 58 | 4 | 54 | 7% |
 | 应用市场 Marketplace | [marketplace.md](marketplace.md) | 59 | 5 | 54 | 8% |
 | 文档 Books | [books.md](books.md) | 35 | 4 | 31 | 11% |
-| **合计** | | **858** | **202** | **656** | **24%** |
+| **合计** | | **858** | **385** | **473** | **45%** |
 
 ## 使用方式
 
@@ -30,24 +30,22 @@
   「每个产品应该有哪些用例、还差哪些」,而 `products/<name>/tests/*.spec.ts` 是这些用例的
   自动化实现。
 
-## 各产品重点缺口(P0 待实现)
+## 各产品重点缺口
 
-**Warehouse** — P0 已补齐(负向鉴权基线、撤销 AccessKey 拒绝、S3 SigV4 真实 ListBuckets、公开/定向分享创建与匿名访问、只读分享写拒绝、admin 越权 403、心跳/就绪探针)。剩余待建:通知、分组、管理员用户管理整片,以及回收站、配额、资料/密码的 P1/P2。
+**Warehouse** — P0 + P1 已补齐(负向鉴权基线、撤销 AccessKey 拒绝、S3 SigV4 真实 ListBuckets、公开/定向分享全生命周期与只读写拒绝、WebDAV 增删改、回收站、配额限额、改密、admin 用户管理、SIWE 重放拒绝、大文件上传/重命名 UI)。剩余待建(P2/整片):logout/邮箱验证码/UCAN 登录、WebDAV COPY/OPTIONS/404、AccessKey 追加绑定、文件预览/排序/冲突 UI、清空回收站、二次分享与 audiences、通知整片、分组整片、管理员删改用户。
 
-**Node** — P0 主链路已覆盖(未过审发布 403、写操作签名信封校验、真实 window.ethereum 端到端 SIWE 登录、受保护路由守卫);仅审核工作流全链路(ND-E2E-003/004)因环境无管理员审批能力降级为干净跳过。剩余待建:refresh 轮换/logout 撤销、应用可见范围与非属主 403、身份能力(TOTP/Passkey/授权码)。
+**Node** — P0 + P1 已补齐(未过审发布 403、写操作签名信封校验、真实 SIWE 端到端登录、受保护路由守卫、refresh 轮换/logout 撤销、应用可见范围与非属主 403、TOTP/PKCE 身份能力、草稿编辑与 apply-to-use 流程)。剩余待建(P2/需管理员):健康别名/就绪 503、verify 负路径、i18n 与应用检索 UI、审核发布全链路(ND-E2E-003/004 缺管理员审批)、下线恢复、草稿重名检查、身份状态查询/Passkey 注册。
 
-**Router** — OpenAI 兼容中继整块(models / chat/completions 扣额度)零覆盖、混合信封契约、
-SIWE 负路径与 nonce 一次性语义、admin 越权 403、未登录路由重定向。
+**Router** — P0 + P1 已补齐(混合信封契约、SIWE 负路径与 nonce 一次性、admin 越权 403、未登录重定向、令牌更新/删除、models API-key 门禁、登录/会话 UI、充值订单基线、兑换码)。剩余待建(P2/整片):OpenAI 兼容中继整块(models / chat/completions 扣额度、未实现端点、DISABLE_OPENAI_COMPAT、路由日志)、充值订单全流转(刷新/取消/套餐预览/状态机)、余额汇总/批次/兑换记录、账户设置改名改密 E2E、challenge 自动注册拒绝、refresh 换发、大小写登录、限流、侧栏/语言/模型/额度/令牌交互 UI。
 
-**Wallet** — dApp 侧负路径(拒绝连接/签名返回 4001)、EIP-2255 权限与链切换审批、
-私钥/keystore 导入、收款地址 EIP-55 校验、dApp 触发的交易审批窗。
+**Wallet** — P0 + P1 已补齐(dApp 侧负路径 4001 拒绝、EIP-2255 权限与链切换审批、私钥/keystore 导入与负向校验、dApp 触发交易审批窗、密码/导入校验、删除账户、RPC 回退、reveal/改密守卫、代币与交易详情)。剩余待建(P2):非法私钥导入报错、收款二维码/导出账户、编辑/删除自定义网络、默认网络切换、清空历史、通讯录、ReCap/watchAsset/accountsChanged/eth_accounts 空/审批超时/并发复用、多次错误解锁处理。
 
 **Chat** — LLM 会话主路径(流式回复 / 停止响应中断 / 无效 key 优雅报错)、钱包 SIWE 登录准入、
 Router 令牌选择、Provider 代理转发。整个业务链路(登录门槛之后)现为冒烟层覆盖。
 
-**Social** — P0 主链路已覆盖(邮箱+密码与 web3-identity SIWE 双路径签发 LoginVO、错误口令/未知邮箱拒绝、自定义 `accessToken` 头鉴权守卫、SIWE nonce 一次性与错误签名拒绝、双用户好友/建群/私聊+群聊消息收发、seeded 会话首页渲染与发消息)。注:web3-graph/incentive 后端为空壳,未纳入。剩余待建:会话/联系人整片 UI、消息已读/撤回、群管理。
+**Social** — P0 + P1 已补齐(邮箱+密码与 web3-identity SIWE 双路径签发、鉴权守卫、SIWE nonce 一次性与错误签名拒绝、好友/建群/私聊+群聊收发、消息历史/撤回/离线/已读、媒体上传、刷新/改密/绑钱包、导航/设置/登出 UI)。剩余待建(P2/整片):refresh 负路径、改密旧码错误、过期 token 拒绝、钱包登录/注册页/二维码轮询 UI、解绑钱包、注销、在线状态、免打扰、AI(改写/建议/摘要)、RTC(配置/信令/通话)、图片语音发送/群 @/通话面板 UI。注:web3-graph/incentive 后端为空壳,未纳入。
 
-**Project**(夜莺/DooTask)— P0 主链路已覆盖(登录签发 token、`ret=-1`/身份失效鉴权守卫、admin 越权 403、项目/列/任务 CRUD、任务完成与撤销、flow 状态流转、成员更新、仪表盘/侧边栏渲染、UI 建项目向导与看板加卡)。因 admin 账号被验证码锁、钱包 SIWE 命中 setup_token 门,用例改用开放注册的临时账号跑通。剩余待建:文件/文档、消息/审批通知、日历、报表等业务面。
+**Project**(夜莺/DooTask)— P0 + P1 已补齐(登录签发 token、`ret=-1`/身份失效鉴权守卫、admin 越权 403、项目/列/任务/工作流/成员/标签/文件/汇报/搜索/令牌/账号 API、仪表盘与 SPA 导航、UI 建项目向导与看板加卡)。因 admin 账号被验证码锁、钱包 SIWE 命中 setup_token 门,用例改用开放注册的临时账号跑通;共享 MySQL 下用宽超时 + 单次重试稳过。剩余待建(P2/整片):图形验证码、passport 轮询、user/counts 角标、404 页、项目移交/置顶/排序、复制任务、任务聊天室、消息与群组 UI、汇报模板、改邮箱/设备登出/删号、令牌审计与 AK/SK 头、部门管理、联系人/文件/消息搜索、demo 账号。
 
 **Knowledge** — SIWE 登录换双令牌、受保护接口 401 基线、知识库创建、Search Lab 三模式检索对比、
 面向 Agent 的服务检索(`X-Service-Api-Key`)。实为完整知识运营系统,17 个模块业务链路全待建。
