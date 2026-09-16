@@ -9,7 +9,7 @@
  * UI 钱包登录（通过浏览器插件）单独在 ui-wallet.spec.ts 里处理。
  */
 import { request } from '@playwright/test';
-import { Wallet, Signature, getBytes, verifyMessage } from 'ethers';
+import { Wallet, Signature, getAddress, getBytes, verifyMessage } from 'ethers';
 import { envFor } from '../../../shared/env';
 
 export interface WarehouseTokens {
@@ -74,11 +74,15 @@ export async function loginWithWallet(
 ): Promise<WarehouseTokens> {
   const wallet = new Wallet(privateKey);
   const address = wallet.address.toLowerCase();
+  // The server's SIWE challenge/verify require an EIP-55 checksum address and
+  // rejects all-lowercase input with 400 (see siwe.spec.ts). Sign with the
+  // checksum form; the returned `address` is normalized to lowercase.
+  const checksum = getAddress(wallet.address);
 
   const ctx = await request.newContext({ baseURL });
   try {
     const challengeRes = await ctx.post('/api/v1/public/auth/challenge', {
-      data: { address },
+      data: { address: checksum },
     });
     const challengeText = await challengeRes.text();
     if (challengeRes.status() !== 200) {
@@ -89,7 +93,7 @@ export async function loginWithWallet(
     const signature = await wallet.signMessage(message);
 
     const verifyRes = await ctx.post('/api/v1/public/auth/verify', {
-      data: { address, signature },
+      data: { address: checksum, signature },
     });
     const verifyText = await verifyRes.text();
     if (verifyRes.status() !== 200) {

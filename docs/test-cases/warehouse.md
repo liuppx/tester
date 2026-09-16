@@ -10,21 +10,21 @@
 
 | 模块 | 用例数 | 已实现 | 待实现 |
 | --- | --- | --- | --- |
-| 一、鉴权与会话 | 16 | 7 | 9 |
-| 二、WebDAV 文件访问协议 | 11 | 3 | 8 |
-| 三、WebDAV 目录访问密钥(AccessKey) | 7 | 4 | 3 |
-| 四、S3 凭证与 S3 协议 | 8 | 5 | 3 |
+| 一、鉴权与会话 | 16 | 9 | 7 |
+| 二、WebDAV 文件访问协议 | 11 | 4 | 7 |
+| 三、WebDAV 目录访问密钥(AccessKey) | 7 | 5 | 2 |
+| 四、S3 凭证与 S3 协议 | 8 | 6 | 2 |
 | 五、文件管理 UI | 9 | 4 | 5 |
 | 六、回收站 | 5 | 1 | 4 |
-| 七、公开分享 | 6 | 0 | 6 |
-| 八、定向分享(给指定用户) | 8 | 0 | 8 |
+| 七、公开分享 | 6 | 2 | 4 |
+| 八、定向分享(给指定用户) | 8 | 2 | 6 |
 | 九、配额 | 4 | 1 | 3 |
 | 十、用户资料与密码 | 4 | 1 | 3 |
 | 十一、通知 | 4 | 0 | 4 |
 | 十二、分组管理 | 2 | 0 | 2 |
-| 十三、管理员用户管理 | 5 | 0 | 5 |
-| 十四、健康检查与冒烟 | 2 | 0 | 2 |
-| **合计** | **91** | **26** | **65** |
+| 十三、管理员用户管理 | 5 | 1 | 4 |
+| 十四、健康检查与冒烟 | 2 | 2 | 0 |
+| **合计** | **91** | **38** | **53** |
 
 ---
 
@@ -83,7 +83,7 @@
 ### WH-API-006 密码登录错误口令被拒
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/auth-negative.spec.ts
 - 前置条件:存在账号 admin
 - 步骤:
   1. `POST /auth/password/login` 提交正确用户名 + 错误密码
@@ -92,7 +92,7 @@
 ### WH-API-007 受保护接口缺少 JWT 返回 401
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/auth-negative.spec.ts
 - 前置条件:无
 - 步骤:
   1. 不带 Authorization 头请求 `GET /api/v1/public/webdav/quota`(或 `/webdav/user/info`)
@@ -266,7 +266,7 @@
 ### WH-API-022 无凭证访问 WebDAV 返回 401
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/auth-negative.spec.ts
 - 前置条件:无
 - 步骤:
   1. 不带 Authorization 发起 `PROPFIND /dav/`
@@ -335,7 +335,7 @@
 ### WH-API-029 撤销后 AccessKey 认证被拒
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/access-keys-revoked.spec.ts
 - 前置条件:AccessKey 已被 revoke
 - 步骤:
   1. 用已撤销的 keyId/keySecret 对绑定路径 `PROPFIND`
@@ -413,7 +413,7 @@
 ### WH-API-037 SigV4 ListBuckets 成功
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/s3-sigv4.spec.ts
 - 前置条件:已创建有效 S3 凭证(accessKeyId/secret)
 - 步骤:
   1. 用 AWS SigV4(region us-east-1)对 6066 发起 ListBuckets
@@ -588,7 +588,7 @@
 ### WH-API-043 创建公开分享返回可访问链接
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/share-public.spec.ts
 - 前置条件:JWT 登录,已存在待分享资源
 - 步骤:
   1. `POST /api/v1/public/share/create`,设置 `mode`、`expiresValue/expiresUnit`
@@ -606,7 +606,7 @@
 ### WH-API-045 通过分享链接匿名访问
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/share-public.spec.ts
 - 前置条件:已创建公开分享
 - 步骤:
   1. `GET /api/v1/public/share/<shareId>`(无需登录)
@@ -647,7 +647,7 @@
 ### WH-API-049 创建定向分享给指定受众
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/share-user.spec.ts
 - 前置条件:JWT 登录,已知目标受众
 - 步骤:
   1. `POST /api/v1/public/share/user/create`,指定资源、受众、`permissions`、有效期
@@ -702,7 +702,7 @@
 ### WH-API-055 只读定向分享的写操作被拒
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/share-user.spec.ts
 - 前置条件:创建仅含只读 `permissions` 的定向分享
 - 步骤:
   1. 受众尝试 `POST /share/user/upload`(或 `/share/resource/folder`、`/rename`、`/delete`)
@@ -913,7 +913,7 @@
 ### WH-API-075 非管理员访问 admin 接口返回 403
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/admin-authz.spec.ts
 - 前置条件:普通用户 JWT(不在 AdminAddresses)
 - 步骤:
   1. 携带普通用户 JWT 请求 `GET /api/v1/admin/users/list`
@@ -926,7 +926,7 @@
 ### WH-API-076 心跳检查
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/health.spec.ts
 - 前置条件:服务已启动
 - 步骤:
   1. `GET /api/v1/public/health/heartbeat`
@@ -935,7 +935,7 @@
 ### WH-API-077 就绪检查确认数据库
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/warehouse/tests/health.spec.ts
 - 前置条件:服务与 PostgreSQL 已连接
 - 步骤:
   1. `GET /api/v1/public/health/readiness`

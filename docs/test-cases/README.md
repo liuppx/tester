@@ -8,7 +8,7 @@
 
 | 产品 | 文档 | 用例数 | ✅ 已实现 | ⬜ 待实现 | 完成度 |
 | --- | --- | ---: | ---: | ---: | ---: |
-| 仓库 Warehouse | [warehouse.md](warehouse.md) | 91 | 26 | 65 | 29% |
+| 仓库 Warehouse | [warehouse.md](warehouse.md) | 91 | 38 | 53 | 42% |
 | 节点 Node | [node.md](node.md) | 50 | 26 | 24 | 52% |
 | 路由 Router | [router.md](router.md) | 79 | 38 | 41 | 48% |
 | 钱包 Wallet | [wallet.md](wallet.md) | 56 | 24 | 32 | 43% |
@@ -19,7 +19,7 @@
 | 智能体 Agent | [agent.md](agent.md) | 58 | 4 | 54 | 7% |
 | 应用市场 Marketplace | [marketplace.md](marketplace.md) | 59 | 5 | 54 | 8% |
 | 文档 Books | [books.md](books.md) | 35 | 4 | 31 | 11% |
-| **合计** | | **858** | **151** | **707** | **18%** |
+| **合计** | | **858** | **163** | **695** | **19%** |
 
 ## 使用方式
 
@@ -32,8 +32,7 @@
 
 ## 各产品重点缺口(P0 待实现)
 
-**Warehouse** — 公开分享 / 定向分享 / 通知 / 分组 / 管理员用户管理整片空白;S3 SigV4 真实读操作、
-admin 越权 403、只读分享写拒绝、无 JWT/无凭证的负向鉴权基线。
+**Warehouse** — P0 已补齐(负向鉴权基线、撤销 AccessKey 拒绝、S3 SigV4 真实 ListBuckets、公开/定向分享创建与匿名访问、只读分享写拒绝、admin 越权 403、心跳/就绪探针)。剩余待建:通知、分组、管理员用户管理整片,以及回收站、配额、资料/密码的 P1/P2。
 
 **Node** — P0 主链路已覆盖(未过审发布 403、写操作签名信封校验、真实 window.ethereum 端到端 SIWE 登录、受保护路由守卫);仅审核工作流全链路(ND-E2E-003/004)因环境无管理员审批能力降级为干净跳过。剩余待建:refresh 轮换/logout 撤销、应用可见范围与非属主 403、身份能力(TOTP/Passkey/授权码)。
 
