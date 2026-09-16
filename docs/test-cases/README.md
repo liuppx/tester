@@ -13,13 +13,13 @@
 | 路由 Router | [router.md](router.md) | 79 | 38 | 41 | 48% |
 | 钱包 Wallet | [wallet.md](wallet.md) | 56 | 24 | 32 | 43% |
 | 对话 Chat | [chat.md](chat.md) | 92 | 5 | 87 | 5% |
-| 社交 Social | [social.md](social.md) | 87 | 10 | 77 | 11% |
-| 项目 Project | [project.md](project.md) | 141 | 4 | 137 | 3% |
+| 社交 Social | [social.md](social.md) | 87 | 29 | 58 | 33% |
+| 项目 Project | [project.md](project.md) | 141 | 24 | 117 | 17% |
 | 知识库 Knowledge | [knowledge.md](knowledge.md) | 110 | 5 | 105 | 5% |
 | 智能体 Agent | [agent.md](agent.md) | 58 | 4 | 54 | 7% |
 | 应用市场 Marketplace | [marketplace.md](marketplace.md) | 59 | 5 | 54 | 8% |
 | 文档 Books | [books.md](books.md) | 35 | 4 | 31 | 11% |
-| **合计** | | **858** | **163** | **695** | **19%** |
+| **合计** | | **858** | **202** | **656** | **24%** |
 
 ## 使用方式
 
@@ -45,11 +45,9 @@ SIWE 负路径与 nonce 一次性语义、admin 越权 403、未登录路由重�
 **Chat** — LLM 会话主路径(流式回复 / 停止响应中断 / 无效 key 优雅报错)、钱包 SIWE 登录准入、
 Router 令牌选择、Provider 代理转发。整个业务链路(登录门槛之后)现为冒烟层覆盖。
 
-**Social** — 邮箱+密码登录换 JWT、负向鉴权基线(自定义 `accessToken` 头)、私聊/群聊消息收发、
-端到端"登录→会话→发消息"。注:web3-graph/incentive 后端为空壳,未纳入。
+**Social** — P0 主链路已覆盖(邮箱+密码与 web3-identity SIWE 双路径签发 LoginVO、错误口令/未知邮箱拒绝、自定义 `accessToken` 头鉴权守卫、SIWE nonce 一次性与错误签名拒绝、双用户好友/建群/私聊+群聊消息收发、seeded 会话首页渲染与发消息)。注:web3-graph/incentive 后端为空壳,未纳入。剩余待建:会话/联系人整片 UI、消息已读/撤回、群管理。
 
-**Project**(夜莺/DooTask)— 登录签发 token、鉴权守卫(`ret=-1`)、项目创建、任务增删与状态流转、
-工作流流转、管理员越权拒绝。141 条中仅 4 条冒烟已覆盖,业务面几乎全待建。
+**Project**(夜莺/DooTask)— P0 主链路已覆盖(登录签发 token、`ret=-1`/身份失效鉴权守卫、admin 越权 403、项目/列/任务 CRUD、任务完成与撤销、flow 状态流转、成员更新、仪表盘/侧边栏渲染、UI 建项目向导与看板加卡)。因 admin 账号被验证码锁、钱包 SIWE 命中 setup_token 门,用例改用开放注册的临时账号跑通。剩余待建:文件/文档、消息/审批通知、日历、报表等业务面。
 
 **Knowledge** — SIWE 登录换双令牌、受保护接口 401 基线、知识库创建、Search Lab 三模式检索对比、
 面向 Agent 的服务检索(`X-Service-Api-Key`)。实为完整知识运营系统,17 个模块业务链路全待建。
