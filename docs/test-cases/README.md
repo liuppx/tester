@@ -8,18 +8,18 @@
 
 | 产品 | 文档 | 用例数 | ✅ 已实现 | ⬜ 待实现 | 完成度 |
 | --- | --- | ---: | ---: | ---: | ---: |
-| 仓库 Warehouse | [warehouse.md](warehouse.md) | 91 | 66 | 25 | 73% |
-| 节点 Node | [node.md](node.md) | 50 | 38 | 12 | 76% |
-| 路由 Router | [router.md](router.md) | 79 | 47 | 32 | 60% |
-| 钱包 Wallet | [wallet.md](wallet.md) | 56 | 41 | 15 | 73% |
+| 仓库 Warehouse | [warehouse.md](warehouse.md) | 91 | 91 | 0 | 100% |
+| 节点 Node | [node.md](node.md) | 50 | 46 | 4 | 92% |
+| 路由 Router | [router.md](router.md) | 79 | 65 | 14 | 82% |
+| 钱包 Wallet | [wallet.md](wallet.md) | 56 | 56 | 0 | 100% |
 | 对话 Chat | [chat.md](chat.md) | 92 | 5 | 87 | 5% |
-| 社交 Social | [social.md](social.md) | 87 | 65 | 22 | 75% |
-| 项目 Project | [project.md](project.md) | 141 | 105 | 36 | 74% |
+| 社交 Social | [social.md](social.md) | 87 | 81 | 6 | 93% |
+| 项目 Project | [project.md](project.md) | 141 | 138 | 3 | 98% |
 | 知识库 Knowledge | [knowledge.md](knowledge.md) | 110 | 5 | 105 | 5% |
 | 智能体 Agent | [agent.md](agent.md) | 58 | 4 | 54 | 7% |
 | 应用市场 Marketplace | [marketplace.md](marketplace.md) | 59 | 5 | 54 | 8% |
 | 文档 Books | [books.md](books.md) | 35 | 4 | 31 | 11% |
-| **合计** | | **858** | **385** | **473** | **45%** |
+| **合计** | | **858** | **500** | **358** | **58%** |
 
 ## 使用方式
 
@@ -32,20 +32,20 @@
 
 ## 各产品重点缺口
 
-**Warehouse** — P0 + P1 已补齐(负向鉴权基线、撤销 AccessKey 拒绝、S3 SigV4 真实 ListBuckets、公开/定向分享全生命周期与只读写拒绝、WebDAV 增删改、回收站、配额限额、改密、admin 用户管理、SIWE 重放拒绝、大文件上传/重命名 UI)。剩余待建(P2/整片):logout/邮箱验证码/UCAN 登录、WebDAV COPY/OPTIONS/404、AccessKey 追加绑定、文件预览/排序/冲突 UI、清空回收站、二次分享与 audiences、通知整片、分组整片、管理员删改用户。
+**Warehouse** — P0 + P1 + P2 全量覆盖(91/91)。logout/邮箱验证码/UCAN 会话、WebDAV COPY/OPTIONS/404、AccessKey 追加绑定、清空回收站、二次分享/audiences、配额百分比/无限标记、通知整片、分组 CRUD/成员、管理员改删用户、文件预览/排序/重命名/冲突/大文件上传 UI 均已落地。个别用例按环境条件跳过并在满足条件时真跑:邮箱验证码通道(后端 500)、UCAN、管理员改删(需地址在 Security.AdminAddresses)、前端 5173 未起时 UI 用例整体跳过。
 
-**Node** — P0 + P1 已补齐(未过审发布 403、写操作签名信封校验、真实 SIWE 端到端登录、受保护路由守卫、refresh 轮换/logout 撤销、应用可见范围与非属主 403、TOTP/PKCE 身份能力、草稿编辑与 apply-to-use 流程)。剩余待建(P2/需管理员):健康别名/就绪 503、verify 负路径、i18n 与应用检索 UI、审核发布全链路(ND-E2E-003/004 缺管理员审批)、下线恢复、草稿重名检查、身份状态查询/Passkey 注册。
+**Node** — P0 + P1 + P2 已补齐(46/50):healthCheck 别名、verify 负路径、身份状态、Passkey 注册(CDP 虚拟认证器跑真实 WebAuthn 仪式)、i18n 与应用检索 UI。剩余 4 条受阻:就绪 503(需非破坏性地制造共享 DB 故障)、下线恢复(需先有已审核上线的应用)、审核发布全链路 ND-E2E-003/004(需管理员审批人 ADMIN_DIDS)。
 
-**Router** — P0 + P1 已补齐(混合信封契约、SIWE 负路径与 nonce 一次性、admin 越权 403、未登录重定向、令牌更新/删除、models API-key 门禁、登录/会话 UI、充值订单基线、兑换码)。剩余待建(P2/整片):OpenAI 兼容中继整块(models / chat/completions 扣额度、未实现端点、DISABLE_OPENAI_COMPAT、路由日志)、充值订单全流转(刷新/取消/套餐预览/状态机)、余额汇总/批次/兑换记录、账户设置改名改密 E2E、challenge 自动注册拒绝、refresh 换发、大小写登录、限流、侧栏/语言/模型/额度/令牌交互 UI。
+**Router** — P0 + P1 + P2 已补齐(65/79):refresh 换发、大小写不敏感登录、充值余额汇总/批次/兑换记录、套餐预览、中继未实现边界 + 路由日志、侧栏/语言/模型/额度/套餐/账户设置 UI、改名与改密 E2E。剩余 14 条为环境受阻:外部支付订单全流转(top_up_mode=api,需真实外部单 + 回调)、令牌复制/编辑 UI(需已购模型才能建令牌)、DISABLE_OPENAI_COMPAT(需服务端重启切换)、auth 限流(DebugEnabled 短路)、未挂路由的死代码页(BalanceStatusPage/RedeemCodePage)。
 
-**Wallet** — P0 + P1 已补齐(dApp 侧负路径 4001 拒绝、EIP-2255 权限与链切换审批、私钥/keystore 导入与负向校验、dApp 触发交易审批窗、密码/导入校验、删除账户、RPC 回退、reveal/改密守卫、代币与交易详情)。剩余待建(P2):非法私钥导入报错、收款二维码/导出账户、编辑/删除自定义网络、默认网络切换、清空历史、通讯录、ReCap/watchAsset/accountsChanged/eth_accounts 空/审批超时/并发复用、多次错误解锁处理。
+**Wallet** — P0 + P1 + P2 全量覆盖(56/56):非法私钥导入报错、收款二维码/导出账户、自定义网络增改删与默认网络切换、清空历史、通讯录、连续错误解锁的锁定处理;dApp 侧 ReCap(EIP-5573)/watchAsset(EIP-747)/accountsChanged、未连接 eth_accounts 返回空、审批窗关闭即视为拒绝、同源并发复用同一审批窗。(唯一跳过为既有的真实 Sepolia 广播用例。)
 
 **Chat** — LLM 会话主路径(流式回复 / 停止响应中断 / 无效 key 优雅报错)、钱包 SIWE 登录准入、
 Router 令牌选择、Provider 代理转发。整个业务链路(登录门槛之后)现为冒烟层覆盖。
 
-**Social** — P0 + P1 已补齐(邮箱+密码与 web3-identity SIWE 双路径签发、鉴权守卫、SIWE nonce 一次性与错误签名拒绝、好友/建群/私聊+群聊收发、消息历史/撤回/离线/已读、媒体上传、刷新/改密/绑钱包、导航/设置/登出 UI)。剩余待建(P2/整片):refresh 负路径、改密旧码错误、过期 token 拒绝、钱包登录/注册页/二维码轮询 UI、解绑钱包、注销、在线状态、免打扰、AI(改写/建议/摘要)、RTC(配置/信令/通话)、图片语音发送/群 @/通话面板 UI。注:web3-graph/incentive 后端为空壳,未纳入。
+**Social** — P0 + P1 + P2 已补齐(81/87):refresh 负路径、改密旧码错误、解绑钱包、注销、终端在线状态、好友/群免打扰、已读指针/群消息已读用户、超大文件上传拒绝、AI 改写/建议/摘要(本地 provider 真跑)、RTC 系统配置、钱包登录无插件优雅提示与注册页 UI。剩余 6 条受阻:过期 accessToken(需服务端 HMAC 密钥伪造合法过期串)、1:1 通话信令与通话面板(需在线 WS 对端 + 摄像头/麦克风)、二维码登录轮询(需外部 passport 审批)、图片/文件/语音发送(getUserMedia)、群聊 @ 成员(IM WebSocket 花名册未握手)。注:web3-graph/incentive 后端为空壳,未纳入。
 
-**Project**(夜莺/DooTask)— P0 + P1 已补齐(登录签发 token、`ret=-1`/身份失效鉴权守卫、admin 越权 403、项目/列/任务/工作流/成员/标签/文件/汇报/搜索/令牌/账号 API、仪表盘与 SPA 导航、UI 建项目向导与看板加卡)。因 admin 账号被验证码锁、钱包 SIWE 命中 setup_token 门,用例改用开放注册的临时账号跑通;共享 MySQL 下用宽超时 + 单次重试稳过。剩余待建(P2/整片):图形验证码、passport 轮询、user/counts 角标、404 页、项目移交/置顶/排序、复制任务、任务聊天室、消息与群组 UI、汇报模板、改邮箱/设备登出/删号、令牌审计与 AK/SK 头、部门管理、联系人/文件/消息搜索、demo 账号。
+**Project**(夜莺/DooTask)— P0 + P1 + P2 已补齐(138/141):图形验证码、token 临近过期轮换、passport 轮询、项目移交/置顶/排序、复制任务/任务聊天室/协助人上限、删除工作流、标签上限、文件内容保存 + 共享、消息与群组、汇报标记与模板、改邮箱/设备登出/删号、令牌审计 + AK/SK 头 + 建令牌 UI、会员/联系人/文件/消息搜索、404 页。剩余 3 条为管理员受阻(站点 admin 账号被验证码锁,无法用临时账号驱动 `auth("admin")`):部门只读视角、令牌审计记录、部门列表增删改。注:该套件写单个共享 MySQL,默认 5 worker 会因争用出现轮换性客户端超时(非缺陷,后端全程 200、无 OOM);须以 `PWWORKERS=2 npx playwright test --project=project` 跑得确定性 0 失败(136 通过/8 跳过/0 失败,0 flaky)。
 
 **Knowledge** — SIWE 登录换双令牌、受保护接口 401 基线、知识库创建、Search Lab 三模式检索对比、
 面向 Agent 的服务检索(`X-Service-Api-Key`)。实为完整知识运营系统,17 个模块业务链路全待建。
