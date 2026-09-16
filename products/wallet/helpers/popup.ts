@@ -61,6 +61,24 @@ export const SELECTORS = {
   saveAccountNameBtn: '#saveAccountNameBtn',
   accountDetailAddress: '#accountDetailAddress',
   accountDetailQr: '#accountDetailQr',
+  copyAccountAddressBtn: '#copyAccountAddressBtn',
+
+  // Activity tab + transaction history.
+  activityTab: '#activityTab',
+  transactionList: '#transactionList',
+  clearTransactionsBtn: '#clearTransactionsBtn',
+
+  // Contacts (address book).
+  contactsBtn: '#contactsBtn',
+  contactsPage: '#contactsPage',
+  contactsList: '#contactsList',
+  openAddContactBtn: '#openAddContactBtn',
+  contactEditorModal: '#contactEditorModal',
+  contactNameInput: '#contactNameInput',
+  contactAddressInput: '#contactAddressInput',
+  addContactBtn: '#addContactBtn',
+  contactSelectorBtn: '#contactSelectorBtn',
+  contactMenu: '#contactMenu',
 
   // Network management page + add/edit form.
   networkManagePage: '#networkManagePage',
