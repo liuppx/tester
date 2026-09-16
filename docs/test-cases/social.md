@@ -9,21 +9,21 @@
 
 | 模块 | 用例数 | 已实现 | 待实现 |
 | --- | --- | --- | --- |
-| 一、登录与注册 | 10 | 0 | 10 |
-| 二、鉴权与会话守卫 | 4 | 0 | 4 |
+| 一、登录与注册 | 10 | 4 | 6 |
+| 二、鉴权与会话守卫 | 4 | 2 | 2 |
 | 三、SPA 登录界面(钱包 / 通行证) | 11 | 7 | 4 |
-| 四、Web3 身份认证(SIWE / web3-identity) | 9 | 0 | 9 |
-| 五、用户资料与搜索 | 5 | 0 | 5 |
-| 六、好友与联系人 | 5 | 0 | 5 |
-| 七、群组管理 | 10 | 0 | 10 |
-| 八、私聊消息 | 6 | 0 | 6 |
-| 九、群聊消息 | 6 | 0 | 6 |
+| 四、Web3 身份认证(SIWE / web3-identity) | 9 | 4 | 5 |
+| 五、用户资料与搜索 | 5 | 1 | 4 |
+| 六、好友与联系人 | 5 | 2 | 3 |
+| 七、群组管理 | 10 | 2 | 8 |
+| 八、私聊消息 | 6 | 1 | 5 |
+| 九、群聊消息 | 6 | 1 | 5 |
 | 十、文件与媒体上传 | 3 | 0 | 3 |
 | 十一、AI 助手 | 3 | 0 | 3 |
 | 十二、音视频通话(RTC 信令) | 2 | 0 | 2 |
-| 十三、前端导航与聊天界面 | 10 | 0 | 10 |
+| 十三、前端导航与聊天界面 | 10 | 2 | 8 |
 | 十四、服务探活与冒烟 | 3 | 3 | 0 |
-| **合计** | **87** | **10** | **77** |
+| **合计** | **87** | **29** | **58** |
 
 > 说明:Yeying Social 是仿微信的网页版即时通讯(IM)系统,后端 `platform` 模块(HTTP,8888)+ `server` 模块(Netty WebSocket 推送,8878)+ `rtc`(WebRTC 信令,8890)+ `web3-identity`(SIWE/UCAN,8901)。前端为 Vue 3 SPA(hash 路由,`createWebHashHistory`),经 8082 的 dev proxy 将 `/api/*` 代理到后端 `/*`(**直连后端 8888 时不带 `/api` 前缀**)。
 > 鉴权口径:登录成功返回 JWT 信封 `{accessToken, accessTokenExpiresIn, refreshToken, refreshTokenExpiresIn}`;受保护接口由 Spring MVC `AuthInterceptor` 校验,token 通过**自定义请求头 `accessToken`** 传递(**非** `Authorization: Bearer`)。公共放行路径:`/login`、`/register`、`/refreshToken`、`/*/upload`(即 `/image/upload`、`/file/upload`)、`/identity/login/*`、`/identity/callback`、swagger。前端 axios 拦截器在 401 时自动 `PUT /refreshToken` 续期,失败则重定向回 `/`。
@@ -36,7 +36,7 @@
 ### SO-API-001 邮箱+密码登录成功换取 JWT
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/auth-api.spec.ts
 - 前置条件:存在测试账号(SOCIAL_USER/SOCIAL_PASS),后端 platform 在 8888 可用
 - 步骤:
   1. `POST /login` 提交 `{email, password, terminal}`(terminal 为 WEB 枚举值)
@@ -45,7 +45,7 @@
 ### SO-API-002 错误密码登录被拒
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/auth-api.spec.ts
 - 前置条件:存在测试账号
 - 步骤:
   1. `POST /login` 提交正确邮箱 + 错误密码
@@ -54,7 +54,7 @@
 ### SO-API-003 未注册邮箱登录被拒
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/auth-api.spec.ts
 - 前置条件:无
 - 步骤:
   1. `POST /login` 提交不存在的邮箱
@@ -63,7 +63,7 @@
 ### SO-API-004 注册新用户
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/auth-api.spec.ts
 - 前置条件:邮箱未被占用
 - 步骤:
   1. `POST /register` 提交 `{email, password, nickName}`
@@ -132,7 +132,7 @@
 ### SO-API-011 受保护接口缺 accessToken 头被拒
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/auth-api.spec.ts
 - 前置条件:无
 - 步骤:
   1. 不带 `accessToken` 头请求 `GET /user/self`
@@ -141,7 +141,7 @@
 ### SO-API-012 非法/篡改 accessToken 被拒
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/auth-api.spec.ts
 - 前置条件:无
 - 步骤:
   1. 携带伪造/签名不匹配的 `accessToken` 头请求 `GET /user/self`
@@ -276,7 +276,7 @@
 ### SO-API-015 SIWE 挑战获取 nonce
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/siwe-api.spec.ts
 - 前置条件:web3-identity 服务在 8901 可用
 - 步骤:
   1. `POST /auth/siwe/nonce` 提交钱包地址等 `SiweNonceDTO`
@@ -285,7 +285,7 @@
 ### SO-API-016 SIWE 验证签名登录换取 token
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/siwe-api.spec.ts
 - 前置条件:已获取有效 nonce,准备测试钱包私钥
 - 步骤:
   1. 用私钥对 SIWE 消息 `personal_sign`
@@ -295,7 +295,7 @@
 ### SO-API-017 SIWE 验证拒绝错误签名
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/siwe-api.spec.ts
 - 前置条件:已获取有效 nonce
 - 步骤:
   1. 用另一把私钥对该挑战签名
@@ -305,7 +305,7 @@
 ### SO-API-018 SIWE nonce 一次性 / 过期
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/siwe-api.spec.ts
 - 前置条件:已完成一次成功 verify,或等待 nonce 过期(>300s)
 - 步骤:
   1. 复用同一 nonce 再次 `POST /auth/siwe/verify`
@@ -363,7 +363,7 @@
 ### SO-API-024 获取当前登录用户信息
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/auth-api.spec.ts
 - 前置条件:已登录(accessToken 头)
 - 步骤:
   1. `GET /user/self`
@@ -413,7 +413,7 @@
 ### SO-API-029 好友列表
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/social-flow.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. `GET /friend/list`
@@ -422,7 +422,7 @@
 ### SO-API-030 添加好友
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/social-flow.spec.ts
 - 前置条件:已登录,已知对方 friendId(可先经 `findByName` 搜索)
 - 步骤:
   1. `POST /friend/add?friendId=<id>`
@@ -464,7 +464,7 @@
 ### SO-API-034 创建群组
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/social-flow.spec.ts
 - 前置条件:已登录
 - 步骤:
   1. `POST /group/create` 提交 `GroupVO`(群名称等)
@@ -501,7 +501,7 @@
 ### SO-API-038 邀请好友入群
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/social-flow.spec.ts
 - 前置条件:已存在群组,有可邀请的好友
 - 步骤:
   1. `POST /group/invite` 提交 `GroupInviteDTO`(groupId + 好友 id 列表)
@@ -562,7 +562,7 @@
 ### SO-API-044 发送私聊消息
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/social-flow.spec.ts
 - 前置条件:已登录,存在好友
 - 步骤:
   1. `POST /message/private/send` 提交 `PrivateMessageDTO`(recvId + content + type)
@@ -621,7 +621,7 @@
 ### SO-API-050 发送群聊消息
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/social-flow.spec.ts
 - 前置条件:已登录,在某群内
 - 步骤:
   1. `POST /message/group/send` 提交 `GroupMessageDTO`(groupId + content + type,可含 @ 列表)
@@ -763,7 +763,7 @@
 ### SO-UI-012 播种会话进入聊天主界面渲染布局
 - 优先级:P0
 - 类型:E2E
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/chat-ui.spec.ts
 - 前置条件:通过 sessionStorage 播种 `accessToken`/`refreshToken`(绕过钱包/通行证登录),访问 `#/home/chat`
 - 步骤:
   1. 注入 token 并访问 `#/home/chat`
@@ -810,7 +810,7 @@
 ### SO-UI-017 端到端发送文本消息
 - 优先级:P0
 - 类型:E2E
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/social/tests/chat-ui.spec.ts
 - 前置条件:已认证会话,已选中一个好友会话(存在好友)
 - 步骤:
   1. 在 `ChatInput` contenteditable 输入框输入文本

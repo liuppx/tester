@@ -43,12 +43,18 @@ const EXTRA_KEYS: Record<ProductName, string[]> = {
     'SOCIAL_USER',
     'SOCIAL_PASS',
     /**
-     * URL of the Vue 2 SPA that fronts the social backend. Defaults to
+     * URL of the Vue 3 SPA that fronts the social backend. Defaults to
      * 8082 in the standard dev layout. `SOCIAL_BASE_URL` points to the
      * Spring Boot backend (8888) for actuator / API tests; SPA tests
      * need `SOCIAL_WEB_URL` instead.
      */
     'SOCIAL_WEB_URL',
+    /**
+     * URL of the web3-identity SIWE service (8901). Its SIWE endpoints
+     * (`/auth/siwe/nonce`, `/auth/siwe/verify`) are only reachable there
+     * directly — the platform gateway on 8888 returns 500 for them.
+     */
+    'SOCIAL_IDENTITY_URL',
   ],
   project: ['APP_DEV_PORT', 'PROJECT_USER', 'PROJECT_PASS'],
   knowledge: ['KNOWLEDGE_API_URL'],
