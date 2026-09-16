@@ -29,6 +29,7 @@ import { loginWithWallet } from '../helpers/auth';
 import {
   buildConfigUpsertBody,
   buildCreateApplicationBody,
+  buildUpdateApplicationBody,
   deleteBody,
   publishBody,
 } from '../helpers/signedAction';
@@ -218,5 +219,163 @@ test('ND-API-028 non-admin audit search outside own scope returns 403', async ()
     expect(((await res.json()) as { message: string }).message).toBe('Audit search scope denied');
   } finally {
     await s.ctx.dispose();
+  }
+});
+
+/** GET the application list for a session with an optional query string. */
+async function listApps(s: Session, query = '') {
+  const res = await s.ctx.get(`/api/v1/public/applications${query}`);
+  expect(res.status()).toBe(200);
+  const body = (await res.json()) as {
+    data: { items: Array<{ uid: string }>; page: { total: number; page: number; pageSize: number } };
+  };
+  return body.data;
+}
+
+test('ND-API-019 application list returns only the caller-visible scope', async () => {
+  skipIfNoService();
+  test.skip(!envFor('node')['NODE_WALLET_PRIVATE_KEY'], 'node wallet env not configured');
+  const baseURL = baseURLFor('node')!;
+  const a = await freshSession(baseURL);
+  const b = await freshSession(baseURL);
+  try {
+    const appA = await createApp(a, baseURL);
+    const appB = await createApp(b, baseURL);
+
+    // Default list is the public (online) scope: it never leaks another
+    // owner's unpublished draft, nor even the caller's own offline draft.
+    const def = await listApps(a);
+    expect(def.page).toBeTruthy();
+    expect(def.items.map((i) => i.uid)).not.toContain(appB.uid);
+    expect(def.items.map((i) => i.uid)).not.toContain(appA.uid);
+
+    // A can see its OWN draft when it explicitly asks for offline + own owner.
+    const own = await listApps(a, `?owner=${a.address}&includeOffline=true`);
+    expect(own.items.map((i) => i.uid)).toContain(appA.uid);
+
+    // A asking for B's offline drafts is scope-downgraded (includeOffline is
+    // dropped for a non-owner/non-admin), so B's draft stays hidden.
+    const cross = await listApps(a, `?owner=${b.address}&includeOffline=true`);
+    expect(cross.items.map((i) => i.uid)).not.toContain(appB.uid);
+
+    await a.ctx.delete(`/api/v1/public/applications/${appA.uid}`, {
+      data: await deleteBody(a.wallet, a.address, appA.uid),
+    });
+    await b.ctx.delete(`/api/v1/public/applications/${appB.uid}`, {
+      data: await deleteBody(b.wallet, b.address, appB.uid),
+    });
+  } finally {
+    await a.ctx.dispose();
+    await b.ctx.dispose();
+  }
+});
+
+test('ND-API-020 application detail is 404 to a non-visible viewer, 200 to the owner', async () => {
+  skipIfNoService();
+  test.skip(!envFor('node')['NODE_WALLET_PRIVATE_KEY'], 'node wallet env not configured');
+  const baseURL = baseURLFor('node')!;
+  const a = await freshSession(baseURL);
+  const b = await freshSession(baseURL);
+  try {
+    const appB = await createApp(b, baseURL);
+
+    // A cannot see B's unpublished draft — invisible reads as not-found.
+    const asA = await a.ctx.get(`/api/v1/public/applications/${appB.uid}`);
+    expect(asA.status()).toBe(404);
+    expect(((await asA.json()) as { message: string }).message).toBe('Application not found');
+
+    // The owner B sees the full record.
+    const asB = await b.ctx.get(`/api/v1/public/applications/${appB.uid}`);
+    expect(asB.status()).toBe(200);
+    expect(((await asB.json()) as { data: { uid: string } }).data.uid).toBe(appB.uid);
+
+    await b.ctx.delete(`/api/v1/public/applications/${appB.uid}`, {
+      data: await deleteBody(b.wallet, b.address, appB.uid),
+    });
+  } finally {
+    await a.ctx.dispose();
+    await b.ctx.dispose();
+  }
+});
+
+test('ND-API-021 updating an application: non-owner 403, owner 200', async () => {
+  skipIfNoService();
+  test.skip(!envFor('node')['NODE_WALLET_PRIVATE_KEY'], 'node wallet env not configured');
+  const baseURL = baseURLFor('node')!;
+  const a = await freshSession(baseURL);
+  const b = await freshSession(baseURL);
+  try {
+    const appB = await createApp(b, baseURL);
+
+    // A signs a valid application_update envelope over B's app → the signature
+    // passes, but the owner check rejects it with 403.
+    const asA = await a.ctx.patch(`/api/v1/public/applications/${appB.uid}`, {
+      data: await buildUpdateApplicationBody(a.wallet, a.address, appB.uid, { name: 'hijacked' }),
+    });
+    expect(asA.status()).toBe(403);
+    expect(((await asA.json()) as { message: string }).message).toBe('Owner mismatch');
+
+    // The owner's own update persists.
+    const newName = `renamed-${Date.now()}`;
+    const asB = await b.ctx.patch(`/api/v1/public/applications/${appB.uid}`, {
+      data: await buildUpdateApplicationBody(b.wallet, b.address, appB.uid, {
+        name: newName,
+        description: 'owner update',
+      }),
+    });
+    expect(asB.status(), await asB.text().catch(() => '')).toBe(200);
+    expect(((await asB.json()) as { data: { name: string } }).data.name).toBe(newName);
+
+    // Persisted: re-reading the record returns the new name.
+    const reread = await b.ctx.get(`/api/v1/public/applications/${appB.uid}`);
+    expect(((await reread.json()) as { data: { name: string } }).data.name).toBe(newName);
+
+    await b.ctx.delete(`/api/v1/public/applications/${appB.uid}`, {
+      data: await deleteBody(b.wallet, b.address, appB.uid),
+    });
+  } finally {
+    await a.ctx.dispose();
+    await b.ctx.dispose();
+  }
+});
+
+test('ND-API-023 unpublish restores an application to offline and removes it from the market', async () => {
+  skipIfNoService();
+  // The behavior under test — an ONLINE application transitioning to
+  // BUSINESS_STATUS_OFFLINE and disappearing from the public market grid —
+  // requires first bringing an app online, which needs an admin-approved audit
+  // (see ND-E2E-003/004, skipped for the same reason). No admin approver is
+  // available in this environment and other owners' online apps can't be
+  // unpublished (Owner mismatch), so the online→offline path can't be driven
+  // without faking a green.
+  test.skip(true, 'requires an online (admin-approved & published) application; publish path is not drivable in this environment');
+});
+
+test('ND-API-024 deleting another owner’s application returns 403 Owner mismatch', async () => {
+  skipIfNoService();
+  test.skip(!envFor('node')['NODE_WALLET_PRIVATE_KEY'], 'node wallet env not configured');
+  const baseURL = baseURLFor('node')!;
+  const a = await freshSession(baseURL);
+  const b = await freshSession(baseURL);
+  try {
+    const appB = await createApp(b, baseURL);
+
+    // A signs a valid application_delete envelope over B's app → owner check 403.
+    const asA = await a.ctx.delete(`/api/v1/public/applications/${appB.uid}`, {
+      data: await deleteBody(a.wallet, a.address, appB.uid),
+    });
+    expect(asA.status()).toBe(403);
+    expect(((await asA.json()) as { message: string }).message).toBe('Owner mismatch');
+
+    // The application still exists for its owner.
+    const stillThere = await b.ctx.get(`/api/v1/public/applications/${appB.uid}`);
+    expect(stillThere.status()).toBe(200);
+
+    await b.ctx.delete(`/api/v1/public/applications/${appB.uid}`, {
+      data: await deleteBody(b.wallet, b.address, appB.uid),
+    });
+  } finally {
+    await a.ctx.dispose();
+    await b.ctx.dispose();
   }
 });

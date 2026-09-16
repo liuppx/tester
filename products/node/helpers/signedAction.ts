@@ -98,6 +98,12 @@ export interface CreateAppOverrides {
   description?: string;
   location?: string;
   code?: string;
+  /**
+   * Relying-party redirect URIs (e.g. for the PKCE authorization flow). The
+   * server stores the array verbatim on create, so the signed payload and the
+   * request body carry the identical list.
+   */
+  redirectUris?: string[];
 }
 
 export interface CreateAppRequest {
@@ -128,6 +134,7 @@ export async function buildCreateApplicationBody(
   const description = overrides.description ?? 'e2e signed-action draft';
   const location = overrides.location ?? 'http://localhost:3020';
   const code = overrides.code ?? 'APPLICATION_CODE_UNKNOWN';
+  const redirectUris = overrides.redirectUris ?? [];
 
   // Mirror the server's reconstructed `signablePayload` exactly.
   const payload = {
@@ -143,18 +150,73 @@ export async function buildCreateApplicationBody(
     code,
     location,
     serviceCodes: '',
-    redirectUris: [] as string[],
+    redirectUris: redirectUris as string[],
     avatar: '',
     codePackagePath: '',
   };
 
   const env = await signAction(wallet, { action: 'application_create', actor: address, payload });
   return {
-    body: { owner: address, did, version, name, description, location, code, ...env },
+    body: { owner: address, did, version, name, description, location, code, redirectUris, ...env },
     did,
     version,
     name,
   };
+}
+
+export interface UpdateAppChanges {
+  name?: string;
+  description?: string;
+  location?: string;
+  code?: string;
+  serviceCodes?: string | string[];
+  redirectUris?: string | string[];
+  avatar?: string;
+  codePackagePath?: string;
+}
+
+/**
+ * Build the request body + signed envelope for a signed
+ * `PATCH /api/v1/public/applications/:uid` (`application_update`).
+ *
+ * The node route reconstructs the signable payload as `{ applicationUid, ...fields }`
+ * where every field that is absent from the body is `undefined` (and therefore
+ * dropped by `stableStringify`). So the payload we sign here includes ONLY the
+ * keys present in `changes`, mirroring the server byte-for-byte.
+ */
+export async function buildUpdateApplicationBody(
+  wallet: BaseWallet,
+  address: string,
+  uid: string,
+  changes: UpdateAppChanges,
+): Promise<Record<string, unknown>> {
+  const body: Record<string, unknown> = {};
+  const payload: Record<string, unknown> = { applicationUid: uid };
+
+  for (const key of ['name', 'description', 'location', 'code', 'avatar', 'codePackagePath'] as const) {
+    if (changes[key] !== undefined) {
+      body[key] = changes[key];
+      payload[key] = String(changes[key]);
+    }
+  }
+  if (changes.serviceCodes !== undefined) {
+    const serviceCodes = Array.isArray(changes.serviceCodes)
+      ? changes.serviceCodes.map((item) => String(item)).join(',')
+      : String(changes.serviceCodes);
+    body.serviceCodes = changes.serviceCodes;
+    payload.serviceCodes = serviceCodes;
+  }
+  if (changes.redirectUris !== undefined) {
+    const list = (Array.isArray(changes.redirectUris) ? changes.redirectUris : [changes.redirectUris])
+      .map((item) => String(item).trim())
+      .filter(Boolean);
+    const storage = list.length ? list[0] : '';
+    body.redirectUris = changes.redirectUris;
+    payload.redirectUris = storage ? [storage] : [];
+  }
+
+  const env = await signAction(wallet, { action: 'application_update', actor: address, payload });
+  return { ...body, ...env };
 }
 
 /** Envelope for `POST /applications/:uid/publish` (payload = { applicationUid }). */

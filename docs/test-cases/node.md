@@ -10,16 +10,16 @@
 | 模块 | 用例数 | 已实现 | 待实现 |
 | --- | --- | --- | --- |
 | 一、健康检查与就绪 | 4 | 2 | 2 |
-| 二、SIWE 认证与会话 | 11 | 5 | 6 |
+| 二、SIWE 认证与会话 | 11 | 9 | 2 |
 | 三、前端首页与导航 | 5 | 4 | 1 |
 | 四、应用市场浏览 | 4 | 3 | 1 |
-| 五、开发者应用生命周期 | 15 | 7 | 8 |
+| 五、开发者应用生命周期 | 15 | 12 | 3 |
 | 六、应用审核 | 2 | 1 | 1 |
-| 七、申请使用应用 | 1 | 0 | 1 |
-| 八、身份能力(TOTP/Passkey/授权码) | 4 | 0 | 4 |
+| 七、申请使用应用 | 1 | 1 | 0 |
+| 八、身份能力(TOTP/Passkey/授权码) | 4 | 2 | 2 |
 | 九、通知中心 | 2 | 2 | 0 |
 | 十、会话与鉴权守卫 | 2 | 2 | 0 |
-| **合计** | **50** | **26** | **24** |
+| **合计** | **50** | **38** | **12** |
 
 > 说明:后端与前端由同一 Express 实例托管,API 根路径统一为 `/api/v1/public/*`;响应统一信封 `{code, message, data, timestamp}`(成功 `code=0`)。写操作(建应用、发布、下线、删除、配置)均需在请求体内携带 `personal_sign` 的**签名动作信封**(action 分别为 `application_create` / `application_update` / `application_publish` / `application_unpublish` / `application_delete` / `application_config_upsert`)。
 
@@ -57,7 +57,7 @@
 ### ND-API-004 数据库不可用时就绪返回 503
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:⬜ 待实现(降级跳过)— products/node/tests/api.spec.ts(无法在共享实例上非破坏性地制造数据库断连,`ready` 的 200 分支已由 ND-API-002 覆盖)
 - 前置条件:可模拟数据库未初始化/断连(如停库或断开连接的测试实例)。
 - 步骤:
   1. 在数据库不可用状态下 GET `/api/v1/public/ready`。
@@ -79,7 +79,7 @@
 ### ND-API-006 challenge 缺少 address 返回 400
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/api.spec.ts
 - 前置条件:后端已启动。
 - 步骤:
   1. POST `/api/v1/public/auth/challenge`,body 为空对象或缺 `address`。
@@ -108,7 +108,7 @@
 ### ND-API-009 verify 拒绝过期/未知 nonce
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/api.spec.ts
 - 前置条件:后端已启动。
 - 步骤:
   1. 使用一个从未签发或已消费(challenge 一次性)或已过期的 `nonce` 调 verify。
@@ -153,7 +153,7 @@
 ### ND-API-014 携带 refresh cookie 刷新出新 access token
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/api.spec.ts
 - 前置条件:同一 cookie jar 内完成过 verify,已持有 refresh cookie。
 - 步骤:
   1. POST `/api/v1/public/auth/refresh`,携带 verify 下发的 HttpOnly cookie。
@@ -162,7 +162,7 @@
 ### ND-API-015 logout 撤销并清除 refresh cookie
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/api.spec.ts
 - 前置条件:已登录并持有 refresh cookie。
 - 步骤:
   1. POST `/api/v1/public/auth/logout`(携带 cookie)。
@@ -304,7 +304,7 @@
 ### ND-API-019 应用列表仅返回可见范围
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/app-write-api.spec.ts
 - 前置条件:两个不同地址各自创建了草稿应用。
 - 步骤:
   1. 以地址 A 登录 GET `/api/v1/public/applications`。
@@ -313,7 +313,7 @@
 ### ND-API-020 应用详情对不可见者返回 404
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/app-write-api.spec.ts
 - 前置条件:地址 B 创建了未发布草稿,记录其 uid;地址 A 登录。
 - 步骤:
   1. 以 A GET `/api/v1/public/applications/:uid`(B 的草稿 uid)。
@@ -323,7 +323,7 @@
 ### ND-API-021 更新应用非属主返回 403
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/app-write-api.spec.ts
 - 前置条件:地址 B 拥有某应用;地址 A 登录并构造 `application_update` 签名信封。
 - 步骤:
   1. 以 A PATCH `/api/v1/public/applications/:uid`(B 的应用)。
@@ -332,7 +332,7 @@
 ### ND-E2E-002 编辑草稿并保存持久化
 - 优先级:P1
 - 类型:E2E
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/apply-flow.spec.ts
 - 前置条件:已存在一条自建草稿;注入会话与签名器。
 - 步骤:
   1. 进入该应用编辑页,修改名称/描述/分类。
@@ -362,7 +362,7 @@
 ### ND-API-023 下线应用恢复为离线
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:⬜ 待实现(降级跳过)— products/node/tests/app-write-api.spec.ts(需先有已上线应用,而上线依赖管理员审批,同 ND-E2E-003/004 无法真跑;他人已上线应用无法下线—Owner mismatch)
 - 前置条件:应用已上线;构造 `application_unpublish` 签名信封。
 - 步骤:
   1. POST `/api/v1/public/applications/:uid/unpublish`。
@@ -371,7 +371,7 @@
 ### ND-API-024 删除他人应用返回 403
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/app-write-api.spec.ts
 - 前置条件:地址 B 拥有应用;地址 A 登录并构造 `application_delete` 签名信封。
 - 步骤:
   1. 以 A DELETE `/api/v1/public/applications/:uid`(B 的应用)。
@@ -436,7 +436,7 @@
 ### ND-E2E-005 申请使用已上线应用
 - 优先级:P1
 - 类型:E2E
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/apply-flow.spec.ts
 - 前置条件:市场存在一个已上线应用;非属主用户登录。
 - 步骤:
   1. 在应用详情/卡片点击「申请使用」,提交申请信息并签名(创建 audit)。
@@ -459,7 +459,7 @@
 ### ND-API-030 TOTP 绑定与校验闭环
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/identity-api.spec.ts
 - 前置条件:已登录且未绑定 TOTP。
 - 步骤:
   1. POST `/identity/totp/setup` 获取密钥/二维码。
@@ -481,7 +481,7 @@
 ### ND-API-032 应用授权码(PKCE)请求 → 批准 → 兑换
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/identity-api.spec.ts
 - 前置条件:已登录;第三方应用有效的 client 与 redirect。
 - 步骤:
   1. POST `/identity/authorize/request` 发起授权请求,GET `/identity/authorize/request/:requestId` 查询。
