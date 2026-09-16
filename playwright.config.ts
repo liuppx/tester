@@ -63,7 +63,7 @@ const projects: Project[] = products.map((product: ProductName) => ({
   name: product,
   testDir: `products/${product}/tests`,
   testMatch: /.*\.spec\.ts$/,
-  outputDir: `test-results/${product}`,
+  outputDir: `results/${product}`,
   use: {
     ...devices['Desktop Chrome'],
     baseURL: baseURLFor(product),

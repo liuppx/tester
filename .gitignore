@@ -3,8 +3,8 @@ node_modules/
 .pnpm-store/
 
 # Playwright outputs
-/playwright-report/
-/test-results/
+/reports/
+/results/
 /blob-report/
 /playwright/.cache/
 /junit*.xml

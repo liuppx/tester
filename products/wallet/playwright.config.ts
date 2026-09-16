@@ -19,7 +19,7 @@ const walletExtensionPath =
 export default defineConfig({
   testDir: __dirname + '/tests',
   testMatch: /.*\.spec\.ts$/,
-  outputDir: 'test-results/wallet',
+  outputDir: 'results/wallet',
   timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,

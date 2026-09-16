@@ -28,12 +28,12 @@
     "browsers:install": "playwright install --with-deps chromium",
     "browsers:list": "playwright install --dry-run chromium",
     "list": "playwright test --list",
-    "report": "playwright show-report",
+    "report": "playwright show-report reports",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc -b",
-    "clean": "rimraf playwright-report test-results manual *.tsbuildinfo junit-*.xml"
+    "clean": "rimraf reports results manual *.tsbuildinfo junit-*.xml"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
