@@ -9,7 +9,7 @@
 | 产品 | 文档 | 用例数 | ✅ 已实现 | ⬜ 待实现 | 完成度 |
 | --- | --- | ---: | ---: | ---: | ---: |
 | 仓库 Warehouse | [warehouse.md](warehouse.md) | 91 | 26 | 65 | 29% |
-| 节点 Node | [node.md](node.md) | 50 | 15 | 35 | 30% |
+| 节点 Node | [node.md](node.md) | 50 | 26 | 24 | 52% |
 | 路由 Router | [router.md](router.md) | 79 | 38 | 41 | 48% |
 | 钱包 Wallet | [wallet.md](wallet.md) | 56 | 24 | 32 | 43% |
 | 对话 Chat | [chat.md](chat.md) | 92 | 5 | 87 | 5% |
@@ -19,7 +19,7 @@
 | 智能体 Agent | [agent.md](agent.md) | 58 | 4 | 54 | 7% |
 | 应用市场 Marketplace | [marketplace.md](marketplace.md) | 59 | 5 | 54 | 8% |
 | 文档 Books | [books.md](books.md) | 35 | 4 | 31 | 11% |
-| **合计** | | **858** | **140** | **718** | **16%** |
+| **合计** | | **858** | **151** | **707** | **18%** |
 
 ## 使用方式
 
@@ -35,8 +35,7 @@
 **Warehouse** — 公开分享 / 定向分享 / 通知 / 分组 / 管理员用户管理整片空白;S3 SigV4 真实读操作、
 admin 越权 403、只读分享写拒绝、无 JWT/无凭证的负向鉴权基线。
 
-**Node** — 应用上线闸门(未过审发布应返回 403)、审核工作流全链路、写操作签名信封校验、
-经真实 window.ethereum 的端到端 SIWE 登录。
+**Node** — P0 主链路已覆盖(未过审发布 403、写操作签名信封校验、真实 window.ethereum 端到端 SIWE 登录、受保护路由守卫);仅审核工作流全链路(ND-E2E-003/004)因环境无管理员审批能力降级为干净跳过。剩余待建:refresh 轮换/logout 撤销、应用可见范围与非属主 403、身份能力(TOTP/Passkey/授权码)。
 
 **Router** — OpenAI 兼容中继整块(models / chat/completions 扣额度)零覆盖、混合信封契约、
 SIWE 负路径与 nonce 一次性语义、admin 越权 403、未登录路由重定向。

@@ -13,13 +13,13 @@
 | 二、SIWE 认证与会话 | 11 | 5 | 6 |
 | 三、前端首页与导航 | 5 | 4 | 1 |
 | 四、应用市场浏览 | 4 | 3 | 1 |
-| 五、开发者应用生命周期 | 15 | 1 | 14 |
-| 六、应用审核 | 2 | 0 | 2 |
+| 五、开发者应用生命周期 | 15 | 7 | 8 |
+| 六、应用审核 | 2 | 1 | 1 |
 | 七、申请使用应用 | 1 | 0 | 1 |
 | 八、身份能力(TOTP/Passkey/授权码) | 4 | 0 | 4 |
-| 九、通知中心 | 2 | 0 | 2 |
-| 十、会话与鉴权守卫 | 2 | 0 | 2 |
-| **合计** | **50** | **15** | **35** |
+| 九、通知中心 | 2 | 2 | 0 |
+| 十、会话与鉴权守卫 | 2 | 2 | 0 |
+| **合计** | **50** | **26** | **24** |
 
 > 说明:后端与前端由同一 Express 实例托管,API 根路径统一为 `/api/v1/public/*`;响应统一信封 `{code, message, data, timestamp}`(成功 `code=0`)。写操作(建应用、发布、下线、删除、配置)均需在请求体内携带 `personal_sign` 的**签名动作信封**(action 分别为 `application_create` / `application_update` / `application_publish` / `application_unpublish` / `application_delete` / `application_config_upsert`)。
 
@@ -277,7 +277,7 @@
 ### ND-API-016 建应用缺 did/version 返回 400
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/app-write-api.spec.ts
 - 前置条件:已登录并持有有效签名信封。
 - 步骤:
   1. POST `/api/v1/public/applications`,缺 `did` 或 `version` 非数字。
@@ -286,7 +286,7 @@
 ### ND-API-017 建应用 owner 与登录地址不符返回 403
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/app-write-api.spec.ts
 - 前置条件:已登录。
 - 步骤:
   1. POST `/api/v1/public/applications`,body `owner` 设为其他地址。
@@ -295,7 +295,7 @@
 ### ND-API-018 建应用未登录返回 401
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/app-write-api.spec.ts
 - 前置条件:后端已启动。
 - 步骤:
   1. 不带 JWT POST `/api/v1/public/applications`。
@@ -343,7 +343,7 @@
 ### ND-API-022 发布未通过审核的应用返回 403
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/app-write-api.spec.ts
 - 前置条件:自建应用尚无「审批通过」记录;构造 `application_publish` 签名信封。
 - 步骤:
   1. POST `/api/v1/public/applications/:uid/publish`。
@@ -352,7 +352,7 @@
 ### ND-E2E-003 审核通过后发布并出现在市场
 - 优先级:P0
 - 类型:E2E
-- 状态:⬜ 待实现
+- 状态:⬜ 待实现(降级跳过)— products/node/tests/admin-audit.spec.ts(需管理员审批能力,无法真跑;反向边界「未过审无法发布」由 ND-API-022 覆盖)
 - 前置条件:应用已提交审核并被管理员审批通过(见 ND-E2E-004)。
 - 步骤:
   1. 在「我创建的」对该应用点击「发布」并完成签名。
@@ -380,7 +380,7 @@
 ### ND-API-025 写操作缺失/无效签名信封被拒
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/app-write-api.spec.ts
 - 前置条件:已登录但请求体不含合法签名动作信封。
 - 步骤:
   1. 对建应用/发布/删除任一写接口发起请求,省略或伪造签名。
@@ -389,7 +389,7 @@
 ### ND-API-026 应用授权配置读取与写入
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/app-write-api.spec.ts
 - 前置条件:登录用户对应用可见;构造 `application_config_upsert` 签名信封。
 - 步骤:
   1. PUT `/api/v1/public/applications/:uid/config`,body 携带 `config` 数组与签名。
@@ -412,7 +412,7 @@
 ### ND-E2E-004 管理员审核:提交 → 审批通过 → 可发布
 - 优先级:P0
 - 类型:E2E
-- 状态:⬜ 待实现
+- 状态:⬜ 待实现(降级跳过)— products/node/tests/admin-audit.spec.ts(需管理员审批能力,无法真跑)
 - 前置条件:管理员地址(命中 vault `ADMIN_DIDS` 或 `USER_ROLE_OWNER`)已登录;存在一条待审核应用。
 - 步骤:
   1. 开发者提交应用送审(POST `/api/v1/public/audits`)。
@@ -423,7 +423,7 @@
 ### ND-API-028 非管理员审核检索被限定范围
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/app-write-api.spec.ts
 - 前置条件:普通用户已登录。
 - 步骤:
   1. POST `/api/v1/public/audits/search`,尝试检索非本人相关的审核记录。
@@ -496,7 +496,7 @@
 ### ND-UI-010 通知中心页面渲染
 - 优先级:P2
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/notifications.spec.ts
 - 前置条件:已注入会话。
 - 步骤:
   1. 打开 `/market/dev/notifications`。
@@ -505,7 +505,7 @@
 ### ND-API-033 通知列表、未读数与标记已读
 - 优先级:P2
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/notifications.spec.ts
 - 前置条件:已登录;账户存在若干通知(如建应用/发布触发的通知)。
 - 步骤:
   1. GET `/api/v1/public/notifications` 与 `/notifications/unread-count`。
@@ -519,7 +519,7 @@
 ### ND-E2E-006 通过真实钱包完成 SIWE 登录
 - 优先级:P0
 - 类型:E2E
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/auth-flow.spec.ts
 - 前置条件:注入 YeYing 钱包 provider(window.ethereum),持有测试私钥。
 - 步骤:
   1. 首页点击连接钱包 → 授权账户。
@@ -529,7 +529,7 @@
 ### ND-E2E-007 未登录访问受保护路由被重定向,登出后守卫生效
 - 优先级:P1
 - 类型:E2E
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/node/tests/auth-flow.spec.ts
 - 前置条件:前端可访问。
 - 步骤:
   1. 在无有效会话时直接访问 `/market/dev/my-apps`。
