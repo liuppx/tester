@@ -130,3 +130,65 @@ test('rename an account from the detail page persists the new name', async ({ re
     await teardownWalletContext(ctx);
   }
 });
+
+test('WL-UI-013: delete a derived account with the password removes it from the list', async ({
+  recorder,
+}) => {
+  const ctx = await loadWalletContext();
+  try {
+    await stubPublicEndpoints(ctx.context);
+    const popup = await createAndUnlockWallet(ctx.context, ctx.extensionId);
+
+    // Open accounts management and add a second derived account so we can
+    // delete one without emptying the wallet.
+    await byId(popup, 'accountHeader').click();
+    await byId(popup, 'accountSwitcherMenu').waitFor({ state: 'visible' });
+    await byId(popup, 'manageAccountsBtn').click();
+    await byId(popup, 'accountsPage').waitFor({ state: 'visible' });
+
+    await popup.locator('#walletList .add-account-item').first().click();
+    await byId(popup, 'createAccountModal').waitFor({ state: 'visible' });
+    await byId(popup, 'newAccountName').fill('E2E Disposable');
+    await byId(popup, 'confirmCreateAccount').click();
+    await fillPasswordPromptIfShown(popup);
+    await byId(popup, 'createAccountModal').waitFor({ state: 'hidden', timeout: 10_000 });
+
+    // Adding an account may bounce back to the wallet page — re-open the
+    // accounts page so the list is actually visible before we delete.
+    if (!(await byId(popup, 'accountsPage').isVisible())) {
+      if (!(await byId(popup, 'walletPage').isVisible())) {
+        await popup.locator('#accountsPage .back-btn:visible').first().click().catch(() => {});
+      }
+      await byId(popup, 'walletPage').waitFor({ state: 'visible' });
+      await byId(popup, 'accountHeader').click();
+      await byId(popup, 'accountSwitcherMenu').waitFor({ state: 'visible' });
+      await byId(popup, 'manageAccountsBtn').click();
+      await byId(popup, 'accountsPage').waitFor({ state: 'visible' });
+    }
+    await expect(popup.locator('#walletList .account-item')).toHaveCount(2, { timeout: 10_000 });
+    await recorder.step(popup, '准备好两个账户，即将删除其一');
+
+    // Delete the second account via its 🗑️ button → confirm modal →
+    // password prompt. The row's action buttons only reveal on hover, so
+    // hover the row first, then force the click.
+    const secondItem = popup.locator('#walletList .account-item').nth(1);
+    await secondItem.scrollIntoViewIfNeeded();
+    await secondItem.hover();
+    await secondItem.locator('.delete-btn').click({ force: true });
+    await popup.locator('#deleteAccountModal').waitFor({ state: 'visible' });
+    await popup.locator('#confirmDeleteAccount').click();
+
+    const prompt = popup.locator('#passwordPromptModal');
+    await prompt.waitFor({ state: 'visible', timeout: 10_000 });
+    await popup.locator('#passwordPromptInput').fill(TEST_PASSWORD);
+    await popup.locator('#passwordPromptConfirm').click();
+    await recorder.step(popup, '输入密码确认删除');
+
+    // Back to a single account, and the success toast confirms removal.
+    await expect(byId(popup, 'globalToast')).toContainText('账户已删除', { timeout: 10_000 });
+    await expect(popup.locator('#walletList .account-item')).toHaveCount(1, { timeout: 10_000 });
+    await recorder.step(popup, '账户已删除，仅剩一个');
+  } finally {
+    await teardownWalletContext(ctx);
+  }
+});

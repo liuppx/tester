@@ -157,6 +157,76 @@ export async function createAndUnlockWallet(
 }
 
 /**
+ * Send a message to the extension's service worker from an extension page
+ * (popup / approval). The SW's `chrome.runtime.onMessage` handler expects
+ * `{ type, data }` and returns the handler's result object.
+ */
+export async function sendSw<T = unknown>(
+  page: Page,
+  type: string,
+  data: Record<string, unknown> = {},
+): Promise<T> {
+  return page.evaluate(
+    async ({ type, data }) =>
+      (globalThis as any).chrome.runtime.sendMessage({ type, data }),
+    { type, data },
+  ) as Promise<T>;
+}
+
+export interface CustomNetworkSpec {
+  chainName: string;
+  chainId: string; // hex, e.g. '0x539'
+  rpcUrl: string;
+  symbol?: string;
+  explorer?: string;
+  decimals?: number;
+}
+
+/**
+ * Register a custom network directly through the SW message bus
+ * (`ADD_CUSTOM_NETWORK`). This does NOT touch the RPC — it only validates
+ * and stores — so it works even when the network's RPC is stubbed/aborted.
+ * Returns `{ success, network?, error? }`.
+ */
+export async function addCustomNetwork(
+  popup: Page,
+  net: CustomNetworkSpec,
+): Promise<{ success: boolean; network?: unknown; error?: string }> {
+  return sendSw(popup, 'ADD_CUSTOM_NETWORK', {
+    chainName: net.chainName,
+    chainId: net.chainId,
+    rpcUrl: net.rpcUrl,
+    explorer: net.explorer ?? '',
+    symbol: net.symbol ?? 'ETH',
+    decimals: net.decimals ?? 18,
+  });
+}
+
+/**
+ * Open the transfer page. Entering it calls `prepareTransferSelectors`,
+ * which refreshes the network-selector options — so any network registered
+ * via {@link addCustomNetwork} after the popup loaded becomes selectable.
+ */
+export async function openTransferPage(popup: Page): Promise<void> {
+  await byId(popup, 'transferBtn').click();
+  await byId(popup, 'transferPage').waitFor({ state: 'visible' });
+}
+
+/**
+ * On the transfer page, open the network selector and pick the option whose
+ * `data-value` is `rpcUrl`. Returns the selector locator so callers can
+ * assert on the resulting `.network-label`.
+ */
+export async function pickTransferNetwork(popup: Page, rpcUrl: string) {
+  const selector = popup.locator('#transferPage [data-network-selector="true"]').first();
+  await selector.locator('.network-trigger').click();
+  const option = selector.locator(`.network-option[data-value="${rpcUrl}"]`);
+  await option.waitFor({ state: 'visible', timeout: 5_000 });
+  await option.click();
+  return selector;
+}
+
+/**
  * Wait for the next approval window to open, return it.
  *
  * `requestType` filters by the `type=...` query parameter the wallet uses

@@ -19,7 +19,7 @@ import { test, expect } from '../fixtures';
 
 import { loadWalletContext, teardownWalletContext } from '../helpers/extension';
 import { stubPublicEndpoints } from '../helpers/network';
-import { byId, createAndUnlockWallet } from '../helpers/popup';
+import { byId, createAndUnlockWallet, addCustomNetwork, openTransferPage } from '../helpers/popup';
 
 // A distinctive custom network so we can assert on its label unambiguously.
 const NET_NAME = 'E2E Testnet';
@@ -95,6 +95,62 @@ test('add a custom network via the UI and switch to it', async ({ recorder }) =>
     await recorder.step(popup, '切换到自定义网络');
 
     await expect(sel2.locator('.network-label')).toHaveText(NET_NAME, { timeout: 5_000 });
+  } finally {
+    await teardownWalletContext(ctx);
+  }
+});
+
+// WL-UI-020: switching to a network whose RPC is unreachable must fail
+// loudly and leave the active network unchanged (no silent partial switch).
+const UNREACHABLE_NAME = 'Unreachable E2E';
+const UNREACHABLE_RPC = 'https://unreachable.e2e.invalid/rpc';
+const UNREACHABLE_CHAIN_ID = '0x2694'; // 9876
+
+test('WL-UI-020: switching to an unreachable RPC fails and keeps the current network', async ({
+  recorder,
+}) => {
+  const ctx = await loadWalletContext();
+  try {
+    await stubPublicEndpoints(ctx.context);
+    // The custom RPC host is unreachable: every request aborts.
+    await ctx.context.route(`${UNREACHABLE_RPC}**`, (route) => route.abort('connectionfailed'));
+    await ctx.context.route('https://unreachable.e2e.invalid/**', (route) =>
+      route.abort('connectionfailed'),
+    );
+
+    const popup = await createAndUnlockWallet(ctx.context, ctx.extensionId);
+
+    // Register the broken network directly (ADD_CUSTOM_NETWORK never calls
+    // the RPC, so it stores fine even though the host is dead).
+    const added = await addCustomNetwork(popup, {
+      chainName: UNREACHABLE_NAME,
+      chainId: UNREACHABLE_CHAIN_ID,
+      rpcUrl: UNREACHABLE_RPC,
+      symbol: 'ETH',
+    });
+    expect(added.success, `add network failed: ${added.error}`).toBe(true);
+
+    // Entering the transfer page refreshes the selector so the new (broken)
+    // network becomes selectable.
+    await openTransferPage(popup);
+    const selector = popup.locator('#transferPage [data-network-selector="true"]').first();
+    const labelBefore = (await selector.locator('.network-label').textContent())?.trim();
+    await recorder.step(popup, `当前网络: ${labelBefore}`);
+
+    await selector.locator('.network-trigger').click();
+    const option = selector.locator(`.network-option[data-value="${UNREACHABLE_RPC}"]`);
+    await option.waitFor({ state: 'visible', timeout: 5_000 });
+    await option.click();
+    await recorder.step(popup, '尝试切换到不可达网络');
+
+    // The switch throws → error toast, and the active label is unchanged.
+    await expect(byId(popup, 'globalToast')).toContainText('切换网络失败', { timeout: 15_000 });
+    await expect
+      .poll(async () => (await selector.locator('.network-label').textContent())?.trim(), {
+        timeout: 5_000,
+      })
+      .toBe(labelBefore);
+    await recorder.step(popup, '切换失败，网络回退到原网络');
   } finally {
     await teardownWalletContext(ctx);
   }

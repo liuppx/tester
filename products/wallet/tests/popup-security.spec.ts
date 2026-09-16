@@ -123,3 +123,82 @@ test('change the wallet password, then lock and unlock with the new one', async 
     await teardownWalletContext(ctx);
   }
 });
+
+test('WL-UI-024: a wrong password when revealing the private key is rejected', async ({
+  recorder,
+}) => {
+  const ctx = await loadWalletContext();
+  try {
+    await stubPublicEndpoints(ctx.context);
+    const popup = await createAndUnlockWallet(ctx.context, ctx.extensionId);
+    await openAccountsPage(popup);
+
+    // Open the reveal flow, then submit a WRONG (but ≥8-char) password.
+    await popup.locator('#walletList .view-private-key-btn').first().click();
+    const prompt = popup.locator('#passwordPromptModal');
+    await prompt.waitFor({ state: 'visible', timeout: 10_000 });
+    await popup.locator('#passwordPromptInput').fill('totally-wrong-1');
+    await popup.locator('#passwordPromptConfirm').click();
+    await recorder.step(popup, '输入错误密码尝试查看私钥');
+
+    // An error toast appears; the prompt stays open and the secret is never
+    // shown.
+    await expect(byId(popup, 'globalToast')).toBeVisible({ timeout: 10_000 });
+    await expect(prompt).toBeVisible();
+    await expect(byId(popup, 'secretDisplayModal')).toBeHidden();
+    await recorder.step(popup, '错误密码被拒绝，未泄露私钥');
+  } finally {
+    await teardownWalletContext(ctx);
+  }
+});
+
+test('WL-UI-025: changing the password with a wrong old password is rejected', async ({
+  recorder,
+}) => {
+  const ctx = await loadWalletContext();
+  const NEW_PASSWORD = 'E2E-password-9999';
+  try {
+    await stubPublicEndpoints(ctx.context);
+    const popup = await createAndUnlockWallet(ctx.context, ctx.extensionId);
+
+    await byId(popup, 'walletHeaderMenuBtn').click();
+    await byId(popup, 'walletHeaderMenu').waitFor({ state: 'visible' });
+    await byId(popup, 'settingsBtn').click();
+    await byId(popup, 'settingsPage').waitFor({ state: 'visible' });
+    await byId(popup, 'changePasswordBtn').click();
+    await byId(popup, 'changePasswordModal').waitFor({ state: 'visible' });
+
+    // Wrong current password, valid + matching new password.
+    await byId(popup, 'oldPasswordInput').fill('this-is-not-the-password');
+    await byId(popup, 'newPasswordInput').fill(NEW_PASSWORD);
+    await byId(popup, 'confirmNewPasswordInput').fill(NEW_PASSWORD);
+    await recorder.step(popup, '用错误的旧密码尝试修改');
+    await byId(popup, 'confirmChangePasswordBtn').click();
+
+    // Rejected: error toast, modal stays open.
+    await expect(byId(popup, 'globalToast')).toContainText('修改失败', { timeout: 10_000 });
+    await expect(byId(popup, 'changePasswordModal')).toBeVisible();
+    await recorder.step(popup, '错误旧密码被拒绝');
+
+    // Prove the password was NOT changed: the original one still unlocks.
+    // Close the modal, lock, and unlock with the ORIGINAL password.
+    await popup.locator('#changePasswordModal .modal-close, #changePasswordModal .btn-secondary')
+      .first()
+      .click()
+      .catch(() => {});
+    if (!(await byId(popup, 'walletPage').isVisible())) {
+      await popup.locator('#settingsPage .back-btn:visible').first().click().catch(() => {});
+    }
+    await byId(popup, 'walletPage').waitFor({ state: 'visible' });
+    await byId(popup, 'walletHeaderMenuBtn').click();
+    await byId(popup, 'walletHeaderMenu').waitFor({ state: 'visible' });
+    await byId(popup, 'lockWalletBtn').click();
+    await byId(popup, 'unlockPage').waitFor({ state: 'visible', timeout: 10_000 });
+    await byId(popup, 'unlockPassword').fill(TEST_PASSWORD);
+    await byId(popup, 'unlockBtn').click();
+    await byId(popup, 'walletPage').waitFor({ state: 'visible', timeout: 15_000 });
+    await recorder.step(popup, '原密码仍可解锁，证明未被修改');
+  } finally {
+    await teardownWalletContext(ctx);
+  }
+});

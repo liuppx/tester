@@ -9,16 +9,16 @@
 
 | 模块 | 用例数 | 已实现 | 待实现 |
 | --- | --- | --- | --- |
-| 一、钱包创建与初始化 | 5 | 4 | 1 |
-| 二、钱包导入 | 5 | 2 | 3 |
-| 三、账户管理 | 5 | 2 | 3 |
-| 四、网络管理 | 5 | 1 | 4 |
-| 五、安全与锁定恢复 | 5 | 3 | 2 |
-| 六、转账与交易 | 9 | 3 | 6 |
+| 一、钱包创建与初始化 | 5 | 5 | 0 |
+| 二、钱包导入 | 5 | 4 | 1 |
+| 三、账户管理 | 5 | 3 | 2 |
+| 四、网络管理 | 5 | 2 | 3 |
+| 五、安全与锁定恢复 | 5 | 5 | 0 |
+| 六、转账与交易 | 9 | 7 | 2 |
 | 七、消息签名与授权 | 5 | 4 | 1 |
-| 八、dApp 连接与 Provider | 13 | 5 | 8 |
+| 八、dApp 连接与 Provider | 13 | 11 | 2 |
 | 九、错误、异常与安全边界 | 4 | 0 | 4 |
-| **合计** | **56** | **24** | **32** |
+| **合计** | **56** | **41** | **15** |
 
 > 编号说明:`WL-UI-*` 为 popup 内交互;`WL-DAPP-*` 为经 `window.ethereum` / 审批窗的 dApp 交互;`WL-E2E-*` 为跨真实链/网络的端到端流程。
 > 通用前置(除特别说明外均适用):已通过 `WALLET_EXTENSION_PATH` 指向钱包源码目录;用 `loadWalletContext()` 启动带扩展的持久化 Chromium;`stubPublicEndpoints` 屏蔽 YeYing 公共端点以保证用例可离线运行。
@@ -73,7 +73,7 @@
 ### WL-UI-005 设置密码时两次输入不一致 / 空密码被拒绝
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/popup-set-password-validation.spec.ts
 - 前置条件:处于设置密码流程。
 - 步骤:
   1. 提交空密码,或(若有确认框)两次输入不一致。
@@ -108,7 +108,7 @@
 ### WL-UI-008 备份文件 / Keystore 导入
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/popup-import-file.spec.ts
 - 前置条件:准备一份钱包导出的备份文件及其解密口令。
 - 步骤:
   1. 进入 `#importPage`,点击「备份文件」tab(`.import-tab[data-type=file]`)。
@@ -118,7 +118,7 @@
 ### WL-UI-009 导入非法助记词报错且不进入主页
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/popup-import-negative.spec.ts
 - 前置条件:无。
 - 步骤:
   1. 助记词 tab 填入词数错误 / 含非 BIP-39 词的字符串,提交。
@@ -161,7 +161,7 @@
 ### WL-UI-013 删除 / 移除账户
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/popup-accounts.spec.ts
 - 前置条件:至少 2 个账户(避免删除唯一账户)。
 - 步骤:
   1. 触发删除,弹出 `#deleteAccountModal`,核对 `#deleteAccountName` / `#deleteAccountAddress`。
@@ -233,7 +233,7 @@
 ### WL-UI-020 切换到不可达 RPC 网络时失败并回退
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/popup-network.spec.ts
 - 前置条件:添加一个 RPC 不可达(不打桩)的自定义网络。
 - 步骤:
   1. 尝试切换到该网络(触发对新 RPC 的 `eth_chainId`)。
@@ -278,7 +278,7 @@
 ### WL-UI-024 使用错误密码查看私钥/助记词被拒绝
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/popup-security.spec.ts
 - 前置条件:钱包已解锁。
 - 步骤:
   1. 触发查看私钥/助记词,在 `#passwordPromptModal` 输入**错误**密码确认。
@@ -287,7 +287,7 @@
 ### WL-UI-025 修改密码时旧密码错误被拒绝
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/popup-security.spec.ts
 - 前置条件:钱包已解锁。
 - 步骤:
   1. `#changePasswordModal` 中 `#oldPasswordInput` 填错误旧密码,新密码合法,提交。
@@ -332,7 +332,7 @@
 ### WL-UI-028 金额超过余额 / 余额不足提示
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/popup-send-insufficient.spec.ts
 - 前置条件:钱包已解锁,已知当前余额(可对 `eth_getBalance` 打桩)。
 - 步骤:
   1. 转账页填入大于余额的金额并提交。
@@ -341,7 +341,7 @@
 ### WL-UI-029 交易详情页展示
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/popup-tx-detail.spec.ts
 - 前置条件:活动列表中至少有一笔交易。
 - 步骤:
   1. 点击 `#transactionList` 中的交易项进入 `#transactionDetailPage`。
@@ -360,7 +360,7 @@
 ### WL-UI-031 添加 ERC-20 代币并展示余额
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/popup-token.spec.ts
 - 前置条件:钱包已解锁;对代币合约的 `balanceOf`/元数据 RPC 打桩。
 - 步骤:
   1. 代币 tab 点 `#tokenAddBtn` 进 `#tokenAddPage`,填 `#tokenAddressInput`(可自动带出 symbol/decimals),`#saveTokenBtn`。
@@ -369,7 +369,7 @@
 ### WL-UI-032 转账 ERC-20 代币
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/popup-token.spec.ts
 - 前置条件:已添加一个 ERC-20 代币且账户持有余额(可打桩)。
 - 步骤:
   1. 转账页将资产切换到该代币(`#transferTokenSymbol`),填收款地址与金额,提交。
@@ -495,7 +495,8 @@
 ### WL-DAPP-011 `wallet_switchEthereumChain`(EIP-3326)审批 + chainChanged
 - 优先级:P1
 - 类型:DAPP
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/dapp-chain.spec.ts
+- 实现说明:当前实现由后台 `chain-handler.js` 直接处理,不弹审批窗(无 `#addChainRequest` 等 UI);已知链静默切换并广播 `chainChanged`,未知链返回 4902。用例据实断言该行为。
 - 前置条件:已连接;目标链已存在于钱包。
 - 步骤:
   1. dApp 监听 `chainChanged`,调 `wallet_switchEthereumChain({ chainId })`。
@@ -505,7 +506,8 @@
 ### WL-DAPP-012 `wallet_addEthereumChain`(EIP-3085)审批
 - 优先级:P1
 - 类型:DAPP
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/dapp-chain.spec.ts
+- 实现说明:当前实现由后台 `chain-handler.js` 直接处理,不弹 `#addChainRequest` 审批窗;校验参数后静默添加并切换到新链,广播 `chainChanged`。用例据实断言该行为。
 - 前置条件:已连接;目标链尚未添加。
 - 步骤:
   1. dApp 调 `wallet_addEthereumChain(params)`。
@@ -525,7 +527,7 @@
 ### WL-DAPP-014 `eth_sendTransaction` 从 dApp 触发交易审批窗
 - 优先级:P1
 - 类型:DAPP
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/dapp-send-tx.spec.ts
 - 前置条件:已连接;对 RPC 打桩或使用测试链。
 - 步骤:
   1. dApp 调 `eth_sendTransaction(tx)`。
@@ -535,7 +537,7 @@
 ### WL-DAPP-015 已连接站点管理:查看与撤销授权
 - 优先级:P1
 - 类型:DAPP
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/dapp-sites.spec.ts
 - 前置条件:已至少授权一个 dApp 源。
 - 步骤:
   1. 进 `#sitesPage`,`#authorizedSitesList` 含该源;打开 `#siteDetailModal` 核对 `#siteDetailOrigin` / `#siteDetailAddress`(及 UCAN 会话信息)。
@@ -545,7 +547,7 @@
 ### WL-DAPP-016 钱包锁定时 dApp 请求触发解锁审批窗
 - 优先级:P1
 - 类型:DAPP
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/dapp-unlock.spec.ts
 - 前置条件:已授权站点,但钱包当前处于锁定态。
 - 步骤:
   1. dApp 发起需私钥的请求(如 `personal_sign`)。
@@ -577,7 +579,7 @@
 ### WL-DAPP-019 链不匹配的提示与处理
 - 优先级:P1
 - 类型:DAPP
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/wallet/tests/dapp-chain.spec.ts
 - 前置条件:已连接;dApp 期望链与钱包当前链不同。
 - 步骤:
   1. dApp 在链 A 状态下请求属于链 B 的操作(或 SIWE 带不同 chainId)。
