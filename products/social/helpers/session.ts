@@ -10,10 +10,17 @@
 import type { Page } from '@playwright/test';
 import type { LoginVO } from './auth';
 
-/** Inject accessToken/refreshToken into sessionStorage before the first load. */
+/** Inject accessToken/refreshToken into sessionStorage before the first load.
+ *
+ * The seed runs exactly once (guarded by a localStorage sentinel that survives
+ * the app's own `sessionStorage.removeItem` on logout). Without the guard,
+ * `addInitScript` would re-run on the post-logout full-page reload
+ * (`location.href = "/"`) and re-seed the token, masking the logout redirect. */
 export async function seedSession(page: Page, login: LoginVO): Promise<void> {
   await page.addInitScript(
     ([access, refresh]) => {
+      if (localStorage.getItem('__e2e_seeded__')) return;
+      localStorage.setItem('__e2e_seeded__', '1');
       sessionStorage.setItem('accessToken', access);
       sessionStorage.setItem('refreshToken', refresh);
     },

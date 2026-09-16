@@ -166,6 +166,34 @@ export async function newSiweIdentity(
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
+/**
+ * Bind two provisioned identities as mutual friends over the platform API.
+ *
+ * `/friend/add?friendId=` is one-directional, so both sides must add each
+ * other before the messaging endpoints pass their `isFriend` gate (this mirrors
+ * what social-flow.spec.ts does inline). Returns once both binds are code:200.
+ */
+export async function befriend(
+  platformURL: string,
+  a: SocialIdentity,
+  b: SocialIdentity,
+): Promise<void> {
+  const ctxA = await platformCtx(platformURL, a.login.accessToken);
+  const ctxB = await platformCtx(platformURL, b.login.accessToken);
+  try {
+    const addAB = await ctxA.post(`/friend/add?friendId=${b.userId}`);
+    const addBA = await ctxB.post(`/friend/add?friendId=${a.userId}`);
+    const okAB = ((await addAB.json()) as Envelope<null>).code;
+    const okBA = ((await addBA.json()) as Envelope<null>).code;
+    if (okAB !== 200 || okBA !== 200) {
+      throw new Error(`befriend failed: ${okAB}/${okBA}`);
+    }
+  } finally {
+    await ctxA.dispose();
+    await ctxB.dispose();
+  }
+}
+
 export interface EmailCreds {
   email: string;
   password: string;
