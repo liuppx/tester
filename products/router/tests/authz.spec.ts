@@ -74,6 +74,56 @@ test('UserAuth and Token CRUD endpoints reject unauthenticated requests with 401
   }
 });
 
+// RT-API-043 (P1) — /api/v1/public/models requires an API Key (TokenAuth).
+test('GET /api/v1/public/models rejects non-API-Key credentials with 401', async () => {
+  skipIfNoService();
+
+  // No credentials at all → TokenAuth 401.
+  const anon = await apiContext(baseURLFor('router')!);
+  try {
+    const r1 = await anon.get('/api/v1/public/models');
+    expect(r1.status()).toBe(401);
+  } finally {
+    await anon.dispose();
+  }
+
+  // A forged sk-… key is not a valid API key.
+  const forged = await apiContext(baseURLFor('router')!, {
+    Authorization: 'Bearer sk-forged-000000000000000000000000',
+  });
+  try {
+    const res = await forged.get('/api/v1/public/models');
+    expect(res.status()).toBe(401);
+    const body = (await res.json()) as { error?: { message?: string; type?: string } };
+    expect(body.error?.type).toBe('one_api_error');
+    expect(body.error?.message ?? '').toMatch(/无效的令牌|token/i);
+  } finally {
+    await forged.dispose();
+  }
+
+  // A user-session JWT is also not accepted by TokenAuth. The endpoint accepts
+  // only a minted `sk-` key, which itself requires purchased models — the
+  // external-payment boundary — so we verify only to the TokenAuth boundary.
+  skipIfNoKey();
+  const baseURL = baseURLFor('router')!;
+  const { token } = await acquireRouterToken(baseURL);
+  const jwtCtx = await apiContext(baseURL, { Authorization: `Bearer ${token}` });
+  try {
+    const res = await jwtCtx.get('/api/v1/public/models');
+    expect(res.status()).toBe(401);
+    const body = (await res.json()) as { error?: { message?: string; type?: string } };
+    expect(body.error?.type).toBe('one_api_error');
+    expect(body.error?.message ?? '').toMatch(/无效的令牌|token/i);
+    test.info().annotations.push({
+      type: 'boundary',
+      description:
+        'no API key minted (account has no available models) — models endpoint verified to the TokenAuth boundary only; minting an sk- key requires purchased models (payment boundary)',
+    });
+  } finally {
+    await jwtCtx.dispose();
+  }
+});
+
 // RT-API-023 (P2)
 test('token/status requires an API key (TokenAuth), not a user JWT', async () => {
   skipIfNoService();

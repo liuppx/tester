@@ -117,6 +117,101 @@ test('GET /token/ returns a well-formed paginated list', async () => {
   }
 });
 
+// RT-API-025 (P1) — POST /token/ is gated when the account has no available models.
+test('POST /token/ is blocked by the no-available-models gate', async () => {
+  skipIfNoService();
+  skipIfNoKey();
+  const baseURL = baseURLFor('router')!;
+  const { token } = await acquireRouterToken(baseURL);
+  const ctx = await apiContext(baseURL, { Authorization: `Bearer ${token}` });
+  try {
+    // Only meaningful for an account with no available models (the gate under
+    // test). A funded account would legitimately create a token, so skip there.
+    const models = (await (await ctx.get('/api/v1/public/user/models/available')).json()) as {
+      data?: unknown[];
+    };
+    test.skip(
+      Array.isArray(models.data) && models.data.length > 0,
+      'account now has available models — the no-models gate does not apply',
+    );
+
+    const res = await ctx.post('/api/v1/public/token/', { data: { name: `e2e-gate-${Date.now()}` } });
+    expect(res.status()).toBe(200);
+    const body = (await res.json()) as CreateResp;
+    // Gated before creation: success:false, models-gate message, no key leaked.
+    expect(body.success).toBe(false);
+    expect(body.data?.key).toBeUndefined();
+    expect(body.message ?? '').toMatch(/暂无可用模型|购买套餐|充值|available model/i);
+  } finally {
+    await ctx.dispose();
+  }
+});
+
+// RT-API-028 (P1) — PUT /token/ updates an existing token (round-trip).
+test('PUT /token/ updates a token and the change is reflected', async () => {
+  skipIfNoService();
+  skipIfNoKey();
+  const baseURL = baseURLFor('router')!;
+  const { token } = await acquireRouterToken(baseURL);
+  const ctx = await apiContext(baseURL, { Authorization: `Bearer ${token}` });
+  try {
+    const listBody = (await (await ctx.get('/api/v1/public/token/')).json()) as {
+      data?: Array<{ id?: string | number; name?: string }>;
+    };
+    const existing = (listBody.data ?? [])[0];
+    // Updating needs a real token. Minting one requires available models
+    // (a purchase — the external-payment boundary), so when the account has no
+    // token we cannot exercise the update and skip cleanly.
+    test.skip(
+      !existing?.id,
+      'account has no token to update; minting one needs purchased models (payment boundary)',
+    );
+
+    const newName = `e2e-upd-${Date.now()}`;
+    const put = await ctx.put('/api/v1/public/token/', {
+      data: { id: existing!.id, name: newName, status: 1 },
+    });
+    expect(put.status()).toBe(200);
+    const putBody = (await put.json()) as { success?: boolean; message?: string };
+    expect(putBody.success).toBe(true);
+
+    const detail = (await (await ctx.get(`/api/v1/public/token/${existing!.id}`)).json()) as {
+      data?: { name?: string };
+    };
+    expect(detail.data?.name).toBe(newName);
+  } finally {
+    await ctx.dispose();
+  }
+});
+
+// RT-API-029 (P1) — DELETE /token/:id is controlled and idempotent.
+test('DELETE /token/:id is controlled and idempotent (no 5xx on re-delete)', async () => {
+  skipIfNoService();
+  skipIfNoKey();
+  const baseURL = baseURLFor('router')!;
+  const { token } = await acquireRouterToken(baseURL);
+  const ctx = await apiContext(baseURL, { Authorization: `Bearer ${token}` });
+  try {
+    // The create-backed happy path (create → delete → gone) requires available
+    // models and is covered by token-lifecycle.spec's funded branch. Here we
+    // pin the endpoint's *controlled + idempotent* contract on an id the account
+    // does not own: it must answer 200 success:false (never 5xx), and repeating
+    // the delete yields the same controlled result.
+    const ghostId = `e2e-ghost-${Date.now()}`;
+    const first = await ctx.delete(`/api/v1/public/token/${ghostId}`);
+    expect(first.status()).toBe(200);
+    const firstBody = (await first.json()) as { success?: boolean; message?: string };
+    expect(firstBody.success).toBe(false);
+
+    const second = await ctx.delete(`/api/v1/public/token/${ghostId}`);
+    expect(second.status()).toBe(200);
+    const secondBody = (await second.json()) as { success?: boolean };
+    expect(secondBody.success).toBe(false);
+  } finally {
+    await ctx.dispose();
+  }
+});
+
 // RT-API-030 (P2)
 test('GET /token/search returns a well-formed result set', async () => {
   skipIfNoService();

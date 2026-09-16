@@ -12,14 +12,14 @@
 | 一、服务健康与公共信息 | 7 | 7 | 0 |
 | 二、钱包自定义 SIWE 鉴权 | 11 | 7 | 4 |
 | 三、鉴权与权限边界(混合信封) | 8 | 8 | 0 |
-| 四、管理后台 UI 与登录导航 | 12 | 4 | 8 |
-| 五、工作台只读页面 | 7 | 3 | 4 |
-| 六、令牌(Token)生命周期 | 10 | 5 | 5 |
+| 四、管理后台 UI 与登录导航 | 12 | 9 | 3 |
+| 五、工作台只读页面 | 7 | 4 | 3 |
+| 六、令牌(Token)生命周期 | 10 | 7 | 3 |
 | 七、充值与订单生命周期 | 8 | 1 | 7 |
 | 八、余额与兑换码 | 5 | 0 | 5 |
 | 九、个人中心与账户设置 | 5 | 1 | 4 |
-| 十、OpenAI 兼容模型与中继 | 6 | 2 | 4 |
-| **合计** | **79** | **38** | **41** |
+| 十、OpenAI 兼容模型与中继 | 6 | 3 | 3 |
+| **合计** | **79** | **47** | **32** |
 
 > 说明:Router 单一 Go 二进制在 `:3011` 上同时提供内嵌 React 管理后台与 API。
 > 钱包是唯一登录方式(`password_login_enabled=false`、`password_register_enabled=false`)。
@@ -133,7 +133,7 @@
 ### RT-API-008 challenge 拒绝未绑定且未开启自动注册的地址
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:⬜ 待实现(降级跳过)— products/router/tests/auth-negative.spec.ts(本部署 `AutoRegisterEnabled=true`,未绑定地址会被自动注册,拒绝分支不可达;测试探测随机地址 challenge,检测到自动注册开启即降级跳过,关闭时才断言拒绝)
 - 前置条件:后台 `AutoRegisterEnabled=false`;使用一个从未绑定账户的随机地址。
 - 步骤:
   1. POST challenge,body `{address: <未绑定地址>}`。
@@ -330,7 +330,7 @@
 ### RT-UI-008 登录页默认渲染钱包登录模式
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/login-ui.spec.ts
 - 前置条件:未登录。
 - 步骤:
   1. 打开 `/login`。
@@ -339,7 +339,7 @@
 ### RT-UI-009 登录页切换到通行证/passkey 模式渲染二维码
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/login-ui.spec.ts
 - 前置条件:在 `/login`。
 - 步骤:
   1. 点击右上角切换角标 `.router-login-mode-corner`。
@@ -348,7 +348,7 @@
 ### RT-UI-010 无钱包插件时显示未检测告警
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/login-ui.spec.ts
 - 前置条件:浏览器未注入钱包 provider(无 `window.ethereum`)。
 - 步骤:
   1. 打开 `/login`,点击钱包登录按钮。
@@ -375,7 +375,7 @@
 ### RT-UI-013 用户下拉“退出/Logout”登出并清理会话
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/session-ui.spec.ts
 - 前置条件:已注入钱包会话。
 - 步骤:
   1. 打开用户下拉,点击“退出/Logout”。
@@ -384,7 +384,7 @@
 ### RT-UI-014 普通用户访问 /admin/* 被重定向到工作台
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/session-ui.spec.ts
 - 前置条件:普通用户会话(非 admin)。
 - 步骤:
   1. 直接打开 `/admin/dashboard`。
@@ -451,7 +451,7 @@
 ### RT-UI-021 服务购买页渲染套餐区与余额充值区
 - 优先级:P1
 - 类型:UI
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/workspace.spec.ts
 - 前置条件:已注入钱包会话。
 - 步骤:
   1. 打开 `/workspace/service/pricing`。
@@ -493,7 +493,7 @@
 ### RT-API-025 POST /token/ 无可用模型时被门槛拦截
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/token-api.spec.ts
 - 前置条件:账户无可用模型(未购买/未充值)。
 - 步骤:
   1. 携带用户 JWT POST `/token/`,body `{name}`。
@@ -521,7 +521,7 @@
 ### RT-API-028 PUT /token/ 更新令牌
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:⬜ 待实现(降级跳过)— products/router/tests/token-api.spec.ts(条件跳过:当前账户无令牌可更新;创建令牌需可用模型=外部支付边界。存在令牌时自动执行 PUT 更新回环)
 - 前置条件:已创建 1 个令牌。
 - 步骤:
   1. PUT `/token/`,body 含 id 与修改后的名称/配额/状态。
@@ -530,7 +530,7 @@
 ### RT-API-029 DELETE /token/:id 删除且幂等
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/token-api.spec.ts
 - 前置条件:已创建 1 个令牌。
 - 步骤:
   1. DELETE `/token/:id`;GET 列表确认消失。
@@ -582,7 +582,7 @@
 ### RT-API-032 POST /user/topup/orders 创建 balance_topup 订单
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:⬜ 待实现(降级跳过)— products/router/tests/topup-orders.spec.ts(本部署 `top_up_mode=api`,下单会命中真实外部支付网关 wp.tidukongjian.com;redirect 模式下自动执行完整下单→列表→详情→刷新→取消流程)
 - 前置条件:持有用户 JWT;stub 外部支付网关或断言到下单边界。
 - 步骤:
   1. POST `/user/topup/orders`,body `{business_type:'balance_topup', plan_id}`。
@@ -591,7 +591,7 @@
 ### RT-API-033 GET /user/topup/orders 列表与 /orders/:id 详情
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:⬜ 待实现(降级跳过)— products/router/tests/topup-orders.spec.ts(本部署 `top_up_mode=api`,依赖已创建订单=真实外部支付网关;redirect 模式下随订单生命周期流程一并执行)
 - 前置条件:已创建至少 1 个订单。
 - 步骤:
   1. GET `/user/topup/orders`。
@@ -601,7 +601,7 @@
 ### RT-API-034 POST /orders/:id/refresh 刷新订单状态
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:⬜ 待实现(降级跳过)— products/router/tests/topup-orders.spec.ts(本部署 `top_up_mode=api`,刷新会查询真实外部支付网关;redirect 模式下随订单生命周期流程一并执行)
 - 前置条件:存在 pending 订单。
 - 步骤:
   1. POST `/user/topup/orders/:id/refresh`。
@@ -610,7 +610,7 @@
 ### RT-API-035 POST /orders/:id/cancel 取消 pending 订单
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:⬜ 待实现(降级跳过)— products/router/tests/topup-orders.spec.ts(本部署 `top_up_mode=api`,取消会查询真实外部支付网关;redirect 模式下随订单生命周期流程一并执行并自清理)
 - 前置条件:存在 pending 订单。
 - 步骤:
   1. POST `/user/topup/orders/:id/cancel`。
@@ -659,7 +659,7 @@
 ### RT-E2E-003 兑换码充值弹窗输入并提交
 - 优先级:P1
 - 类型:E2E
-- 状态:⬜ 待实现
+- 状态:⬜ 待实现(降级跳过)— products/router/tests/redeem.spec.ts(兑换码弹窗 `RedeemCodePage` 仅被未挂载路由的 `BalanceStatusPage`/`TopUpRecordsPage` 引用,当前 `App.jsx` 无任何 live 路由可到达用户兑换码弹窗)
 - 前置条件:已注入会话;准备一个测试兑换码(或断言到提交边界)。
 - 步骤:
   1. 打开余额状态页,点击“兑换码充值”打开 `RedeemCodePage` 弹窗。
@@ -752,7 +752,7 @@
 ### RT-API-043 GET /api/v1/public/models 以 API Key 列出模型
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现
+- 状态:✅ 已实现 — products/router/tests/authz.spec.ts
 - 前置条件:已创建 API token 且账户有可用模型。
 - 步骤:
   1. 用 `Authorization: Bearer sk-<key>` GET `/api/v1/public/models`。

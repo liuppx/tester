@@ -59,3 +59,26 @@ test('workspace quota, token and log pages render for an authenticated user', as
   });
   await recorder.step(page, '工作台 · 路由异常概览');
 });
+
+// RT-UI-021 (P1) — service-purchase page renders the package + balance sections.
+test('service-purchase page renders the package and balance sections', async ({
+  page,
+  baseURL,
+  recorder,
+}) => {
+  skipIfNoService();
+  const env = envFor('router');
+  test.skip(!env['ROUTER_WALLET_PRIVATE_KEY'], 'ROUTER_WALLET_PRIVATE_KEY not configured');
+
+  await page.goto(baseURL!, { waitUntil: 'domcontentloaded' });
+  await seedWalletSession(page, baseURL!, env['ROUTER_WALLET_PRIVATE_KEY']!);
+
+  await page.goto(`${baseURL}/workspace/service/pricing`, { waitUntil: 'domcontentloaded' });
+
+  // Both region wrappers always render (ServicePricing/index.jsx), plus the
+  // payment-history link in the header.
+  await expect(page.locator('#pricing-package-section')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('#pricing-balance-section')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.router-service-pricing-history-link')).toBeVisible();
+  await recorder.step(page, '服务购买页 · 套餐区与余额充值区');
+});

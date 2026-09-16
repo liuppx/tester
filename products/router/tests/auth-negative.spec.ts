@@ -94,6 +94,38 @@ test('challenge rejects missing / malformed address', async () => {
   }
 });
 
+// RT-API-008 (P1) — challenge rejects an unbound address when auto-register is off.
+//
+// `WalletChallengeProto` (wallet.go) rejects with proto code 5 + "钱包未绑定账户…"
+// when `!IsWalletAddressAlreadyTaken(addr) && !config.AutoRegisterEnabled`.
+// Challenging a *fresh random* address only ever mints a nonce (auto-create
+// happens at verify), so this probe is side-effect free. If the deployment has
+// AutoRegisterEnabled=true the reject branch is unreachable and we skip with the
+// live-detected reason; otherwise we assert the controlled rejection.
+test('challenge rejects an unbound address when auto-register is disabled', async () => {
+  skipIfNoService();
+  const ctx = await apiContext(baseURLFor('router')!);
+  try {
+    const fresh = Wallet.createRandom().address.toLowerCase();
+    const res = await ctx.post(CHALLENGE, { data: { address: fresh } });
+    expect(res.status()).toBe(200);
+    const parsed = (await res.json()) as ProtoEnvelope;
+
+    // Auto-register ON → an unbound address still gets a nonce; the reject branch
+    // can never fire on this deployment.
+    test.skip(
+      parsed.success === true,
+      'AutoRegisterEnabled=true on this deployment: unbound wallet addresses are auto-registered, ' +
+        'so the challenge reject branch (RT-API-008) cannot fire',
+    );
+
+    expect(parsed.success).toBe(false);
+    expect(parsed.message).toContain('钱包未绑定账户');
+  } finally {
+    await ctx.dispose();
+  }
+});
+
 // RT-API-010 (P1)
 test('verify rejects a request missing the signature', async () => {
   skipIfNoService();
