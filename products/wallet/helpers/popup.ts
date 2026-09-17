@@ -271,5 +271,11 @@ export async function waitForApproval(
     timeout,
   });
   await approvalPage.bringToFront();
+  await approvalPage.setViewportSize({ width: POPUP_WIDTH, height: POPUP_HEIGHT });
+  await approvalPage.waitForLoadState('domcontentloaded');
+  await approvalPage.locator('.request-view:not(.hidden)').first().waitFor({
+    state: 'visible',
+    timeout,
+  });
   return approvalPage;
 }

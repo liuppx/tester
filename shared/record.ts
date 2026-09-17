@@ -86,9 +86,14 @@ export class Recorder {
     }
     const idx = String(this.state.steps.length + 1).padStart(2, '0');
     const filename = `${idx}-${slug(label)}.png`;
+    // Extension popup and approval windows have an explicit 380x600 contract.
+    // `fullPage: true` makes Chromium expand a chrome-extension document to
+    // its layout/scroll height (for example 875px when a fixed modal is open),
+    // which records the screenshot canvas rather than the actual popup.
+    const isWalletExtensionPage = page.url().startsWith('chrome-extension://');
     await page.screenshot({
       path: join(this.dir!, filename),
-      fullPage: true,
+      fullPage: !isWalletExtensionPage,
     });
     this.state.steps.push({
       index: this.state.steps.length + 1,
