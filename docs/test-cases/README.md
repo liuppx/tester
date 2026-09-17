@@ -12,14 +12,14 @@
 | 节点 Node | [node.md](node.md) | 50 | 46 | 4 | 92% |
 | 路由 Router | [router.md](router.md) | 79 | 65 | 14 | 82% |
 | 钱包 Wallet | [wallet.md](wallet.md) | 56 | 56 | 0 | 100% |
-| 对话 Chat | [chat.md](chat.md) | 92 | 5 | 87 | 5% |
+| 对话 Chat | [chat.md](chat.md) | 92 | 69 | 23 | 75% |
 | 社交 Social | [social.md](social.md) | 87 | 81 | 6 | 93% |
 | 项目 Project | [project.md](project.md) | 141 | 138 | 3 | 98% |
 | 知识库 Knowledge | [knowledge.md](knowledge.md) | 110 | 5 | 105 | 5% |
 | 智能体 Agent | [agent.md](agent.md) | 58 | 4 | 54 | 7% |
 | 应用市场 Marketplace | [marketplace.md](marketplace.md) | 59 | 59 | 0 | 100% |
 | 文档 Books | [books.md](books.md) | 35 | 32 | 3 | 91% |
-| **合计** | | **858** | **582** | **276** | **68%** |
+| **合计** | | **858** | **646** | **212** | **75%** |
 
 ## 使用方式
 
@@ -40,8 +40,7 @@
 
 **Wallet** — P0 + P1 + P2 全量覆盖(56/56):非法私钥导入报错、收款二维码/导出账户、自定义网络增改删与默认网络切换、清空历史、通讯录、连续错误解锁的锁定处理;dApp 侧 ReCap(EIP-5573)/watchAsset(EIP-747)/accountsChanged、未连接 eth_accounts 返回空、审批窗关闭即视为拒绝、同源并发复用同一审批窗。(唯一跳过为既有的真实 Sepolia 广播用例。)
 
-**Chat** — LLM 会话主路径(流式回复 / 停止响应中断 / 无效 key 优雅报错)、钱包 SIWE 登录准入、
-Router 令牌选择、Provider 代理转发。整个业务链路(登录门槛之后)现为冒烟层覆盖。
+**Chat**(NextChat 定制版)— P0 + P1 + P2 大批补齐(69/92):健康/配置探针、钱包 SIWE→UCAN 登录准入与重定向/登出、侧栏/新建会话/技能 UI、会话列表/切换/搜索、Provider 代理边界、设置(主题/地址/重置/清除)、云同步与 WebDAV 代理白名单/透传、Router 令牌列表/选择/用量/充值跳转、发现/技能编辑器/插件/工具市场、图像页/历史、artifacts 分享边界。真实 SIWE→UCAN 登录成功进入应用外壳;无 provider key 且 Router 未充值时模型目录为空,授权用户落到 `/setup`,如实断言、未伪造流式回复。整套 `--project=chat` 在 `PWWORKERS=2` 下 52 通过/42 跳过/0 失败。剩余 23 条受阻:LLM 会话需真实 key/令牌(spec 就绪、有 key 即真跑);会话级置顶/访问码/自定义模型/系统提示模板等本构建特性缺失或位置不同;`needCode`/`HIDE_USER_API_KEY`/`ENABLE_TOOLS` 配置固定致触发态不可复现;UCAN 外部授权、STABILITY 出图、ShareGPT 外发需外部系统。**发现 2 处真实产品缺陷**(诚实断言边界、未修改产品仓库):① `app/api/[provider]` 与 `app/api/artifacts` 误用 `dynamic="force-static"` 却读请求 → 所有已识别 provider 与 artifacts POST/GET 均 500(仅未知 provider 分支正常);② WebDAV 代理未放行 PROPFIND(返回 403,与文档不符)。另记一处并发健壮性问题:共享钱包并发同步同一 WebDAV workspace 会偶发 WorkspaceSyncError(可恢复,已在 helper 重试)。
 
 **Social** — P0 + P1 + P2 已补齐(81/87):refresh 负路径、改密旧码错误、解绑钱包、注销、终端在线状态、好友/群免打扰、已读指针/群消息已读用户、超大文件上传拒绝、AI 改写/建议/摘要(本地 provider 真跑)、RTC 系统配置、钱包登录无插件优雅提示与注册页 UI。剩余 6 条受阻:过期 accessToken(需服务端 HMAC 密钥伪造合法过期串)、1:1 通话信令与通话面板(需在线 WS 对端 + 摄像头/麦克风)、二维码登录轮询(需外部 passport 审批)、图片/文件/语音发送(getUserMedia)、群聊 @ 成员(IM WebSocket 花名册未握手)。注:web3-graph/incentive 后端为空壳,未纳入。
 
