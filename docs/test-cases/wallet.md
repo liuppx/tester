@@ -10,7 +10,7 @@
 | 模块 | 用例数 | 已实现 | 待实现 |
 | --- | --- | --- | --- |
 | 一、钱包创建与初始化 | 5 | 5 | 0 |
-| 二、钱包导入 | 5 | 4 | 0 |
+| 二、钱包导入 | 5 | 5 | 0 |
 | 三、账户管理 | 5 | 5 | 0 |
 | 四、网络管理 | 5 | 5 | 0 |
 | 五、安全与锁定恢复 | 5 | 5 | 0 |
@@ -19,9 +19,7 @@
 | 八、dApp 连接与 Provider | 13 | 13 | 0 |
 | 九、错误、异常与安全边界 | 4 | 4 | 0 |
 | 十、云端密钥托管与恢复 | 11 | 11 | 0 |
-| **合计** | **67** | **66** | **0** |
-
-> 🐞 缺陷阻塞 1 条:WL-UI-008(备份文件导入)因云端恢复改造回归而无法真跑,已 `test.fixme` 并在用例内记录根因;产品修复后移除标记即恢复。
+| **合计** | **67** | **67** | **0** |
 
 > 文档与基线:wallet 云端密钥托管的可重复验收基线见钱包仓库 `docs/钱包测试/密钥托管验收标准.md`(CUST-001..072)。本节 CUST-* 用例覆盖其中 11 条**当前可在离线 stub 模式下跑通**的子集(配置、状态、启用/停用、密文与恢复读取完整性),步骤、断言以该基线为准;其余 CUST-* 用例(已绑定通行证下的整链开启 CUST-010/020..023、HD/私钥整链恢复 CUST-031/032、新设备通行证恢复 CUST-040..043、UCAN 权限边界 CUST-060..062、本地删除钱包后清理远端 CUST-072 等)仍 ⬜,前置条件为真实 Node/托管服务联调,在 tester 仓库环境变量未提供时不具备可重复执行条件。
 
@@ -113,13 +111,13 @@
 ### WL-UI-008 备份文件 / Keystore 导入
 - 优先级:P1
 - 类型:UI
-- 状态:🐞 已实现但受真实缺陷阻塞(`test.fixme`)— products/wallet/tests/popup-import-file.spec.ts
+- 状态:✅ 已实现 — products/wallet/tests/popup-import-file.spec.ts
 - 前置条件:准备一份钱包导出的备份文件及其解密口令。
 - 步骤:
   1. 进入 `#importPage`,点击外层「备份文件」来源 tab(`.import-source-tab[data-source=file]`),`#fileImportSection` 显示。
   2. 选择备份文件、输入口令并提交(「导入备份」)。
 - 预期结果:成功恢复其中账户,落在 `#walletPage`,账户列表与备份一致。
-- **真实缺陷(云端恢复改造引入的回归,钱包仓库 6d5118c..ac99bcf)**:导入页改为「来源 tab(助记词/私钥·备份文件·云端恢复)+ 方式 tab(助记词/私钥)」两级后,`import-wallet-controller.js:handleImportWallet` 仍只按 `.import-method-tab.active`(默认恒为 mnemonic)推导 `importType`,从不根据 `source==='file'` 路由 → 点击「导入备份」实际走了助记词分支,因助记词为空报「请输入助记词」并返回,备份文件永远不会被导入、页面停留在导入页。已实证复现(active source=file 但 active method=mnemonic)。修复在钱包仓库(此处只读):`importType` 应取 `source==='file' ? 'file' : <方式 tab 类型>`。产品修好后移除 `test.fixme` 即恢复真跑。
+- **修复记录(云端恢复改造回归,已修)**:导入页改为「来源 tab(助记词/私钥·备份文件·云端恢复)+ 方式 tab(助记词/私钥)」两级后,`import-wallet-controller.js:handleImportWallet` 曾只按 `.import-method-tab.active`(默认恒为 mnemonic)推导 `importType`,从不根据 `source==='file'` 路由 → 点击「导入备份」实际走了助记词分支,因助记词为空报「请输入助记词」并返回。修复:`importType = source === 'file' ? 'file' : <方式 tab 类型>`,文件导入分支已完整支持(`importAccountsFile`)。修复后本用例移除 `test.fixme` 恢复真跑,导出→导入整程通过。
 
 
 ### WL-UI-009 导入非法助记词报错且不进入主页
