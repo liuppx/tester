@@ -70,22 +70,27 @@ test('import Tron private key lands on #walletPage with the expected Base58Check
     });
 
     const displayedAddress = (await byId(popup, 'accountAddress').textContent())?.trim() ?? '';
-    expect(displayedAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{34,35}$/);
-    // Truncated prefix/suffix — matches the resilient assertion style
-    // used in popup-import.spec.ts / popup-import-privatekey.spec.ts.
-    expect(displayedAddress).toContain(EXPECTED_PREFIX);
-    expect(displayedAddress).toContain(EXPECTED_SUFFIX);
+    // Popup truncates the address with a unicode/ASCII ellipsis; assert on
+    // shape (Base58Check alphabet + the truncation marker) and on the
+    // known prefix/suffix. The full address is cross-checked via the SW
+    // message bus below.
     expect(displayedAddress).toMatch(/…|\.\.\./);
+    const stripped = displayedAddress.replace(/…|\.\.\./g, '');
+    expect(stripped).toMatch(/^[1-9A-HJ-NP-Za-km-z]+$/);
+    expect(stripped).toContain(EXPECTED_PREFIX);
+    expect(stripped).toContain(EXPECTED_SUFFIX);
 
     // Cross-check the *full* address through the SW message bus so the
-    // truncation marker doesn't fool us.
-    const account = await sendSw<{ address: string; namespace: string; chainKey: string }>(
+    // truncation marker doesn't fool us. handleGetCurrentAccount wraps the
+    // account under a `.account` key alongside `{ success: true }`.
+    const response = await sendSw<{ success?: boolean; account?: { address: string; namespace: string; chainKey: string } }>(
       popup,
       'GET_CURRENT_ACCOUNT',
     );
-    expect(account.namespace).toBe('tron');
-    expect(account.chainKey).toBe('tron:mainnet');
-    expect(account.address).toBe(EXPECTED_TRON_ADDRESS);
+    const currentAccount = response?.account;
+    expect(currentAccount?.namespace).toBe('tron');
+    expect(currentAccount?.chainKey).toBe('tron:mainnet');
+    expect(currentAccount?.address).toBe(EXPECTED_TRON_ADDRESS);
   } finally {
     await teardownWalletContext(ctx);
   }

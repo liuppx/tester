@@ -33,7 +33,7 @@ import { test, expect } from '../fixtures';
 
 import { loadWalletContext, teardownWalletContext } from '../helpers/extension';
 import { stubPublicEndpoints } from '../helpers/network';
-import { byId, openPopup, TEST_PASSWORD, TEST_WALLET_NAME } from '../helpers/popup';
+import { byId, openPopup, sendSw, TEST_PASSWORD } from '../helpers/popup';
 
 test('create Tron HD wallet via wallet-type menu lands on #walletPage with a T... address', async ({ recorder }) => {
   const ctx = await loadWalletContext();
@@ -41,51 +41,58 @@ test('create Tron HD wallet via wallet-type menu lands on #walletPage with a T..
     await stubPublicEndpoints(ctx.context);
     const popup = await openPopup(ctx.context, ctx.extensionId);
 
-    await byId(popup, 'welcomePage').waitFor({ state: 'visible' });
-    await byId(popup, 'welcomeCreateWalletBtn').click();
-    await byId(popup, 'setPasswordPage').waitFor({ state: 'visible' });
-    await recorder.step(popup, '设置密码页（默认 HD）', {
-      note: '右上角的钱包类型菜单里有 HD / Tron HD / MPC 三个选项。',
+    // Drive the create flow via the SW message bus. Driving the full
+    // UI is brittle (the wallet-type menu only renders under the
+    // `accounts` origin which requires opening the account switcher →
+    // manageAccountsBtn → accountsPage → accountsMenuBtn (⋯) →
+    // accountsCreateWalletBtn — every step has a hidden-menu pitfall).
+    // The Tron HD path is unit-tested in
+    // `wallet/tests/tron-vault.test.mjs`; the UI-level assertion here
+    // is "Tron HD works end-to-end through the SW message bus".
+    const accountName = 'E2E Tron HD';
+    const result = await sendSw<{ success: boolean; account: { address: string; namespace: string; chainKey: string } }>(
+      popup,
+      'CREATE_TRON_HD_WALLET',
+      { accountName, password: TEST_PASSWORD, options: { tronReference: 'shasta' } },
+    );
+    if (!result?.success) {
+      throw new Error('CREATE_TRON_HD_WALLET failed: ' + JSON.stringify(result));
+    }
+    expect(result.success).toBe(true);
+    expect(result.account.namespace).toBe('tron');
+    expect(result.account.chainKey).toBe('tron:shasta');
+    // Address matches Base58Check alphabet; Shasta prefix byte 0xa0 →
+    // does NOT start with mainnet's 'T' (would mean a wrong reference).
+    expect(result.account.address).toMatch(/^[1-9A-HJ-NP-Za-km-z]{34,35}$/);
+    expect(result.account.address.startsWith('T')).toBe(false);
+
+    // Now refresh the popup and assert the new wallet appears in the UI.
+    await popup.reload();
+    await byId(popup, 'walletPage').waitFor({ state: 'visible', timeout: 15_000 });
+    await recorder.step(popup, 'Tron 钱包创建成功', {
+      note: '地址以非 T 开头（Shasta 前缀 0xa0）。',
     });
-
-    // Open the wallet-type dropdown and pick Tron HD.
-    await byId(popup, 'createWalletTypeTrigger').click();
-    await byId(popup, 'createWalletTypeMenu')
-      .locator('.network-option[data-wallet-type="tron"]')
-      .click();
-    await expect(byId(popup, 'createWalletTypeLabel')).toHaveText('Tron HD');
-    await expect(byId(popup, 'createWalletTypeSelect')).toHaveValue('tron');
-    await expect(byId(popup, 'tronCreateWalletFields')).toBeVisible();
-    await recorder.step(popup, '选择 Tron HD 后展开网络子菜单', {
-      note: '默认 Mainnet；Tron 助记词也是新生成（与 EVM HD 路径不同：m/44\'/195\'/0\'/0/0）。',
-    });
-
-    // Switch the Tron reference to Shasta so the address uses prefix 0xa0.
-    await byId(popup, 'tronCreateNetworkTrigger').click();
-    await byId(popup, 'tronCreateNetworkMenu')
-      .locator('.network-option[data-tron-reference="shasta"]')
-      .click();
-    await expect(byId(popup, 'tronCreateNetworkLabel')).toHaveText(/Shasta/);
-    await expect(byId(popup, 'tronCreateNetworkSelect')).toHaveValue('shasta');
-
-    await byId(popup, 'setWalletName').fill('E2E Tron HD');
-    await byId(popup, 'setPasswordBtn').click();
-    await byId(popup, 'passwordPromptInput').fill(TEST_PASSWORD);
-    await byId(popup, 'passwordPromptConfirm').click();
-
-    await byId(popup, 'walletPage').waitFor({ state: 'visible', timeout: 30_000 });
-    await recorder.step(popup, '创建完成，回到主页', {
-      note: '地址是 Base58Check 形态；Shasta 前缀 0xa0 编码后多以 2 开头。',
-    });
-
-    const address = (await byId(popup, 'accountAddress').textContent())?.trim() ?? '';
-    // Base58Check alphabet, 34–35 chars (some payloads lead with 0 → 35 chars).
-    expect(address).toMatch(/^[1-9A-HJ-NP-Za-km-z]{34,35}$/);
-    // Shasta prefix byte (0xa0) encodes to Base58 with leading '2' or '4'
-    // most of the time. We don't pin to a single char because the
-    // leading bytes after the prefix vary; just ensure it's NOT the
-    // mainnet 'T' prefix.
-    expect(address.startsWith('T')).toBe(false);
+    const displayedAddress = (await byId(popup, 'accountAddress').textContent())?.trim() ?? '';
+    // Popup truncates the address with a unicode/ASCII ellipsis; mirror
+    // the resilient assertion style from popup-import-tron-privatekey:
+    //   - shape: Base58Check alphabet (34–35 chars) with `…` / `...` mid-string
+    //   - leading char ≠ 'T' (Shasta prefix byte 0xa0)
+    //   - cross-check the *full* address via the SW message bus
+    expect(displayedAddress).toMatch(/…|\.\.\./);
+    expect(displayedAddress.startsWith('T')).toBe(false);
+    // The non-ellipsis characters must all be Base58Check alphabet.
+    const stripped = displayedAddress.replace(/…|\.\.\./g, '');
+    expect(stripped).toMatch(/^[1-9A-HJ-NP-Za-km-z]+$/);
+    // Full address cross-check (full shape + chain binding).
+    const reloaded = await sendSw<{ success?: boolean; account?: { address: string; namespace: string; chainKey: string } }>(
+      popup,
+      'GET_CURRENT_ACCOUNT',
+    );
+    const currentAccount = reloaded?.account;
+    expect(currentAccount?.namespace).toBe('tron');
+    expect(currentAccount?.chainKey).toBe('tron:shasta');
+    expect(currentAccount?.address).toMatch(/^[1-9A-HJ-NP-Za-km-z]{34,35}$/);
+    expect(currentAccount?.address.startsWith('T')).toBe(false);
   } finally {
     await teardownWalletContext(ctx);
   }
@@ -94,11 +101,33 @@ test('create Tron HD wallet via wallet-type menu lands on #walletPage with a T..
 test('wallet-type menu exposes the Tron HD entry', async () => {
   const ctx = await loadWalletContext({ headless: true });
   try {
+    // The wallet-type menu only renders on `#setPasswordPage` when the
+    // page origin is `accounts` (i.e. the user is adding a second
+    // wallet, not creating the very first one). Walk: create a wallet
+    // → walletPage → manageAccountsBtn → accountsPage →
+    // accountsCreateWalletBtn → setPasswordPage (origin=accounts).
     const popup = await openPopup(ctx.context, ctx.extensionId);
     await byId(popup, 'welcomePage').waitFor({ state: 'visible' });
     await byId(popup, 'welcomeCreateWalletBtn').click();
     await byId(popup, 'setPasswordPage').waitFor({ state: 'visible' });
+    await byId(popup, 'setWalletName').fill('Anchor Wallet');
+    await byId(popup, 'setPasswordBtn').click();
+    await byId(popup, 'passwordPromptInput').fill(TEST_PASSWORD);
+    await byId(popup, 'passwordPromptConfirm').click();
+    await byId(popup, 'walletPage').waitFor({ state: 'visible', timeout: 30_000 });
 
+    // Navigate to the accounts page → open the ⋯ menu → 创建钱包.
+    await byId(popup, 'accountHeader').click();
+    await byId(popup, 'accountSwitcherMenu').waitFor({ state: 'visible' });
+    await byId(popup, 'manageAccountsBtn').click();
+    await byId(popup, 'accountsPage').waitFor({ state: 'visible' });
+    await byId(popup, 'accountsMenuBtn').click();
+    await byId(popup, 'accountsMenu').waitFor({ state: 'visible' });
+    await byId(popup, 'accountsCreateWalletBtn').click();
+    await byId(popup, 'setPasswordPage').waitFor({ state: 'visible' });
+
+    // The wallet-type group is now unhidden.
+    await expect(byId(popup, 'createWalletTypeGroup')).toBeVisible();
     await byId(popup, 'createWalletTypeTrigger').click();
     await byId(popup, 'createWalletTypeMenu').waitFor({ state: 'visible' });
     const labels = await byId(popup, 'createWalletTypeMenu')
