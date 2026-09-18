@@ -59,7 +59,10 @@ test('EVM dApp protocol calls throw UNSUPPORTED_METHOD while Tron is active', as
     expect(String(chainIdOk?.chainId ?? '').startsWith('0x')).toBe(true);
 
     // -- Step 2: switch to Tron mainnet ---------------------------------------
-    const switched = await sendSw<{ success: boolean }>(popup, 'SWITCH_NETWORK', { networkKey: 'tronMainnet' });
+    const switched = await sendSw<{ success: boolean; error?: string }>(popup, 'SWITCH_NETWORK', { networkKey: 'tronMainnet' });
+    if (!switched?.success) {
+      throw new Error('SWITCH_NETWORK to tronMainnet failed: ' + JSON.stringify(switched));
+    }
     expect(switched.success).toBe(true);
 
     // -- Step 3: SWITCH_NETWORK → tronMainnet moves currentChainKey to
@@ -102,7 +105,10 @@ test('EVM dApp protocol calls throw UNSUPPORTED_METHOD while Tron is active', as
     expect(tronChainIdStr.startsWith('0x')).toBe(false);
 
     // -- Step 4: switch back to Ethereum mainnet; EVM behaviour resumes ------
-    const back = await sendSw<{ success: boolean }>(popup, 'SWITCH_NETWORK', { networkKey: 'mainnet' });
+    const back = await sendSw<{ success: boolean; error?: string }>(popup, 'SWITCH_NETWORK', { networkKey: 'mainnet' });
+    if (!back?.success) {
+      throw new Error('SWITCH_NETWORK back to mainnet failed: ' + JSON.stringify(back));
+    }
     expect(back.success).toBe(true);
     const restored = await sendSw<{ success?: boolean; chainId?: string }>(popup, 'GET_CURRENT_CHAIN_ID');
     expect(String(restored?.chainId ?? '').startsWith('0x')).toBe(true);
