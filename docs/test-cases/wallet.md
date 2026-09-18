@@ -1,7 +1,7 @@
 # 钱包 Wallet — 端到端测试用例
 
 > 测试人员视角整理的**应有** E2E 用例清单,作为实现依据。
-> 状态说明:✅ 已实现(链接到 spec) / ⬜ 待实现。
+> 状态说明:✅ 已实现(链接到 spec) / ⬜ 待实现 / 🐞 已实现但被真实产品缺陷阻塞(`test.fixme`,产品修复后即恢复真跑)。
 > 形态:浏览器扩展(popup + service worker + dApp provider)。基于 MV3,名称「夜莺钱包 / YeYing Wallet」,rdns `io.github.yeying`。
 > 最后更新:2026-09-16
 
@@ -10,7 +10,7 @@
 | 模块 | 用例数 | 已实现 | 待实现 |
 | --- | --- | --- | --- |
 | 一、钱包创建与初始化 | 5 | 5 | 0 |
-| 二、钱包导入 | 5 | 5 | 0 |
+| 二、钱包导入 | 5 | 4 | 0 |
 | 三、账户管理 | 5 | 5 | 0 |
 | 四、网络管理 | 5 | 5 | 0 |
 | 五、安全与锁定恢复 | 5 | 5 | 0 |
@@ -18,7 +18,9 @@
 | 七、消息签名与授权 | 5 | 5 | 0 |
 | 八、dApp 连接与 Provider | 13 | 13 | 0 |
 | 九、错误、异常与安全边界 | 4 | 4 | 0 |
-| **合计** | **56** | **56** | **0** |
+| **合计** | **56** | **55** | **0** |
+
+> 🐞 缺陷阻塞 1 条:WL-UI-008(备份文件导入)因云端恢复改造回归而无法真跑,已 `test.fixme` 并在用例内记录根因;产品修复后移除标记即恢复。
 
 > 编号说明:`WL-UI-*` 为 popup 内交互;`WL-DAPP-*` 为经 `window.ethereum` / 审批窗的 dApp 交互;`WL-E2E-*` 为跨真实链/网络的端到端流程。
 > 通用前置(除特别说明外均适用):已通过 `WALLET_EXTENSION_PATH` 指向钱包源码目录;用 `loadWalletContext()` 启动带扩展的持久化 Chromium;`stubPublicEndpoints` 屏蔽 YeYing 公共端点以保证用例可离线运行。
@@ -108,12 +110,14 @@
 ### WL-UI-008 备份文件 / Keystore 导入
 - 优先级:P1
 - 类型:UI
-- 状态:✅ 已实现 — products/wallet/tests/popup-import-file.spec.ts
+- 状态:🐞 已实现但受真实缺陷阻塞(`test.fixme`)— products/wallet/tests/popup-import-file.spec.ts
 - 前置条件:准备一份钱包导出的备份文件及其解密口令。
 - 步骤:
-  1. 进入 `#importPage`,点击「备份文件」tab(`.import-tab[data-type=file]`)。
-  2. 选择备份文件、输入口令并提交。
+  1. 进入 `#importPage`,点击外层「备份文件」来源 tab(`.import-source-tab[data-source=file]`),`#fileImportSection` 显示。
+  2. 选择备份文件、输入口令并提交(「导入备份」)。
 - 预期结果:成功恢复其中账户,落在 `#walletPage`,账户列表与备份一致。
+- **真实缺陷(云端恢复改造引入的回归,钱包仓库 6d5118c..ac99bcf)**:导入页改为「来源 tab(助记词/私钥·备份文件·云端恢复)+ 方式 tab(助记词/私钥)」两级后,`import-wallet-controller.js:handleImportWallet` 仍只按 `.import-method-tab.active`(默认恒为 mnemonic)推导 `importType`,从不根据 `source==='file'` 路由 → 点击「导入备份」实际走了助记词分支,因助记词为空报「请输入助记词」并返回,备份文件永远不会被导入、页面停留在导入页。已实证复现(active source=file 但 active method=mnemonic)。修复在钱包仓库(此处只读):`importType` 应取 `source==='file' ? 'file' : <方式 tab 类型>`。产品修好后移除 `test.fixme` 即恢复真跑。
+
 
 ### WL-UI-009 导入非法助记词报错且不进入主页
 - 优先级:P1
