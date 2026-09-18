@@ -33,6 +33,7 @@ export const SELECTORS = {
   setPasswordBtn: '#setPasswordBtn',
   passwordPromptInput: '#passwordPromptInput',
   passwordPromptConfirm: '#passwordPromptConfirm',
+  createWalletTypeTrigger: '#createWalletTypeTrigger',
 
   walletPage: '#walletPage',
   accountAddress: '#accountAddress',
@@ -128,6 +129,22 @@ export const SELECTORS = {
   importWalletPassword: '#importWalletPassword',
   importBtn: '#importBtn',
   importAccountName: '#importAccountName',
+  privateKeyImportSection: '#privateKeyImportSection',
+
+  // Tron-specific UI surface (added in v1; secp256k1 second-chain support).
+  createWalletTypeSelect: '#createWalletTypeSelect',
+  createWalletTypeLabel: '#createWalletTypeLabel',
+  createWalletTypeMenu: '#createWalletTypeMenu',
+  tronCreateWalletFields: '#tronCreateWalletFields',
+  tronCreateNetworkTrigger: '#tronCreateNetworkTrigger',
+  tronCreateNetworkMenu: '#tronCreateNetworkMenu',
+  tronCreateNetworkLabel: '#tronCreateNetworkLabel',
+  tronCreateNetworkSelect: '#tronCreateNetworkSelect',
+  tronMnemonicTab: '#tronMnemonicTab',
+  tronPrivateKeyTab: '#tronPrivateKeyTab',
+  tronImportNetworkGroup: '#tronImportNetworkGroup',
+  tronImportNetworkSelect: '#tronImportNetworkSelect',
+  transferFeeEstimate: '#transferFeeEstimate',
 } as const;
 
 /** Open the main popup (380×600) and return the page. */
