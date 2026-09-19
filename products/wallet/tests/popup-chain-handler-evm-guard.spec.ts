@@ -54,7 +54,7 @@ test('EVM dApp protocol calls throw UNSUPPORTED_METHOD while Tron is active', as
     await byId(popup, 'importBtn').click();
     await byId(popup, 'walletPage').waitFor({ state: 'visible', timeout: 30_000 });
 
-    // -- Step 1: confirm the EVM guard is OFF while on Ethereum mainnet --------
+    // -- Step 1: confirm the EVM guard is OFF on the default EVM network -----
     const chainIdOk = await sendSw<{ success?: boolean; chainId?: string }>(popup, 'GET_CURRENT_CHAIN_ID');
     expect(String(chainIdOk?.chainId ?? '').startsWith('0x')).toBe(true);
 
@@ -104,10 +104,10 @@ test('EVM dApp protocol calls throw UNSUPPORTED_METHOD while Tron is active', as
     const tronChainIdStr = String(tronChainId?.chainId ?? '');
     expect(tronChainIdStr.startsWith('0x')).toBe(false);
 
-    // -- Step 4: switch back to Ethereum mainnet; EVM behaviour resumes ------
-    const back = await sendSw<{ success: boolean; error?: string }>(popup, 'SWITCH_NETWORK', { networkKey: 'mainnet' });
+    // -- Step 4: switch back to the default EVM network; EVM behaviour resumes
+    const back = await sendSw<{ success: boolean; error?: string }>(popup, 'SWITCH_NETWORK', { networkKey: 'yeying' });
     if (!back?.success) {
-      throw new Error('SWITCH_NETWORK back to mainnet failed: ' + JSON.stringify(back));
+      throw new Error('SWITCH_NETWORK back to yeying failed: ' + JSON.stringify(back));
     }
     expect(back.success).toBe(true);
     const restored = await sendSw<{ success?: boolean; chainId?: string }>(popup, 'GET_CURRENT_CHAIN_ID');
