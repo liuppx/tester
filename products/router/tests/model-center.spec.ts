@@ -402,18 +402,33 @@ test(
 
 test(
   localizedTitle(
-    '【我的额度 / UI】 个人模型使用迁入额度页并独立恢复筛选状态',
-    'personal model usage lives on quota and restores its own filter state',
+    '【我的 / UI】 历史额度下钻并将个人模型使用作为独立 Tab',
+    'quota history drills down from quota while personal model usage has its own tab',
   ),
   async ({ page, baseURL, recorder }) => {
     skipIfNoService();
     await installModelCenterFixtures(page, 0);
-    const path = '/workspace/topup?tab=quota&usage_period=last_30_days&usage_q=retired';
+
+    await page.goto(`${baseURL}/workspace/topup?tab=quota`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await expect(page.getByRole('tab', { name: '额度' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: '模型使用' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: '历史额度' })).toHaveCount(0);
+    await page.getByRole('button', { name: '历史额度' }).click();
+    await expect(page).toHaveURL(/tab=history/);
+    await expect(page.getByRole('tab', { name: '额度' })).toHaveAttribute('aria-selected', 'true');
+
+    const path = '/workspace/topup?tab=model_usage&usage_period=last_30_days&usage_q=retired';
     await page.goto(`${baseURL}${path}`, { waitUntil: 'domcontentloaded' });
 
-    const usageSection = page.locator('.router-quota-model-usage');
+    await expect(page.getByRole('tab', { name: '模型使用' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    const usageSection = page.locator('.router-topup-model-usage');
     await expect(
-      usageSection.getByRole('heading', { level: 2, name: '我的模型使用' }),
+      usageSection.getByRole('heading', { level: 2, name: '模型使用' }),
     ).toBeVisible();
     await expect(usageSection.locator('.workspace-models-search')).toHaveValue('retired');
     await expect(usageSection.locator('.workspace-model-ranking-period')).toContainText('近 30 天');
@@ -425,7 +440,7 @@ test(
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(
-      new RegExp('tab=quota.*usage_period=last_30_days.*usage_q=retired'),
+      new RegExp('tab=model_usage.*usage_period=last_30_days.*usage_q=retired'),
     );
     await expect(usageSection.locator('.workspace-models-search')).toHaveValue('retired');
 
@@ -452,7 +467,10 @@ test(
     });
     expect(darkUsageColors.heading).toBe('rgb(15, 23, 42)');
     expect(darkUsageColors.description).toBe('rgb(71, 85, 105)');
-    await recorder.step(page, '我的额度 · 个人模型使用 / URL 恢复 / 移动端 / 暗色可读性');
+    await recorder.step(
+      page,
+      '我的 · 历史额度下钻 / 模型使用 Tab / URL 恢复 / 移动端 / 暗色可读性',
+    );
   },
 );
 
