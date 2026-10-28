@@ -3,7 +3,7 @@
 > 测试人员视角整理的**应有** E2E 用例清单,作为实现依据。
 > 状态说明:✅ 已实现(链接到 spec) / ⬜ 待实现。
 > 端点:前后端同源,均由 8100 的 Express 实例托管(8991 为约定配置端口,非独立服务);API 前缀 `/api/v1/public/*`;EIP-4361 SIWE 登录
-> 最后更新:2026-09-17
+> 最后更新:2026-10-28
 
 ## 覆盖总览
 
@@ -16,10 +16,10 @@
 | 五、开发者应用生命周期 | 15 | 13 | 2 |
 | 六、应用审核 | 2 | 1 | 1 |
 | 七、申请使用应用 | 1 | 1 | 0 |
-| 八、身份能力(TOTP/Passkey/授权码) | 4 | 4 | 0 |
+| 八、身份能力(TOTP/Passkey/邮箱/授权码) | 6 | 6 | 0 |
 | 九、通知中心 | 6 | 6 | 0 |
 | 十、会话与鉴权守卫 | 2 | 2 | 0 |
-| **合计** | **54** | **50** | **4** |
+| **合计** | **56** | **52** | **4** |
 
 > 说明:后端与前端由同一 Express 实例托管,API 根路径统一为 `/api/v1/public/*`;响应统一信封 `{code, message, data, timestamp}`(成功 `code=0`)。写操作(建应用、发布、下线、删除、配置)均需在请求体内携带 `personal_sign` 的**签名动作信封**(action 分别为 `application_create` / `application_update` / `application_publish` / `application_unpublish` / `application_delete` / `application_config_upsert`)。剩余 4 个待实现均为**降级跳过**(依赖管理员审批或非破坏性造 DB 断连,环境不具备),已在对应 spec 中以 `test.skip` + 明确原因落地,绝不伪造通过。
 
@@ -445,7 +445,7 @@
 
 ---
 
-## 八、身份能力(TOTP/Passkey/授权码)
+## 八、身份能力(TOTP/Passkey/邮箱/授权码)
 
 ### ND-API-029 身份状态查询
 - 优先级:P2
@@ -488,6 +488,29 @@
   2. POST `/identity/authorize/approve`(或前端 `/identity/authorize` 页 Passkey 批准)。
   3. POST `/identity/authorize/exchange` 用 code + PKCE verifier 兑换令牌。
 - 预期结果:批准后返回 `redirectTo` 及授权码;正确 verifier 兑换成功;错误/重复兑换被拒(一次性)。
+
+### ND-API-038 同 DID 多钱包可重验邮箱且普通换绑被拒
+- 优先级:P0
+- 类型:API
+- 状态:✅ 已实现 — products/node/tests/identity-email.spec.ts(仅显式启用 local/test E2E;Mailpit 不可用时跳过)
+- 前置条件:Node 与 Mailpit 可访问;`TEST_ENV=local|test`;显式设置 `NODE_IDENTITY_EMAIL_E2E_ENABLED=true`;`MAILPIT_URL` 默认为 `http://127.0.0.1:8025`;测试自动轮询 Mailpit 并提交 OTP。
+- 步骤:
+  1. 创建新 DID,分别将两个新钱包 account link 关联到该 DID。
+  2. 用钱包一请求邮箱验证码;测试按随机收件地址从 Mailpit 自动读取验证码并确认。
+  3. 用钱包二对同一 DID、同一邮箱再次请求验证码;测试再次自动从 Mailpit 读取并确认。
+  4. 用钱包二为同一 DID 请求另一个邮箱的验证码,由测试自动读取并提交确认。
+- 预期结果:步骤 2、3 返回 HTTP 200 并签发/续签 `EmailCredential`;步骤 4 返回 HTTP 409 `IDENTITY_EMAIL_CHANGE_REQUIRES_AUTHORIZATION`。
+
+### ND-API-039 跨 DID 邮箱冲突且无插件注册不能绕过绑定
+- 优先级:P0
+- 类型:API
+- 状态:✅ 已实现 — products/node/tests/identity-email.spec.ts(仅显式启用 local/test E2E;Mailpit 不可用时跳过)
+- 前置条件:Node 与 Mailpit 可访问;`TEST_ENV=local|test`;显式设置 `NODE_IDENTITY_EMAIL_E2E_ENABLED=true`;`MAILPIT_URL` 默认为 `http://127.0.0.1:8025`;测试使用随机 `.test` 邮箱并自动读取 OTP。
+- 步骤:
+  1. 为 DID A 关联新钱包并请求邮箱验证码;测试从 Mailpit 自动读取并确认绑定。
+  2. 为 DID B 关联另一个新钱包,对同一邮箱请求验证码;测试从 Mailpit 自动读取后提交确认。
+  3. 使用相同邮箱调用无插件 `/api/v1/public/auth/email/register/request`。
+- 预期结果:步骤 2 返回 HTTP 409 `IDENTITY_EMAIL_ALREADY_BOUND`;步骤 3 返回 HTTP 409 `IDENTITY_EMAIL_ALREADY_REGISTERED`,不创建邮箱注册挑战。
 
 ---
 
