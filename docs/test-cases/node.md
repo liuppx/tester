@@ -3,7 +3,7 @@
 > 测试人员视角整理的**应有** E2E 用例清单,作为实现依据。
 > 状态说明:✅ 已实现(链接到 spec) / ⬜ 待实现。
 > 端点:前后端同源,均由 8100 的 Express 实例托管(8991 为约定配置端口,非独立服务);API 前缀 `/api/v1/public/*`;EIP-4361 SIWE 登录
-> 最后更新:2026-10-28
+> 最后更新:2026-10-29
 
 ## 覆盖总览
 
@@ -16,10 +16,10 @@
 | 五、开发者应用生命周期 | 15 | 13 | 2 |
 | 六、应用审核 | 2 | 1 | 1 |
 | 七、申请使用应用 | 1 | 1 | 0 |
-| 八、身份能力(TOTP/Passkey/邮箱/授权码) | 6 | 6 | 0 |
+| 八、身份能力(TOTP/Passkey/邮箱/授权码) | 8 | 8 | 0 |
 | 九、通知中心 | 6 | 6 | 0 |
 | 十、会话与鉴权守卫 | 2 | 2 | 0 |
-| **合计** | **56** | **52** | **4** |
+| **合计** | **58** | **54** | **4** |
 
 > 说明:后端与前端由同一 Express 实例托管,API 根路径统一为 `/api/v1/public/*`;响应统一信封 `{code, message, data, timestamp}`(成功 `code=0`)。写操作(建应用、发布、下线、删除、配置)均需在请求体内携带 `personal_sign` 的**签名动作信封**(action 分别为 `application_create` / `application_update` / `application_publish` / `application_unpublish` / `application_delete` / `application_config_upsert`)。剩余 4 个待实现均为**降级跳过**(依赖管理员审批或非破坏性造 DB 断连,环境不具备),已在对应 spec 中以 `test.skip` + 明确原因落地,绝不伪造通过。
 
@@ -511,6 +511,29 @@
   2. 为 DID B 关联另一个新钱包,对同一邮箱请求验证码;测试从 Mailpit 自动读取后提交确认。
   3. 使用相同邮箱调用无插件 `/api/v1/public/auth/email/register/request`。
 - 预期结果:步骤 2 返回 HTTP 409 `IDENTITY_EMAIL_ALREADY_BOUND`;步骤 3 返回 HTTP 409 `IDENTITY_EMAIL_ALREADY_REGISTERED`,不创建邮箱注册挑战。
+
+### ND-API-040 邮箱 Bootstrap 的 Passkey challenge 延迟创建与模式轮换
+
+- 状态:✅ 已实现 — `products/node/tests/identity-email.spec.ts`（仅显式启用 local/test E2E；Mailpit 不可用时跳过；Chromium CDP 虚拟认证器产生真实 WebAuthn attestation）
+- 前置条件:Node 与 Mailpit 可访问；`TEST_ENV=local|test`；显式设置 `NODE_IDENTITY_EMAIL_E2E_ENABLED=true`；Node Web origin 与 WebAuthn 配置一致。
+- 步骤:
+  1. 浏览器客户端生成一个钱包身份 DID Document，并调用邮箱注册 request；确认返回同一 DID 和 registration ID。
+  2. 从 Mailpit 读取 OTP，以 `authenticatorMode=platform` 确认；断言返回 `residentKey=required`、`userVerification=required`、`authenticatorAttachment=platform` 和 `client-device` hint。
+  3. 模拟用户取消后，用同一 OTP 和 `authenticatorMode=security-key` 再次确认；断言 DID、registration ID、challenge row ID 不变，challenge 值已轮换，attachment 改为 `cross-platform`。
+  4. 使用旧 challenge 生成的凭证确认注册，断言失败；再用新 challenge 和 USB 虚拟认证器生成凭证，断言 Passkey 激活成功。
+  5. 为同一 DID 完成 EIP-191 账户关联和邮箱注册 complete，断言最终返回的 identity 仍是最初 DID。
+- 预期结果:OTP 前不需要客户端持有 WebAuthn challenge；每次正确 OTP 确认可为同一 pending registration 生成或轮换 challenge；旧 challenge 立即失效；模式切换不创建第二个 DID、钱包或用户名预约；无有效 Passkey 时不能完成注册。
+
+### ND-UI-011 邮箱 Bootstrap 的平台认证器能力分支
+
+- 状态:✅ 已实现 — `products/node/tests/email-bootstrap-ui.spec.ts`
+- 前置条件:Node Web 可访问；Chromium 支持 WebAuthn API。测试在页面加载前确定性覆写平台认证器能力检测结果，不依赖真实指纹或安全密钥。
+- 步骤:
+  1. 模拟 `isUserVerifyingPlatformAuthenticatorAvailable() = true`，进入邮箱创建账户页。
+  2. 断言“本机设备”可用且默认选中。
+  3. 新建浏览器上下文，模拟能力检测返回 false，再次进入创建账户页。
+  4. 断言“本机设备”禁用且未选中，“手机 / 跨设备”和“外接安全密钥”可选；选择手机方式并确认选中状态。
+- 预期结果:平台认证器可用时默认使用本机 Windows PIN、屏幕锁、指纹或人脸；不可用时不会自动进入必失败的本机流程，用户必须在发送 OTP 前显式选择备用认证方式。
 
 ---
 
