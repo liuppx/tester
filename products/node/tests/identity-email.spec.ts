@@ -53,7 +53,8 @@ function testEndpoints() {
 async function ensureMailpitAvailable(request: APIRequestContext, mailpitUrl: string) {
   let response: APIResponse;
   try {
-    response = await request.get(`${mailpitUrl}/api/v1/search?limit=1`);
+    const query = encodeURIComponent('to:mailpit-healthcheck@example.test');
+    response = await request.get(`${mailpitUrl}/api/v1/search?query=${query}&limit=1`);
   } catch {
     test.skip(true, 'Mailpit is not reachable; identity email E2E cases are skipped');
     throw new Error('Mailpit is not reachable');
