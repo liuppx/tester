@@ -104,7 +104,8 @@ async function createRegistrationCredential(
         source = source.padEnd(source.length + ((4 - (source.length % 4)) % 4), '=');
         const binary = atob(source);
         const bytes = new Uint8Array(binary.length);
-        for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+        for (let index = 0; index < binary.length; index += 1)
+          bytes[index] = binary.charCodeAt(index);
         return bytes.buffer;
       };
       const encode = (value: ArrayBuffer) => {
@@ -122,7 +123,10 @@ async function createRegistrationCredential(
           attestation: opts.attestation,
           authenticatorSelection: opts.authenticatorSelection,
           hints: opts.hints,
-          excludeCredentials: (opts.excludeCredentials || []).map((item: any) => ({ ...item, id: decode(item.id) })),
+          excludeCredentials: (opts.excludeCredentials || []).map((item: any) => ({
+            ...item,
+            id: decode(item.id),
+          })),
         },
       });
       const response = credential.response as any;
@@ -225,16 +229,21 @@ test(
       const identityDocument = identity.buildDocument();
       const email = uniqueEmail();
       const requestedAt = Date.now();
-      const registrationResponse = await request.post('/api/v1/public/auth/email/register/request', {
-        data: {
-          email,
-          username: `e2e${randomBytes(8).toString('hex')}`,
-          avatar: 'https://example.invalid/avatar.png',
-          identityDocument,
-          deviceName: 'E2E Bootstrap Passkey',
+      const registrationResponse = await request.post(
+        '/api/v1/public/auth/email/register/request',
+        {
+          data: {
+            email,
+            username: `e2e${randomBytes(8).toString('hex')}`,
+            avatar: 'https://example.invalid/avatar.png',
+            identityDocument,
+            deviceName: 'E2E Bootstrap Passkey',
+          },
         },
-      });
-      expect(registrationResponse.status(), await registrationResponse.text().catch(() => '')).toBe(200);
+      );
+      expect(registrationResponse.status(), await registrationResponse.text().catch(() => '')).toBe(
+        200,
+      );
       const registration = (await registrationResponse.json()) as {
         data: { verificationId: string; registrationId: string; identity: string };
       };
@@ -242,13 +251,20 @@ test(
       const code = await readMailpitCode(request, mailpitUrl, email, requestedAt);
 
       const platformResponse = await request.post('/api/v1/public/auth/email/register/confirm', {
-        data: { verificationId: registration.data.verificationId, code, authenticatorMode: 'platform' },
+        data: {
+          verificationId: registration.data.verificationId,
+          code,
+          authenticatorMode: 'platform',
+        },
       });
       expect(platformResponse.status(), await platformResponse.text().catch(() => '')).toBe(200);
       const platform = (await platformResponse.json()) as {
         data: { registrationId: string; identity: string; passkeyRequest: Record<string, any> };
       };
-      expect(platform.data).toMatchObject({ registrationId: registration.data.registrationId, identity: identity.did });
+      expect(platform.data).toMatchObject({
+        registrationId: registration.data.registrationId,
+        identity: identity.did,
+      });
       expect(platform.data.passkeyRequest.authenticatorSelection).toMatchObject({
         authenticatorAttachment: 'platform',
         residentKey: 'required',
@@ -258,15 +274,24 @@ test(
       expect(platform.data.passkeyRequest.hints).toEqual(['client-device']);
 
       const fallbackResponse = await request.post('/api/v1/public/auth/email/register/confirm', {
-        data: { verificationId: registration.data.verificationId, code, authenticatorMode: 'security-key' },
+        data: {
+          verificationId: registration.data.verificationId,
+          code,
+          authenticatorMode: 'security-key',
+        },
       });
       expect(fallbackResponse.status(), await fallbackResponse.text().catch(() => '')).toBe(200);
       const fallback = (await fallbackResponse.json()) as {
         data: { registrationId: string; identity: string; passkeyRequest: Record<string, any> };
       };
-      expect(fallback.data).toMatchObject({ registrationId: registration.data.registrationId, identity: identity.did });
+      expect(fallback.data).toMatchObject({
+        registrationId: registration.data.registrationId,
+        identity: identity.did,
+      });
       expect(fallback.data.passkeyRequest.requestId).toBe(platform.data.passkeyRequest.requestId);
-      expect(fallback.data.passkeyRequest.challenge).not.toBe(platform.data.passkeyRequest.challenge);
+      expect(fallback.data.passkeyRequest.challenge).not.toBe(
+        platform.data.passkeyRequest.challenge,
+      );
       expect(fallback.data.passkeyRequest.authenticatorSelection).toMatchObject({
         authenticatorAttachment: 'cross-platform',
         residentKey: 'required',
@@ -275,19 +300,42 @@ test(
       });
       expect(fallback.data.passkeyRequest.hints).toEqual(['security-key']);
 
-      const staleCredential = await createRegistrationCredential(page, platform.data.passkeyRequest, 'internal');
+      const staleCredential = await createRegistrationCredential(
+        page,
+        platform.data.passkeyRequest,
+        'internal',
+      );
       const staleConfirmation = await request.post('/api/v1/public/identity/register/confirm', {
-        data: { registrationId: registration.data.registrationId, identityDocument, credential: staleCredential },
+        data: {
+          registrationId: registration.data.registrationId,
+          identityDocument,
+          credential: staleCredential,
+        },
       });
       expect(staleConfirmation.status()).not.toBe(200);
 
-      const credential = await createRegistrationCredential(page, fallback.data.passkeyRequest, 'usb');
+      const credential = await createRegistrationCredential(
+        page,
+        fallback.data.passkeyRequest,
+        'usb',
+      );
       const passkeyConfirmation = await request.post('/api/v1/public/identity/register/confirm', {
-        data: { registrationId: registration.data.registrationId, identityDocument, credential, deviceName: 'E2E Security Key' },
+        data: {
+          registrationId: registration.data.registrationId,
+          identityDocument,
+          credential,
+          deviceName: 'E2E Security Key',
+        },
       });
-      expect(passkeyConfirmation.status(), await passkeyConfirmation.text().catch(() => '')).toBe(200);
+      expect(passkeyConfirmation.status(), await passkeyConfirmation.text().catch(() => '')).toBe(
+        200,
+      );
 
-      const account = await linkWalletToIdentity(request, identity, Wallet.createRandom().privateKey);
+      const account = await linkWalletToIdentity(
+        request,
+        identity,
+        Wallet.createRandom().privateKey,
+      );
       const completed = await request.post('/api/v1/public/auth/email/register/complete', {
         data: {
           verificationId: registration.data.verificationId,
@@ -303,7 +351,9 @@ test(
         },
       });
       expect(completed.status(), await completed.text().catch(() => '')).toBe(200);
-      expect(((await completed.json()) as { data: { identity: string } }).data.identity).toBe(identity.did);
+      expect(((await completed.json()) as { data: { identity: string } }).data.identity).toBe(
+        identity.did,
+      );
     } finally {
       await request.dispose();
     }

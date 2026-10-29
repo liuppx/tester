@@ -21,10 +21,14 @@ test(
     for (const platformAuthenticatorAvailable of [true, false]) {
       const context = await browser.newContext();
       await context.addInitScript((available) => {
-        Object.defineProperty(globalThis.PublicKeyCredential, 'isUserVerifyingPlatformAuthenticatorAvailable', {
-          configurable: true,
-          value: async () => available,
-        });
+        Object.defineProperty(
+          globalThis.PublicKeyCredential,
+          'isUserVerifyingPlatformAuthenticatorAvailable',
+          {
+            configurable: true,
+            value: async () => available,
+          },
+        );
       }, platformAuthenticatorAvailable);
       const page = await context.newPage();
       try {
