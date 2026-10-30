@@ -29,6 +29,16 @@ import { test, expect } from '../fixtures';
 import { loadWalletContext, teardownWalletContext } from '../helpers/extension';
 import { stubPublicEndpoints } from '../helpers/network';
 import { byId, createAndUnlockWallet, openPopup, sendSw, TEST_PASSWORD } from '../helpers/popup';
+import {
+  IDENTITY_LOGIN_ORIGIN,
+  authorizeIdentityLogin,
+  openIdentityLoginDapp,
+  requestIdentityPresentation,
+  serveIdentityLoginDapp,
+  verifyIdentityPresentation,
+  type IdentityPresentation,
+  type PublicIdentity,
+} from '../helpers/identity-login';
 
 interface ExportResult {
   success: boolean;
@@ -44,10 +54,11 @@ interface CurrentAccount {
 
 interface IdentityRecord {
   document?: { walletIdentityId?: string };
+  publicJwk?: Record<string, unknown>;
 }
 
 interface IdentityListResult {
-  identities?: IdentityRecord[];
+  identities?: Array<IdentityRecord & { document: { id: string; walletIdentityId: string } }>;
   selectedIdentityId?: string;
 }
 
@@ -133,9 +144,65 @@ test(
 
       const restoredIdentities = await sendSw<IdentityListResult>(popupB, 'IDENTITY_LIST');
       expect(restoredIdentities.selectedIdentityId).toBe(identityIdA);
+      const restoredIdentity = restoredIdentities.identities?.find(
+        (item) => item.document.walletIdentityId === identityIdA,
+      );
+      expect(restoredIdentity, 'the original Wallet Identity should be restored').toBeTruthy();
+      expect(restoredIdentity!.document.id).toBe(`did:yeying:${identityIdA}`);
+      expect(restoredIdentity!.publicJwk).toBeTruthy();
+
+      // A DID string alone is not a successful recovery. Complete a real dApp
+      // identity login so the restored controller key must sign both the DID
+      // document and the audience/nonce-bound Presentation.
+      await serveIdentityLoginDapp(ctxB.context);
+      const dapp = await openIdentityLoginDapp(ctxB.context);
+      const audience = `${IDENTITY_LOGIN_ORIGIN}login`;
+      const nonce = `file-recovery-${crypto.randomUUID()}`;
+      const authorization = await authorizeIdentityLogin(ctxB.context, ctxB.extensionId, dapp, {
+        beforeApprove: async (approval) =>
+          await expect(approval.locator('#connectPermissionItems')).toContainText('读取钱包身份'),
+      });
       expect(
-        restoredIdentities.identities?.map((item) => item.document?.walletIdentityId),
-      ).toContain(identityIdA);
+        authorization.result.success,
+        `identity scope authorization failed: ${authorization.result.error}`,
+      ).toBe(true);
+      expect(
+        authorization.result.permissions?.some(
+          (item) => item.parentCapability === 'wallet_identity',
+        ),
+      ).toBe(true);
+      // A restored identity must still be usable after the wallet is locked.
+      // The next dApp login should unlock the recovered account and continue.
+      await sendSw(popupB, 'LOCK_WALLET');
+      const login = await requestIdentityPresentation(
+        ctxB.context,
+        ctxB.extensionId,
+        dapp,
+        { audience, nonce },
+        { approve: false, unlockPassword: TEST_PASSWORD },
+      );
+      expect(login.result.success, `identity login failed: ${login.result.error}`).toBe(true);
+      const presentation = login.result.presentation as IdentityPresentation;
+      expect(presentation.holder).toBe(restoredIdentity!.document.id);
+      expect(presentation.audience).toBe(audience);
+      expect(presentation.nonce).toBe(nonce);
+      expect(presentation.scopes).toEqual(['identity.basic']);
+      expect(Date.parse(presentation.expiresAt)).toBeGreaterThan(Date.now());
+      expect(JSON.stringify(presentation)).not.toContain('privateJwk');
+      const signatures = await verifyIdentityPresentation(
+        popupB,
+        restoredIdentity as PublicIdentity,
+        presentation,
+      );
+      expect(
+        signatures.documentValid,
+        'restored DID controller must sign the identity document',
+      ).toBe(true);
+      expect(
+        signatures.presentationValid,
+        'restored DID controller must sign the login challenge',
+      ).toBe(true);
+      await recorder.step(dapp, '使用恢复的 Wallet Identity 完成 dApp 登录并验证签名');
     } finally {
       await teardownWalletContext(ctxB);
       rmSync(fileDir, { recursive: true, force: true });
