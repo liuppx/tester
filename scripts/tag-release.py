@@ -21,8 +21,8 @@ def main():
     overrides = {}
     for raw in args.unit_version:
         unit, sep, version = raw.partition("=")
-        if sep != "=" or unit != "tester" or not VERSION.fullmatch(version):
-            p.error("--unit-version must be tester=MAJOR.MINOR.PATCH")
+        if sep != "=" or unit != "tester-service" or not VERSION.fullmatch(version):
+            p.error("--unit-version must be tester-service=MAJOR.MINOR.PATCH")
         if unit in overrides:
             p.error("duplicate unit version")
         overrides[unit] = version
@@ -51,7 +51,7 @@ def main():
             files = ["package.json"]
             if overrides:
                 override_file = worktree / "scripts/artifact-versions.conf"
-                override_file.write_text("tester " + overrides["tester"] + "\n")
+                override_file.write_text("tester-service " + overrides["tester-service"] + "\n")
                 files.append("scripts/artifact-versions.conf")
             git("add", "--", *files, cwd=worktree)
             git("commit", "-m", "chore(release): " + tag, cwd=worktree)
