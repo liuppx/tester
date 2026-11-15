@@ -14,7 +14,7 @@ scripts/package.sh --ref "$RELEASE_COMMIT" --source-commit "$MAIN_COMMIT" --vers
 
 package-api.json 声明四个统一参数。构建输入的 tag commit 与 main source commit 分开记录；归档名与清单身份采用 main source commit。输出目录必须为空，不覆盖已有不同字节的制品。可用 TESTER_BUILD_BROWSER_CACHE 指定构建缓存；安装器确认对应浏览器版本后完整复制入包，运行时仍不依赖该缓存。
 
-独立的 scripts/tag.sh 在获批发布事件中调用，支持 --bump patch|minor|major、--unit-version tester=版本。它在临时 worktree 更新 package.json 与 artifact-versions.conf，仅推送 tag，不改 main。package.sh 不调用它。正式发布通过 Deployer 的 compile_packages.sh --publish；开发验收不需要推送任何真实 tag。
+独立的 scripts/tag.sh 在获批发布事件中调用，支持 --bump patch|minor|major、--unit-version tester-service=版本。它在临时 worktree 更新 package.json 与 artifact-versions.conf，仅推送 tag，不改 main。package.sh 不调用它。正式发布通过 Deployer 的 compile_packages.sh --publish；开发验收不需要推送任何真实 tag。
 
 ## 构建结果核对
 

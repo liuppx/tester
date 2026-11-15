@@ -68,10 +68,10 @@ def build(args):
             line = line.split("#", 1)[0].strip()
             if line:
                 unit, version = line.split()
-                if unit != "tester" or not re.fullmatch(SEMVER, version):
+                if unit != "tester-service" or not re.fullmatch(SEMVER, version):
                     raise ValueError("invalid Tester artifact version override")
                 unit_version = version
-    package_root = f"tester-v{unit_version}-{source[:7]}"
+    package_root = f"tester-service-v{unit_version}-{source[:7]}"
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="tester-package-") as temporary:
         temp = Path(temporary)
@@ -105,7 +105,7 @@ def build(args):
         for name in (*DIRS, "node_modules", "browsers"):
             shutil.copytree(checkout / name, staged / name, symlinks=True)
         (staged / "release.json").write_text(json.dumps({
-            "unit_id": "tester", "version": unit_version, "source_commit": source,
+            "unit_id": "tester-service", "version": unit_version, "source_commit": source,
             "release_commit": ref, "platform": "linux-x86_64",
             "node": node_version, "npm": npm_version,
         }, indent=2) + "\n")
@@ -133,9 +133,10 @@ def build(args):
             tar.add(staged, arcname=package_root, filter=filtered)
         manifest = {
             "schema_version": 1, "repository": "tester", "source_commit": source,
-            "artifacts": [{"unit_id": "tester", "type": "service", "version": unit_version,
+            "artifacts": [{"unit_id": "tester-service", "type": "service", "version": unit_version,
                            "package": archive_path.name, "sha256": sha(archive_path),
-                           "package_root": package_root}],
+                           "package_root": package_root,
+                           "service_target": {"module": "tester", "path": "/opt/deploy/tester"}}],
         }
         manifest_path = temp / "release-manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")

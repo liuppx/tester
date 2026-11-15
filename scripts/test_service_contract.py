@@ -163,13 +163,13 @@ class ServiceContractTests(unittest.TestCase):
             git("add", "."); git("commit", "-m", "fixture")
             git("remote", "add", "origin", str(origin)); git("push", "-u", "origin", "main")
             baseline = git("rev-parse", "HEAD")
-            subprocess.run(["bash", "scripts/tag.sh", "--bump", "minor", "--unit-version", "tester=7.8.9"],
+            subprocess.run(["bash", "scripts/tag.sh", "--bump", "minor", "--unit-version", "tester-service=7.8.9"],
                            cwd=repo, check=True, capture_output=True)
             self.assertEqual(git("rev-parse", "HEAD"), baseline)
             self.assertEqual(git("rev-parse", "refs/heads/main", cwd=origin), baseline)
             self.assertIn("Source-Commit: " + baseline, git("for-each-ref", "--format=%(contents)", "refs/tags/v0.2.0"))
             self.assertEqual(json.loads(git("show", "v0.2.0:package.json"))["version"], "0.2.0")
-            self.assertEqual(git("show", "v0.2.0:scripts/artifact-versions.conf"), "tester 7.8.9")
+            self.assertEqual(git("show", "v0.2.0:scripts/artifact-versions.conf"), "tester-service 7.8.9")
 
     def test_e2e_report_parser_keeps_skips_and_stable_ids(self):
         report = {"suites": [{"title": "root", "specs": [
