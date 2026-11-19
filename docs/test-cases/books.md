@@ -358,7 +358,7 @@
 - 前置条件:`payment/docs/rails/card/章节元信息总表.md`、`payment/docs/rails/card/跨章索引.md` 可读
 - 步骤:
   1. 抽取两表引用的章节编号/文件
-  2. 与 `acquiring/` 下实际章节比对
+  2. 与 `rails/card/` 下实际章节比对
 - 预期结果:元信息总表与跨章索引所列章节均真实存在,无悬空引用
 
 ### BK-DATA-032 README 顶层提及 YeYing 社区
