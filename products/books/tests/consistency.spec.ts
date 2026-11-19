@@ -31,7 +31,7 @@ test(
             .map((file) => `${entry.name}/${file}`),
         ),
     );
-    expect(diskFiles.size).toBe(8);
+    expect(diskFiles.size).toBe(9);
     // exact bijection — table entries and disk files are identical sets
     expect(tableFiles).toEqual(diskFiles);
   },
@@ -44,12 +44,16 @@ test(
     'BK-DATA-030 payment release-navigation versions are complete and current one is referenced',
   ),
   () => {
-    const current = 'payment/docs/acquiring';
-    const navs = readdirSync(abs(current)).filter((f) => /^00-发布导航-v[\d.]+\.md$/.test(f));
-    // v1.0 … v2.2 → 13 versioned navigation files
+    const current = 'payment/docs/rails/card';
+    const archive = 'payment/docs/archive/release-nav';
+    const navs = [
+      ...readdirSync(abs(current)).filter((f) => /^00-发布导航-v[\d.]+\.md$/.test(f)),
+      ...readdirSync(abs(archive)).filter((f) => /^00-发布导航-v[\d.]+\.md$/.test(f)),
+    ];
+    // v1.0 … v2.2 → 13 versioned navigation files; old snapshots live in archive.
     expect(navs.length).toBeGreaterThanOrEqual(13);
 
-    // The acquiring README references the current v2.2 navigation, which exists.
+    // The card-rail README references the current v2.2 navigation, which exists.
     const readme = readText(`${current}/README.md`);
     expect(readme).toContain('00-发布导航-v2.2.md');
     expect(existsSync(abs(`${current}/00-发布导航-v2.2.md`))).toBe(true);
@@ -76,7 +80,7 @@ test(
     'BK-DATA-031 payment metadata table and cross-index reference real chapters',
   ),
   () => {
-    const acquiring = 'payment/docs/acquiring';
+    const acquiring = 'payment/docs/rails/card';
     const missing: string[] = [];
     for (const rel of [`${acquiring}/章节元信息总表.md`, `${acquiring}/跨章索引.md`]) {
       const text = readText(rel);

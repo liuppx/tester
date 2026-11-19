@@ -29,7 +29,10 @@ export function readText(rel: string): string {
 export function walk(dir: string): string[] {
   let out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === '.git') continue;
+    // The reader keeps its installed VitePress dependencies in-tree for local
+    // preview. They are generated third-party documentation, not Books
+    // content, and must not participate in repository quality checks.
+    if (entry.name === '.git' || entry.name === 'node_modules') continue;
     const p = join(dir, entry.name);
     if (entry.isDirectory()) out = out.concat(walk(p));
     else out.push(p);
