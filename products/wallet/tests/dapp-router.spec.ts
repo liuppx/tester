@@ -33,7 +33,11 @@ function skipIfNoRouterSPA() {
 async function ensureRouterReachable(url: string) {
   try {
     const res = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(5_000) });
-    test.skip(res.status >= 500, `router SPA returned HTTP ${res.status}`);
+    // The Router API and its SPA are separate artifacts. A test machine can
+    // have the Go API listening on this port while the web artifact is absent,
+    // which returns a deterministic 404. Provider assertions are meaningful
+    // only when the requested URL actually serves a page.
+    test.skip(!res.ok, `router SPA returned HTTP ${res.status}`);
   } catch (err) {
     test.skip(true, `router SPA unreachable: ${err instanceof Error ? err.message : String(err)}`);
   }

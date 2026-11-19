@@ -100,14 +100,16 @@ test(
     const productDirs = readdirSync(abs(dir), { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && !excluded.has(entry.name))
       .map((entry) => entry.name);
-    expect(productDirs.length).toBe(8);
+    // Wallet, Node, Router, Warehouse, Chat, Project, Knowledge, Agent and
+    // the newly documented ZhixingGraph product.
+    expect(productDirs.length).toBe(9);
     const overview = readText('yeying/社区文档总览.md');
     const productDocs = productDirs.flatMap((productDir) =>
       readdirSync(abs(`${dir}/${productDir}`))
         .filter((file) => file.endsWith('产品说明.md'))
         .map((file) => `${productDir}/${file}`),
     );
-    expect(productDocs.length).toBe(8);
+    expect(productDocs.length).toBe(9);
     const orphans = productDocs.filter((rel) => !overview.includes(`夜莺社区/产品/${rel}`));
     expect(orphans).toEqual([]);
   },

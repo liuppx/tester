@@ -131,13 +131,13 @@
 - 步骤:
   1. 抽取总览表与阅读路径中的全部 `](社区/….md)` 链接
   2. 相对 `yeying/` 解析并断言每个目标存在
-- 预期结果:入口/贡献/协作/规范/产品/工程等所有导航链接均无死链(含 8 个单产品说明链接)
+- 预期结果:入口/贡献/协作/规范/产品/工程等所有导航链接均无死链(含 9 个单产品说明链接)
 
 ### BK-DATA-011 payment 索引文档内链接目标存在
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/books/tests/links.spec.ts
-- 前置条件:`payment/docs/README.md`、`payment/docs/series-index.md`、`payment/docs/acquiring/README.md`、`payment/docs/acquiring/跨章索引.md` 可读
+- 前置条件:`payment/docs/README.md`、`payment/docs/series-index.md`、`payment/docs/rails/card/README.md`、`payment/docs/rails/card/跨章索引.md` 可读
 - 步骤:
   1. 抽取各索引文件内的相对链接
   2. 逐条断言目标文件存在
@@ -213,9 +213,9 @@
 - 状态:✅ 已实现 — products/books/tests/chapters.spec.ts:67
 - 前置条件:`yeying/社区/产品/单产品/` 与 `社区文档总览.md` 可读
 - 步骤:
-  1. 枚举 `单产品/` 下的 `.md`(8 篇:钱包/节点/模型路由/文件仓库/聊天/项目/知识/智能体)
+  1. 枚举 `单产品/` 下的 `.md`(9 篇:钱包/节点/模型路由/文件仓库/聊天/项目/知识/智能体/知行图)
   2. 校验每篇都在总览"产品与说明"表中被链接
-- 预期结果:8 个产品说明文件与总览表条目一一对应,无缺失、无孤儿
+- 预期结果:9 个产品说明文件与总览表条目一一对应,无缺失、无孤儿
 
 ---
 
@@ -337,17 +337,17 @@
 - 状态:✅ 已实现 — products/books/tests/consistency.spec.ts:10
 - 前置条件:`yeying/社区文档总览.md` 与 `单产品/` 可读
 - 步骤:
-  1. 解析总览"产品与说明"表的 8 行(Wallet/Node/Router/Warehouse/Chat/Project/Knowledge/Agent)
-  2. 与磁盘 8 个产品说明文件做双向匹配
+  1. 解析总览"产品与说明"表的 9 行(Wallet/Node/Router/Warehouse/Chat/Project/Knowledge/Agent/ZhixingGraph)
+  2. 与磁盘 9 个产品说明文件做双向匹配
 - 预期结果:表格产品条目与磁盘文件集合完全一致,不多不少
 
 ### BK-DATA-030 payment 发布导航版本链接齐全
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/books/tests/consistency.spec.ts
-- 前置条件:`payment/docs/acquiring/` 可读
+- 前置条件:`payment/docs/rails/card/` 和 `payment/docs/archive/release-nav/` 可读
 - 步骤:
-  1. 在 `payment/docs/acquiring/` 枚举 `00-发布导航-v*.md`(v1.0 … v2.2,共 13 个版本);历史导航与当前导航均存放在该目录
+  1. 在 `payment/docs/rails/card/` 和 `payment/docs/archive/release-nav/` 枚举 `00-发布导航-v*.md`(v1.0 … v2.2,共 13 个版本);历史导航位于 archive,当前 v2.2 位于 card 目录
   2. 校验该目录 README 指向的 v2.2 发布导航存在,且当前导航内引用的章节链接有效
 - 预期结果:发布导航版本文件齐全,最新版被 README 正确引用,导航内链接无死链
 
@@ -355,7 +355,7 @@
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/books/tests/consistency.spec.ts
-- 前置条件:`payment/docs/acquiring/章节元信息总表.md`、`payment/docs/acquiring/跨章索引.md` 可读
+- 前置条件:`payment/docs/rails/card/章节元信息总表.md`、`payment/docs/rails/card/跨章索引.md` 可读
 - 步骤:
   1. 抽取两表引用的章节编号/文件
   2. 与 `acquiring/` 下实际章节比对
