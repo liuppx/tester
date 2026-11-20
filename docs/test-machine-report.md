@@ -45,17 +45,21 @@ Notification failure preserves the report and the test runner's exit code.
 
 ## Daily schedule
 
-Review the repository path, Node.js location, directories and host timezone
-before installing `scripts/yeying-tester-full.cron`. The example runs daily at
-**03:00** on a host configured for **Asia/Shanghai**; it does not set the timezone.
-It calls `test-tester-main.sh`, which fetches the latest Tester main into a
-separate managed worktree before running the existing report pipeline. See
-[test-control.md](test-control.md) for the separate worktree and protected
-manual controls.
+The packaged Tester control service owns the daily schedule. Set
+`TESTER_DAILY_RUN_ENABLED` to `true`, choose `TESTER_DAILY_RUN_TIME` and
+`TESTER_DAILY_RUN_TIMEZONE` in the protected runtime configuration, then restart
+Tester through `scripts/starter.sh`. The standard schedule is **03:00** in
+**Asia/Shanghai**. The schedule enqueues the full run through Tester’s shared
+queue and lock, so manual, project-triggered and daily runs cannot overlap.
+Remove any old `/etc/cron.d/yeying-tester-full` entry after enabling this
+schedule. In source mode, the full runner still checks out the requested Tester
+main commit into its managed worktree. In artifact mode, it runs the published
+Tester package directly. See [test-control.md](test-control.md) for the source
+worktree and protected manual controls.
+
+Manual source-mode run with the latest Tester main:
 
 ```bash
-sudo install -m 644 scripts/yeying-tester-full.cron /etc/cron.d/yeying-tester-full
-# Manual run with the latest Tester main:
 bash scripts/test-tester-main.sh
 ```
 

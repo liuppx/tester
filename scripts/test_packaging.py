@@ -17,6 +17,17 @@ def module(name):
     return result
 
 class PackageContractTests(unittest.TestCase):
+    def test_runtime_defaults_to_external_artifact_before_release_local_config(self):
+        runtime = module("service-runtime")
+        with tempfile.TemporaryDirectory() as folder:
+            package_config = Path(folder) / "runtime.json"
+            package_config.write_text('{"TESTER_CONTROL_PORT":"18083"}')
+            with patch.object(runtime, "ROOT", Path(folder)), patch.object(
+                runtime, "STANDARD_RUNTIME_CONFIG", package_config
+            ), patch.object(runtime, "systemd_runtime_config", return_value=None):
+                result = runtime.environment(required=False)
+        self.assertEqual(result["TESTER_CONTROL_PORT"], "18083")
+
     def test_runtime_configuration_never_accepts_arbitrary_environment_keys(self):
         runtime = module("service-runtime")
         with tempfile.TemporaryDirectory() as folder:
@@ -86,6 +97,7 @@ class ArtifactServiceTests(unittest.TestCase):
                 "TESTER_PRIVATE_REPORT_DIR": str(root / "private"),
                 "TESTER_REPORT_DIR": str(root / "reports"),
                 "TESTER_PID_FILE": str(root / "control.pid"),
+                "TESTER_LOCK_FILE": str(root / "test.lock"),
                 "TESTER_CONTROL_LOG": str(root / "control.log"),
             }))
             env = dict(os.environ, TESTER_RUNTIME_CONFIG=str(config))
@@ -113,6 +125,46 @@ class ArtifactServiceTests(unittest.TestCase):
                 stopped = run("starter.sh", "stop")
                 self.assertEqual(stopped.returncode, 0, stopped.stderr)
                 self.assertFalse((root / "control.pid").exists())
+
+    def test_service_stop_is_deferred_while_test_lock_is_held(self):
+        import fcntl
+        import socket
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            with socket.socket() as listener:
+                listener.bind(("127.0.0.1", 0))
+                port = listener.getsockname()[1]
+            projects = root / "projects.json"
+            projects.write_text(json.dumps({"projects": {"router": {"repo": "/not-a-checkout", "enabled": False}}}))
+            config = root / "runtime.json"
+            config.write_text(json.dumps({
+                "TESTER_CONTROL_CONFIG": str(projects),
+                "TESTER_CONTROL_HOST": "127.0.0.1",
+                "TESTER_CONTROL_PORT": str(port),
+                "TESTER_PRIVATE_REPORT_DIR": str(root / "private"),
+                "TESTER_REPORT_DIR": str(root / "reports"),
+                "TESTER_PID_FILE": str(root / "control.pid"),
+                "TESTER_LOCK_FILE": str(root / "test.lock"),
+                "TESTER_CONTROL_LOG": str(root / "control.log"),
+            }))
+            env = dict(os.environ, TESTER_RUNTIME_CONFIG=str(config))
+            def run(*args):
+                return subprocess.run(["bash", str(ROOT / "scripts" / args[0]), *args[1:]],
+                                      env=env, capture_output=True, text=True, timeout=20)
+            started = run("starter.sh", "start")
+            self.assertEqual(started.returncode, 0, started.stderr)
+            lock = (root / "test.lock").open("a")
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try:
+                stopped = run("starter.sh", "stop")
+                self.assertNotEqual(stopped.returncode, 0)
+                health = run("health-check.sh", "--level", "liveness", "--format", "json")
+                self.assertEqual(health.returncode, 0, health.stderr)
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+                lock.close()
+                stopped = run("starter.sh", "stop")
+                self.assertEqual(stopped.returncode, 0, stopped.stderr)
 
 if __name__ == "__main__":
     unittest.main()
