@@ -38,8 +38,9 @@ test(localizedTitle("【会话与鉴权守卫 / E2E】 ND-E2E-006 通过真实�
 
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
 
-  // The header's connect button drives connectWallet() → loginWithSiwe().
-  await page.getByRole('button', { name: '连接钱包' }).click();
+  // Wallet sign-in is a separate tab in the current email-first login UI.
+  await page.getByRole('tab', { name: '钱包' }).click();
+  await page.getByRole('button', { name: '连接钱包并登录' }).click();
   await recorder.step(page, '点击连接钱包，触发 SIWE 登录');
 
   // Successful login routes into /market and writes the access JWT.

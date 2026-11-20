@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { baseURLFor } from '../../shared/env';
+import { routerWebURLFor } from '../../shared/env';
 
 /**
  * Per-product Playwright project overrides.
@@ -25,7 +25,7 @@ export default defineConfig({
   workers: process.env.PWWORKERS ? Number(process.env.PWWORKERS) : undefined,
   use: {
     ...devices['Desktop Chrome'],
-    baseURL: baseURLFor('router'),
+    baseURL: routerWebURLFor(),
     headless: !HEADED,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',

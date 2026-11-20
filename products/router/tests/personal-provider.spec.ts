@@ -2,7 +2,7 @@
  * router — 个人供应商路由 (Personal Provider Routing), user-level BYOK.
  *
  * A "personal provider connection" is a normal user's own upstream (bring your
- * own key). It lives under `/api/v1/public/personal-provider/*` behind
+ * own key). It lives under `/api/v1/public/personal/channels/*` behind
  * `UserAuth` (RoleCommonUser) — no admin, no feature toggle; the default
  * routing policy is `personal_first`. Connections belong to exactly one
  * `user_id`, never enter the operator `channels` table, and are surfaced to
@@ -21,16 +21,18 @@
  * NOTE (id quirk): connection ids come back as char36 padded with trailing
  * spaces (`"…ed    "`), so every id is `.trim()`-ed before use in a URL.
  *
- * Verified against router `internal/admin/controller/personalprovider/handler.go`,
- * `internal/admin/model/personal_provider.go`, `common/client/personal_provider.go`.
+ * Verified against router `internal/transport/http/router/api.go` and
+ * `internal/admin/controller/personalchannel/handler.go`.
  */
 import { localizedTitle } from '../../../shared/title';
 import { test, expect, baseURLFor, envFor } from '../fixtures';
 import { apiContext } from '../../../shared/api';
 import { acquireRouterToken } from '../helpers/auth';
 
-const PP = '/api/v1/public/personal-provider';
+const PP = '/api/v1/public/personal/channels';
 const CONNS = `${PP}/connections`;
+const MODEL_ROUTES = `${PP}/models/routes`;
+const ROUTING_QUOTA = `${PP}/routing/quota`;
 
 function skipIfNoService() {
   test.skip(!baseURLFor('router'), 'ROUTER_BASE_URL not configured');
@@ -360,25 +362,25 @@ test(
       connId = (((await c.json()) as Envelope<Connection>).data!.id ?? '').trim();
 
       // valid upsert
-      const ok = await ctx.put(`${PP}/model-routes`, {
+      const ok = await ctx.put(MODEL_ROUTES, {
         data: { model, route_policy: 'personal_only' },
       });
       expect(((await ok.json()) as Envelope).success).toBe(true);
 
       // invalid policy
-      const badPolicy = await ctx.put(`${PP}/model-routes`, {
+      const badPolicy = await ctx.put(MODEL_ROUTES, {
         data: { model, route_policy: 'bogus' },
       });
       expect(((await badPolicy.json()) as Envelope).message).toBe('路由策略无效');
 
       // model outside the routable set
-      const outOfScope = await ctx.put(`${PP}/model-routes`, {
+      const outOfScope = await ctx.put(MODEL_ROUTES, {
         data: { model: 'zzz-not-a-real-model', route_policy: 'personal_first' },
       });
       expect(((await outOfScope.json()) as Envelope).message).toBe('模型不在当前账号可用范围内');
 
       // list reflects the rule
-      const list = (await (await ctx.get(`${PP}/model-routes`)).json()) as Envelope<
+      const list = (await (await ctx.get(MODEL_ROUTES)).json()) as Envelope<
         Array<{ model: string; route_policy: string }>
       >;
       expect(list.success).toBe(true);
@@ -387,9 +389,9 @@ test(
       );
 
       // delete the rule, then deleting again is a controlled not-found
-      const del = await ctx.delete(`${PP}/model-routes/${encodeURIComponent(model)}`);
+      const del = await ctx.delete(`${MODEL_ROUTES}/${encodeURIComponent(model)}`);
       expect(((await del.json()) as Envelope).success).toBe(true);
-      const delMissing = await ctx.delete(`${PP}/model-routes/${encodeURIComponent(model)}`);
+      const delMissing = await ctx.delete(`${MODEL_ROUTES}/${encodeURIComponent(model)}`);
       const missingBody = (await delMissing.json()) as Envelope;
       expect(missingBody.success).toBe(false);
       expect(missingBody.code).toBe('personal_model_route_not_found');
@@ -412,7 +414,7 @@ test(
     skipIfNoKey();
     const ctx = await authedContext(baseURLFor('router')!);
     try {
-      const res = await ctx.get(`${PP}/routing-quota`);
+      const res = await ctx.get(ROUTING_QUOTA);
       expect(res.status()).toBe(200);
       const body = (await res.json()) as Envelope<{
         period: string;
@@ -482,7 +484,7 @@ test(
     skipIfNoService();
     const ctx = await apiContext(baseURLFor('router')!);
     try {
-      for (const path of [`${CONNS}`, `${PP}/model-routes`, `${PP}/routing-quota`]) {
+      for (const path of [CONNS, MODEL_ROUTES, ROUTING_QUOTA]) {
         const res = await ctx.get(path);
         expect(res.status(), `GET ${path}`).toBe(401);
       }

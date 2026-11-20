@@ -40,7 +40,7 @@ import { acquireRouterToken, acquireAdminToken } from '../helpers/auth';
 
 const ADMIN_TOKEN = '/api/v1/admin/token';   // admin, site-wide
 const USER_TOKEN = '/api/v1/public/token';   // user, own-only (create/cleanup)
-const PP_CONNS = '/api/v1/public/personal-provider/connections'; // BYOK fallback (gives the owner a model)
+const PP_CONNS = '/api/v1/public/personal/channels/connections'; // BYOK fallback (gives the owner a model)
 const USER_MODELS = '/api/v1/public/user/models/available'; // account's available-model set (entitlement ∪ BYOK)
 
 // model.Token statuses (internal/admin/model/token.go): 1=Enabled 2=Disabled.

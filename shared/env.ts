@@ -120,6 +120,9 @@ const EXTRA_KEYS: Record<ProductName, string[]> = {
     'MAILPIT_URL',
   ],
   router: [
+    // Router's React SPA is a separate artifact; API tests use
+    // ROUTER_BASE_URL while browser navigation uses ROUTER_WEB_URL.
+    'ROUTER_WEB_URL',
     'ROUTER_WALLET_PRIVATE_KEY',
     'ROUTER_EXPECTED_ADDRESS',
     // Admin/root wallet (must be in the deployment's bootstrap.root_wallet_address).
@@ -167,6 +170,11 @@ const EXTRA_KEYS: Record<ProductName, string[]> = {
 /** Return the base URL for a product, or undefined if not configured. */
 export function baseURLFor(product: ProductName): string | undefined {
   return process.env[baseURLKey(product)]?.trim() || undefined;
+}
+
+/** Router's web artifact URL, with fallback for legacy single-origin setups. */
+export function routerWebURLFor(): string | undefined {
+  return process.env['ROUTER_WEB_URL']?.trim() || baseURLFor('router');
 }
 
 export function hasEnv(name: string): boolean {

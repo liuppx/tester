@@ -2,7 +2,7 @@
 
 > 测试人员视角整理的**应有** E2E 用例清单,作为实现依据。
 > 状态说明:✅ 已实现(链接到 spec) / ⬜ 待实现。文末“待评审”方案不计入下方覆盖数量，评审通过后再纳入正式用例与进度统计。
-> 端点:admin UI + API 3011(内嵌 Go 二进制)· 自定义 SIWE
+> 端点:管理 UI 5181(Vite/static artifact) + API 3011(Go)· 自定义 SIWE
 > 最后更新:2026-11-18
 
 ## 覆盖总览
@@ -28,13 +28,13 @@
 | 十七、模型中心状态与排行 | 5 | 5 | 0 |
 | **合计** | **116** | **102** | **14** |
 
-> 说明:Router 单一 Go 二进制在 `:3011` 上同时提供内嵌 React 管理后台与 API。
+> 说明:Router API 由 Go 服务监听 `:3011`;React 管理后台是独立 Web 制品,本地开发默认监听 `:5181`,并将 `/api` 代理至 Go 服务。
 > 钱包是唯一登录方式(`password_login_enabled=false`、`password_register_enabled=false`)。
 > 自定义 SIWE 挑战格式(非 EIP-4361):
 > `Login to <SystemName>\nNonce: <hex>\nAddress: 0x...\nIssued At: <RFC3339>`。
 > **混合信封**是本产品的核心测试点:`/auth/verify` 用 `{success, data, message}`,
 > `/profile`、`/user/*` 用 SDK 信封 `{code, data, message, timestamp}`。
-> 环境变量:`ROUTER_BASE_URL`(默认 `http://localhost:3011`)、`ROUTER_WALLET_PRIVATE_KEY`、`ROUTER_EXPECTED_ADDRESS`。
+> 环境变量:`ROUTER_BASE_URL`(API,默认 `http://localhost:3011`)、`ROUTER_WEB_URL`(UI,默认 `http://localhost:5181`)、`ROUTER_WALLET_PRIVATE_KEY`、`ROUTER_EXPECTED_ADDRESS`。
 > 模块十一/十二新增:`ROUTER_ADMIN_PRIVATE_KEY`(地址须在部署的 `bootstrap.root_wallet_address`,用于管理员/渠道用例)、
 > `ROUTER_ADMIN_EXPECTED_ADDRESS`、`ROUTER_PERSONAL_UPSTREAM_BASE_URL`/`_KEY`/`_MODEL`(个人供应商 BYOK 上游)。
 
@@ -46,7 +46,7 @@
 - 优先级:P0
 - 类型:API
 - 状态:✅ 已实现 — products/router/tests/api.spec.ts
-- 前置条件:Router 服务在 `ROUTER_BASE_URL` 可达。
+- 前置条件:Router API 在 `ROUTER_BASE_URL` 可达。
 - 步骤:
   1. GET `/api/v1/public/status`。
 - 预期结果:200;`success=true`;`data.system_name` 非空;`data.register_enabled`、`data.wallet_login`、`data.password_login_enabled` 均为布尔;含 `version`、`quota_per_unit`、`jwt_expire_hours` 等字段。
@@ -84,7 +84,7 @@
 - 状态:✅ 已实现 — products/router/tests/api.spec.ts
 - 前置条件:服务可达。
 - 步骤:
-  1. 浏览器打开 `ROUTER_BASE_URL`。
+  1. 浏览器打开 `ROUTER_WEB_URL`。
 - 预期结果:页面标题匹配 `/Router/`;内嵌 React 后台正常挂载。
 
 ### RT-UI-002 根 URL 响应 2xx 且渲染非空内容
@@ -101,7 +101,7 @@
 - 优先级:P2
 - 类型:UI
 - 状态:✅ 已实现 — products/router/tests/smoke.spec.ts
-- 前置条件:`ROUTER_BASE_URL` 未配置或服务不可达。
+- 前置条件:`ROUTER_WEB_URL` 未配置或 UI 服务不可达。
 - 步骤:
   1. 尝试以 3s 超时 GET `/`。
 - 预期结果:未配置或连接失败时用例 `test.skip`,不产生误报失败。
@@ -409,27 +409,27 @@
   1. 直接打开 `/admin/dashboard`。
 - 预期结果:`AdminOnlyRoute` 判定 `isAdmin()=false`,重定向到 `/workspace/entry`。
 
-### RT-UI-015 /workspace/entry 依据余额/套餐重定向
+### RT-UI-015 /workspace/entry 依据 API 调用进度重定向
 - 优先级:P2
 - 类型:UI
 - 状态:✅ 已实现 — products/router/tests/workspace-nav.spec.ts:81
 - 前置条件:已注入钱包会话。
 - 步骤:
   1. 打开 `/workspace/entry`。
-- 预期结果:有活跃套餐或余额>0 → 跳 `/workspace/topup?tab=quota`;否则跳 `/workspace/service/pricing`。测试账号无套餐且余额为 0,断言落在 pricing 分支。
+- 预期结果:读取 `/api/v1/public/user/onboarding/progress`;已有 API 调用 → 跳 `/workspace/topup?tab=quota`;尚无 API 调用 → 跳 `/workspace/start`。
 
 ---
 
 ## 五、工作台只读页面
 
-### RT-UI-016 额度总览页渲染 3 个统计卡
+### RT-UI-016 额度总览页渲染统计卡
 - 优先级:P1
 - 类型:UI
 - 状态:✅ 已实现 — products/router/tests/workspace.spec.ts
 - 前置条件:已注入钱包会话。
 - 步骤:
   1. 打开 `/workspace/topup?tab=quota`。
-- 预期结果:`.router-topup-statistic` 恰好 3 个(总额度/已用额度/剩余额度,默认 0)。
+- 预期结果:`.router-topup-statistic` 至少 3 个统计卡可见(总额度/已用额度/剩余额度等);当前页面还展示令牌数与近期请求统计。
 
 ### RT-UI-017 令牌列表页渲染表格与新增按钮
 - 优先级:P1
@@ -490,11 +490,11 @@
 ### RT-UI-022 令牌值复制与启用/禁用切换交互
 - 优先级:P2
 - 类型:UI
-- 状态:✅ 已实现 — products/router/tests/token-ui.spec.ts:67(账号已获赠额度,存在令牌:执行复制→toast + 状态开关 PUT 切换并复位;若某次账号偶发无令牌则条件跳过)
-- 前置条件:已注入会话且账户至少有 1 个令牌。
+- 状态:✅ 已实现 — products/router/tests/token-ui.spec.ts(用自清理测试令牌执行复制→toast + 状态开关 PUT 切换并复位;账号无套餐权益时先创建临时 BYOK 测试模型,不访问上游)
+- 前置条件:已注入会话;用例创建并清理专属令牌,缺少套餐权益时会临时创建 BYOK 模型且不调用上游。
 - 步骤:
   1. 在令牌行点击复制图标;点击状态开关切换启用/禁用。
-- 预期结果:复制成功提示出现;状态切换后行状态更新,并持久化(刷新后保持)。
+- 预期结果:复制成功提示出现;启用/禁用各触发一次成功的状态 PUT,并恢复原状态。
 
 ---
 
@@ -509,7 +509,7 @@
   1. 注入会话,打开 `/workspace/token`,点“新增令牌”。
   2. 填名称 `e2e-tok-<ts>`,点“确认”触发真实 `POST /token/`。
   3. 有可用模型:断言“令牌已创建”卡片、列表出现该行,`finally` 用 Bearer 调 `DELETE /token/:id/` 清理;无可用模型:断言到达后端门槛消息。
-- 预期结果:请求体 `name` 与输入一致;账号已获赠额度,默认走「创建→列表可见→删除」完整闭环;若某次账号偶发无可用模型则命中门槛分支并断言门槛消息。
+- 预期结果:请求体 `name` 与输入一致;账号有套餐权益时走「创建→列表可见→删除」完整闭环,无权益时断言到达后端模型门槛。该用例不创建付费资源。
 
 ### RT-API-024 POST /token/ 创建令牌返回 key
 - 优先级:P0
@@ -518,7 +518,7 @@
 - 前置条件:账户存在可用模型(有额度)。
 - 步骤:
   1. 携带用户 JWT POST `/api/v1/public/token/`,body `{name}`。
-- 预期结果:有可用模型时 `success=true`、`data` 含新令牌 id 与 key,随后 `finally` 删除;无可用模型时命中后端「暂无可用模型」门槛(未写入)。账号已获赠额度,默认走真实创建分支。
+- 预期结果:有可用模型时 `success=true`、`data` 含新令牌 id 与 key,随后 `finally` 删除;无可用模型时命中后端「暂无可用模型」门槛(未写入)。
 
 ### RT-API-025 POST /token/ 无可用模型时被门槛拦截
 - 优先级:P1
@@ -527,7 +527,7 @@
 - 前置条件:账户无可用模型(未购买/未充值)。
 - 步骤:
   1. 携带用户 JWT POST `/token/`,body `{name}`。
-- 预期结果:`success=false`;消息匹配“暂无可用模型/购买套餐”等门槛提示;未创建令牌。备注:账号已获赠额度、可用模型非空时该门槛不再适用,本例按条件 `test.skip` 干净跳过(仅在无额度账号上真实执行)。
+- 预期结果:`success=false`;消息匹配“暂无可用模型/购买套餐”等门槛提示;未创建令牌。若并发用例恰好创建临时 BYOK 模型导致本门槛不可达,清理意外创建的令牌并据实跳过;串行运行时可稳定验证无权益分支。
 
 ### RT-API-026 POST /token/ 参数校验
 - 优先级:P1
@@ -546,16 +546,16 @@
 - 步骤:
   1. GET `/token/` 列表。
   2. GET `/token/:id` 详情。
-- 预期结果:列表返回 `success=true` 且 `data` 为数组、含分页 `meta`;若存在令牌则 `/token/:id` 返回该令牌详情(id 一致)。账号已获赠额度、通常有令牌,详情分支真实执行;偶发无令牌时该分支按条件 `test.skip` 干净跳过。
+- 预期结果:列表返回 `success=true` 且 `data` 为数组、含分页 `meta`;用本测试创建的令牌读取 `/token/:id`,详情 id 一致。账号无套餐权益时先创建临时 BYOK 测试模型,不访问上游,最终清理令牌与连接。
 
-### RT-API-028 PUT /token/ 更新令牌
+### RT-API-028 PUT /token/ 更新令牌名称
 - 优先级:P1
 - 类型:API
-- 状态:✅ 已实现 — products/router/tests/token-api.spec.ts:154(账号已获赠额度,存在令牌:执行 PUT 更新回环并 GET 校验;若某次账号偶发无令牌则条件跳过)
+- 状态:✅ 已实现 — products/router/tests/token-api.spec.ts(用自清理测试令牌执行 PUT 更新回环并 GET 校验;账号无套餐权益时先创建临时 BYOK 测试模型,不访问上游)
 - 前置条件:已创建 1 个令牌。
 - 步骤:
-  1. PUT `/token/`,body 含 id 与修改后的名称/配额/状态。
-- 预期结果:`success=true`;GET 详情反映更新后字段。
+  1. 用本测试创建的令牌执行 PUT `/token/`,body 含 id 与新名称。
+- 预期结果:`success=true`;GET 详情反映新名称。
 
 ### RT-API-029 DELETE /token/:id 删除且幂等
 - 优先级:P1
@@ -579,21 +579,21 @@
 ### RT-API-031 token/status 以 API Key 返回额度状态
 - 优先级:P2
 - 类型:API
-- 状态:✅ 已实现 — products/router/tests/token-api.spec.ts:246(账号已获赠额度,有可用模型:铸造令牌并以 API Key 读 token/status;若某次探测无可用模型则条件跳过)
+- 状态:✅ 已实现 — products/router/tests/token-api.spec.ts(通过自清理测试令牌的 API Key 读取 token/status;账号无套餐权益时先创建临时 BYOK 测试模型,不访问上游)
 - 前置条件:已创建并取得令牌 key。
 - 步骤:
   1. 用 `Authorization: Bearer <key>` GET `/token/status`(API 返回的原始 key 为 48 位、**无 `sk-` 前缀**;`sk-` 仅前端 `renderFullToken` 展示/cURL 时附加)。
 - 预期结果:返回该令牌剩余额度/请求次数等状态字段。
 
-### RT-UI-023 令牌编辑页修改名称/配额/模型限制并保存
+### RT-UI-023 令牌编辑页修改名称并保存
 - 优先级:P2
 - 类型:UI
-- 状态:✅ 已实现 — products/router/tests/token-ui.spec.ts:108(账号已获赠额度,本测试自带 `mintOwnToken` 铸造专属令牌以避免与其它 token 规格并发竞争;点击「编辑」进入编辑态、改名保存、断言 PUT 200 success 并删除该令牌)
-- 前置条件:已注入会话;账号存在可用模型(本测试自己铸造令牌)。
+- 状态:✅ 已实现 — products/router/tests/token-ui.spec.ts(本测试自带专属测试令牌以避免与其它 token 规格并发竞争;点击「编辑」进入编辑态、改名保存、断言 PUT 200 success 并清理令牌与临时 BYOK 连接)
+- 前置条件:已注入会话。
 - 步骤:
   1. 用用户 JWT 铸造专属测试令牌,跳到 `/workspace/token/:id`(EditToken)。
-  2. 修改名称、配额上限、模型限制,保存。
-- 预期结果:保存成功;返回列表后该行显示更新后的名称;后端 PUT 请求体携带修改字段。
+  2. 点击编辑,修改名称并保存。
+- 预期结果:保存成功;后端 PUT 请求成功且 token detail 页面保持正常。
 
 ---
 
@@ -649,8 +649,8 @@
 ### RT-API-036 POST /topup/package/preview 套餐购买预览
 - 优先级:P2
 - 类型:API
-- 状态:✅ 已实现 — products/router/tests/topup-balance.spec.ts:112
-- 前置条件:存在可购套餐。
+- 状态:✅ 已实现(无套餐时验证参数错误;有效套餐分支需可购套餐)— products/router/tests/topup-balance.spec.ts:112
+- 前置条件:存在可购套餐(当前环境未配置可购套餐,有效套餐分支条件跳过;空套餐 ID 参数校验仍会执行)。
 - 步骤:
   1. POST `/user/topup/package/preview`,body 含套餐/操作类型。
 - 预期结果:空 `package_id` 返回“套餐 ID 不能为空”;取 `GET /user/packages` 的有效套餐预览返回 `success=true`、`target_package_id` 一致、`payable_amount` 为数值、`payable_currency` 非空,不实际下单。
@@ -668,10 +668,10 @@
 - 优先级:P2
 - 类型:UI
 - 状态:✅ 已实现 — products/router/tests/pricing-ui.spec.ts:25
-- 前置条件:已注入会话且存在可购套餐。
+- 前置条件:已注入会话。
 - 步骤:
   1. 打开 `/workspace/service/pricing`,定位 `#pricing-package-section`。
-- 预期结果:`.router-package-purchase-card` 渲染套餐名(`.router-package-purchase-card-title`)与价格(`.router-package-purchase-price`)信息(PackagePurchasePage)。
+- 预期结果:有可购套餐时,`.router-package-purchase-card` 显示套餐名与价格;套餐列表为空时显示「暂无可购买套餐」空状态(PackagePurchasePage)。
 
 ---
 
@@ -839,7 +839,7 @@
 ## 十一、个人供应商路由(BYOK)
 
 > 个人供应商 = 普通用户自带上游(bring-your-own-key),用户级、非管理员、无功能开关。
-> 端点在 `/api/v1/public/personal-provider/*`(`UserAuth`),连接只属于单个 `user_id`,
+> 端点在 `/api/v1/public/personal/channels/*`(`UserAuth`),连接只属于单个 `user_id`,
 > 不进入运营 `channels` 表,以合成渠道 `personal:<连接ID>` 参与路由(默认策略 `personal_first`)。
 > 信封 `{success, message, data}`;多数逻辑失败为 HTTP 200 + `success:false`,报文格式错误 400,未鉴权 401。
 > 凭证(`api_key`)只写不回显:响应仅暴露 `credential_configured` 布尔,永不回显密钥。
@@ -898,7 +898,7 @@
 - 状态:✅ 已实现 — products/router/tests/personal-provider.spec.ts
 - 前置条件:持有普通用户 JWT;已有一条列出该模型的连接。
 - 步骤:
-  1. PUT `/model-routes` 合法策略;非法策略;范围外模型;GET 列表;DELETE;再 DELETE。
+  1. PUT `/models/routes` 合法策略;非法策略;范围外模型;GET 列表;DELETE;再 DELETE。
 - 预期结果:合法成功;非法策略「路由策略无效」;范围外「模型不在当前账号可用范围内」;
   列表含该规则;删除成功;重复删除 `code:"personal_model_route_not_found"`、报文「模型路由规则不存在或无权访问」。
 
@@ -908,7 +908,7 @@
 - 状态:✅ 已实现 — products/router/tests/personal-provider.spec.ts
 - 前置条件:持有普通用户 JWT。
 - 步骤:
-  1. GET `/routing-quota`。
+  1. GET `/routing/quota`。
 - 预期结果:`{unit:"request", unlimited:true, period:"YYYY-MM", used_requests:<number>, included_requests}`。
   个人调用绕过货币额度/计费(`UpstreamSource=personal_provider`)。
 
@@ -927,7 +927,7 @@
 - 状态:✅ 已实现 — products/router/tests/personal-provider.spec.ts
 - 前置条件:服务可达。
 - 步骤:
-  1. 无 token GET `/connections`、`/model-routes`、`/routing-quota`。
+  1. 无 token GET `/connections`、`/models/routes`、`/routing/quota`。
 - 预期结果:均 HTTP 401。
 
 ### RT-API-058 经个人供应商中继补全(边界)
@@ -1061,8 +1061,8 @@
 > `/api/v1/public/token/*`(仅本人可见)。信封 `{success, message, data}`(列表另带 `meta:{total,page,page_size}`,
 > 部分令牌错误另带 `code`),HTTP 恒 200,断言以 `success` 为准。id 为 char36 空格右填充,需 `.trim()`。
 > 需 `ROUTER_ADMIN_PRIVATE_KEY` 与 `ROUTER_WALLET_PRIVATE_KEY`。被测令牌经用户端创建(管理端无 create),
-> 该创建受**归属账号权益**约束(可用模型 = 套餐/充值权益 ∪ 个人供应商 BYOK 连接的模型)。两个测试账号均已赠送额度,
-> 令牌 CRUD 三条已真跑绿;RT-API-078 另行独立验证 BYOK 自助解锁令牌创建这条正交路径。
+> 该创建受**归属账号权益**约束(可用模型 = 套餐/充值权益 ∪ 个人供应商 BYOK 连接的模型)。管理员令牌 CRUD 用例会在无套餐权益时临时创建 BYOK 模型,
+> 并在清理令牌时一并删除连接;RT-API-078 独立验证 BYOK 自助解锁令牌创建这条正交路径。
 
 ### RT-API-069 管理员列出任意用户令牌并读取(含归属身份)
 - 优先级:P0

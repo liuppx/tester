@@ -25,7 +25,7 @@
 
 > 编号说明:`WL-UI-*` 为 popup 内交互;`WL-DAPP-*` 为经 `window.ethereum` / 审批窗的 dApp 交互;`WL-E2E-*` 为跨真实链/网络的端到端流程。
 > 通用前置(除特别说明外均适用):已通过 `WALLET_EXTENSION_PATH` 指向钱包源码目录;用 `loadWalletContext()` 启动带扩展的持久化 Chromium;`stubPublicEndpoints` 屏蔽 YeYing 公共端点以保证用例可离线运行。
-> 现有 dApp 相关用例(WL-DAPP-006/007/008)在 node/router/warehouse 三个站点各有一份等价实现,链接列出三处;缺少对应站点环境变量(`NODE_BASE_URL` / `ROUTER_BASE_URL` / `WAREHOUSE_BASE_URL`)时自动跳过。
+> 现有 dApp 相关用例(WL-DAPP-006/007/008)在 node/router/warehouse 三个站点各有一份等价实现,链接列出三处;Router 使用 `ROUTER_WEB_URL` 指向独立 SPA,未配置时兼容回退 `ROUTER_BASE_URL`。缺少对应站点环境变量时自动跳过。
 
 ---
 
@@ -506,8 +506,8 @@
 - 前置条件:对应站点可达(否则跳过);钱包已解锁。
 - 步骤:
   1. 新标签打开目标 SPA,等待内容脚本注入 provider。
-  2. 读取 `window.ethereum` 的 `isYeYing` / `isMetaMask` / `chainId`。
-- 预期结果:`isYeYing===true`、`isMetaMask` 假值、`chainId` 匹配 `^0x[0-9a-fA-F]+$`(默认 YeYing 0x1538),未被任何 shim 覆盖。
+  2. 读取 `window.ethereum` 的 `isYeYing` / `isMetaMask` 标识和 `request` 方法。
+- 预期结果:`isYeYing===true`、`isMetaMask` 假值、`request` 可调用,未被任何 shim 覆盖。当前新钱包默认网络为非 EVM 的知行图测试网,此用例不要求存在 EVM `chainId`;EIP-1193 链 ID 行为由 WL-DAPP-011/012 专项验证。
 
 ### WL-DAPP-007 EIP-6963 `announceProvider` 被 dApp 发现
 

@@ -1,20 +1,17 @@
 /**
  * router — token-row interactions & the token edit page (RT-UI-022 / RT-UI-023).
  *
- * Both require the account to already hold at least one token. Minting a token
- * needs available models (a purchase — the external-payment boundary this suite
- * does not cross), so when the account has no token these cannot be exercised
- * and skip cleanly after a live probe of GET /token/. When a token exists the
- * full interaction runs.
+ * Both create a dedicated token and clean it up afterward. If the account has
+ * no package entitlement, the test helper temporarily adds a synthetic BYOK
+ * model; no upstream request is made and no paid package is required.
  *
  * Selectors verified against router web/src/components/TokensTable.jsx and
  * web/src/pages/Token/EditToken.jsx.
  */
 import { localizedTitle } from '../../../shared/title';
 import { test, expect, baseURLFor, envFor } from '../fixtures';
-import { apiContext } from '../../../shared/api';
-import { acquireRouterToken } from '../helpers/auth';
 import { seedWalletSession } from '../helpers/session';
+import { createTestToken } from '../helpers/test-token';
 
 function skipIfNoService() {
   test.skip(!baseURLFor('router'), 'ROUTER_BASE_URL not configured');
@@ -26,83 +23,53 @@ function skipIfNoKey() {
   );
 }
 
-async function firstToken(baseURL: string): Promise<{ id?: string | number; name?: string } | undefined> {
-  const { token } = await acquireRouterToken(baseURL);
-  const ctx = await apiContext(baseURL, { Authorization: `Bearer ${token}` });
-  try {
-    const body = (await (await ctx.get('/api/v1/public/token/')).json()) as {
-      data?: Array<{ id?: string | number; name?: string }>;
-    };
-    return (body.data ?? [])[0];
-  } finally {
-    await ctx.dispose();
-  }
-}
-
-/**
- * Mint a dedicated token via the user API (entitlement-gated: the account must have
- * available models). Returns the trimmed id plus the owner ctx (kept open for
- * cleanup), or null when the account cannot mint (payment boundary). Using a
- * dedicated token keeps the edit test isolated from concurrent token specs that
- * create/delete rows on the same shared account.
- */
-async function mintOwnToken(
-  baseURL: string,
-  name: string,
-): Promise<{ id: string; ctx: Awaited<ReturnType<typeof apiContext>> } | null> {
-  const { token } = await acquireRouterToken(baseURL);
-  const ctx = await apiContext(baseURL, { Authorization: `Bearer ${token}` });
-  const res = (await (
-    await ctx.post('/api/v1/public/token/', {
-      data: { name, unlimited_quota: true, unlimited_request_count: true, expired_time: -1, models: '' },
-    })
-  ).json()) as { success?: boolean; data?: { id?: string | number } };
-  if (!res.success || res.data?.id == null) {
-    await ctx.dispose();
-    return null;
-  }
-  return { id: String(res.data.id).trim(), ctx };
-}
-
 // RT-UI-022 (P2)
 test(localizedTitle("【令牌、充值与余额 / API】 令牌行支持复制和启用/禁用切换", "token row supports copy and enable/disable toggle"), async ({ page, baseURL, recorder }) => {
   skipIfNoService();
   skipIfNoKey();
-  const existing = await firstToken(baseURL!);
-  test.skip(
-    !existing?.id,
-    'account has no token; minting one needs purchased models (payment boundary), ' +
-      'so the token-row copy/toggle interaction cannot be exercised',
-  );
+  const owned = await createTestToken(baseURL!, `e2e-uitoken-${Date.now().toString(36)}`);
 
-  await page.goto(baseURL!, { waitUntil: 'domcontentloaded' });
-  await seedWalletSession(page, baseURL!, envFor('router')['ROUTER_WALLET_PRIVATE_KEY']!);
-  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
-  await page.goto(`${baseURL}/workspace/token`, { waitUntil: 'domcontentloaded' });
+  try {
+    await page.goto(baseURL!, { waitUntil: 'domcontentloaded' });
+    await seedWalletSession(page, baseURL!, envFor('router')['ROUTER_WALLET_PRIVATE_KEY']!);
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
+    await page.goto(`${baseURL}/workspace/token`, { waitUntil: 'domcontentloaded' });
 
-  const table = page.locator('.router-list-table');
-  await expect(table).toBeVisible({ timeout: 15_000 });
+    const table = page.locator('.router-list-table');
+    await expect(table).toBeVisible({ timeout: 15_000 });
+    const row = table.locator('tbody tr').filter({ hasText: owned.name });
+    await expect(row).toBeVisible({ timeout: 15_000 });
 
-  // Copy the token key → success toast appears.
-  await page.locator('.router-icon-button').first().click();
-  await expect(page.getByText(/复制成功|copied|Copied|copy/i).first()).toBeVisible({ timeout: 10_000 });
-  await recorder.step(page, '令牌复制成功');
+    // Copy the token key → success toast appears.
+    await row.locator('.router-icon-button').click();
+    await expect(page.getByText(/复制成功|copied|Copied|copy/i).first()).toBeVisible({ timeout: 10_000 });
+    await recorder.step(page, '令牌复制成功');
 
-  // Toggle the status switch → the PUT (?status_only=true) fires and settles.
-  const sw = page.locator('.router-token-status-switch').first();
-  await expect(sw).toBeVisible();
-  const [putRes] = await Promise.all([
-    page.waitForResponse(
-      r => r.url().includes('/api/v1/public/token/') && r.request().method() === 'PUT',
-      { timeout: 15_000 },
-    ),
-    sw.click(),
-  ]);
-  expect(putRes.ok()).toBe(true);
-  await recorder.step(page, '令牌状态切换');
+    // Toggle the status switch → the PUT (?status_only=true) fires and settles.
+    const sw = row.locator('.router-token-status-switch');
+    await expect(sw).toBeVisible();
+    const [putRes] = await Promise.all([
+      page.waitForResponse(
+        r => r.url().includes('/api/v1/public/token/') && r.request().method() === 'PUT',
+        { timeout: 15_000 },
+      ),
+      sw.click(),
+    ]);
+    expect(putRes.ok()).toBe(true);
+    await recorder.step(page, '令牌状态切换');
 
-  // Flip it back so the run is side-effect neutral.
-  await sw.click().catch(() => {});
+    // Flip it back so the run is side-effect neutral.
+    const [resetRes] = await Promise.all([
+      page.waitForResponse(
+        r => r.url().includes('/api/v1/public/token/') && r.request().method() === 'PUT',
+        { timeout: 15_000 },
+      ),
+      sw.click(),
+    ]);
+    expect(resetRes.ok()).toBe(true);
+  } finally {
+    await owned.cleanup();
+  }
 });
 
 // RT-UI-023 (P2)
@@ -112,12 +79,8 @@ test(localizedTitle("【令牌、充值与余额 / UI】 令牌编辑页面保�
   // Mint a DEDICATED token to edit: the account is shared across token specs via
   // ROUTER_WALLET_PRIVATE_KEY, so editing firstToken() races concurrent specs that
   // delete rows (the edit page then re-renders/detaches mid-interaction).
-  const owned = await mintOwnToken(baseURL!, `e2e-uiedit-${Date.now().toString(36)}`);
-  test.skip(
-    owned === null,
-    'account cannot mint a token to edit (no available models — payment boundary)',
-  );
-  const { id, ctx } = owned!;
+  const owned = await createTestToken(baseURL!, `e2e-uiedit-${Date.now().toString(36)}`);
+  const { id } = owned;
 
   try {
     await page.goto(baseURL!, { waitUntil: 'domcontentloaded' });
@@ -151,8 +114,7 @@ test(localizedTitle("【令牌、充值与余额 / UI】 令牌编辑页面保�
     expect(putBody.success).toBe(true);
     await recorder.step(page, '令牌编辑保存');
   } finally {
-    // Dedicated token — just remove it; no original state to restore.
-    await ctx.delete(`/api/v1/public/token/${id}/`).catch(() => {});
-    await ctx.dispose();
+    // Dedicated token — remove it along with any temporary BYOK entitlement.
+    await owned.cleanup();
   }
 });

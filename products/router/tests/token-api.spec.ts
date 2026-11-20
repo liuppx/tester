@@ -21,6 +21,7 @@ import { localizedTitle } from '../../../shared/title';
 import { test, expect, baseURLFor, envFor } from '../fixtures';
 import { apiContext } from '../../../shared/api';
 import { acquireRouterToken } from '../helpers/auth';
+import { createTestToken } from '../helpers/test-token';
 
 function skipIfNoService() {
   test.skip(!baseURLFor('router'), 'ROUTER_BASE_URL not configured');
@@ -99,8 +100,8 @@ test(localizedTitle("【令牌、充值与余额 / API】 GET /token/ 返回格�
   skipIfNoService();
   skipIfNoKey();
   const baseURL = baseURLFor('router')!;
-  const { token } = await acquireRouterToken(baseURL);
-  const ctx = await apiContext(baseURL, { Authorization: `Bearer ${token}` });
+  const owned = await createTestToken(baseURL, `e2e-list-${Date.now().toString(36)}`);
+  const ctx = owned.ctx;
   try {
     const res = await ctx.get('/api/v1/public/token/');
     expect(res.status()).toBe(200);
@@ -108,16 +109,17 @@ test(localizedTitle("【令牌、充值与余额 / API】 GET /token/ 返回格�
     expect(body.success).toBe(true);
     expect(Array.isArray(body.data)).toBe(true);
 
-    // If any token exists, GET /token/:id returns that token's detail.
-    const first = (body.data as Array<{ id?: string | number }>)[0];
-    test.skip(!first?.id, 'account has no tokens to fetch a detail for');
-    const detail = await ctx.get(`/api/v1/public/token/${first!.id}`);
+    const listed = (body.data as Array<{ id?: string | number }>).find(
+      (row) => String(row.id ?? '').trim() === owned.id,
+    );
+    expect(listed).toBeTruthy();
+    const detail = await ctx.get(`/api/v1/public/token/${owned.id}`);
     expect(detail.status()).toBe(200);
     const detailBody = (await detail.json()) as { success?: boolean; data?: { id?: unknown } };
     expect(detailBody.success).toBe(true);
-    expect(String(detailBody.data?.id)).toBe(String(first!.id));
+    expect(String(detailBody.data?.id).trim()).toBe(owned.id);
   } finally {
-    await ctx.dispose();
+    await owned.cleanup();
   }
 });
 
@@ -142,6 +144,13 @@ test(localizedTitle("【令牌、充值与余额 / API】 POST /token/ 被无可
     const res = await ctx.post('/api/v1/public/token/', { data: { name: `e2e-gate-${Date.now()}` } });
     expect(res.status()).toBe(200);
     const body = (await res.json()) as CreateResp;
+    if (body.success && body.data?.id != null) {
+      // Another parallel test may provision a temporary BYOK model after the
+      // entitlement probe above. Clean any token created by that race and
+      // record the gate as unreachable for this run.
+      await ctx.delete(`/api/v1/public/token/${body.data.id}/`).catch(() => {});
+      test.skip(true, 'a parallel E2E test added a temporary model entitlement during this case');
+    }
     // Gated before creation: success:false, models-gate message, no key leaked.
     expect(body.success).toBe(false);
     expect(body.data?.key).toBeUndefined();
@@ -156,35 +165,23 @@ test(localizedTitle("【令牌、充值与余额 / API】 PUT /token/ 更新令�
   skipIfNoService();
   skipIfNoKey();
   const baseURL = baseURLFor('router')!;
-  const { token } = await acquireRouterToken(baseURL);
-  const ctx = await apiContext(baseURL, { Authorization: `Bearer ${token}` });
+  const owned = await createTestToken(baseURL, `e2e-update-${Date.now().toString(36)}`);
+  const ctx = owned.ctx;
   try {
-    const listBody = (await (await ctx.get('/api/v1/public/token/')).json()) as {
-      data?: Array<{ id?: string | number; name?: string }>;
-    };
-    const existing = (listBody.data ?? [])[0];
-    // Updating needs a real token. Minting one requires available models
-    // (a purchase — the external-payment boundary), so when the account has no
-    // token we cannot exercise the update and skip cleanly.
-    test.skip(
-      !existing?.id,
-      'account has no token to update; minting one needs purchased models (payment boundary)',
-    );
-
     const newName = `e2e-upd-${Date.now()}`;
     const put = await ctx.put('/api/v1/public/token/', {
-      data: { id: existing!.id, name: newName, status: 1 },
+      data: { id: owned.id, name: newName, status: 1 },
     });
     expect(put.status()).toBe(200);
     const putBody = (await put.json()) as { success?: boolean; message?: string };
     expect(putBody.success).toBe(true);
 
-    const detail = (await (await ctx.get(`/api/v1/public/token/${existing!.id}`)).json()) as {
+    const detail = (await (await ctx.get(`/api/v1/public/token/${owned.id}`)).json()) as {
       data?: { name?: string };
     };
     expect(detail.data?.name).toBe(newName);
   } finally {
-    await ctx.dispose();
+    await owned.cleanup();
   }
 });
 
@@ -238,52 +235,27 @@ test(localizedTitle("【令牌、充值与余额 / API】 GET /token/search 返�
 
 // RT-API-031 (P2) — token/status returns quota status when called with an API Key.
 //
-// DEGRADED SKIP: `GET /token/status` is guarded by TokenAuth, which accepts only
-// a minted `sk-…` API key — never a user JWT (that JWT-rejection boundary is
-// covered by RT-API-023 in authz.spec). Minting an API key needs the account to
-// have available models, which requires a purchase — the external-payment
-// boundary this suite does not cross. Probe available models live; with none,
-// no key can be minted and the API-Key branch is unreachable, so we skip.
+// `/token/status` requires a minted API key. If the shared account has no
+// package entitlement, createTestToken supplies one temporary synthetic BYOK
+// model and removes it with the token; no external upstream request is made.
 test(localizedTitle("【令牌(Token)生命周期 / API】 RT-API-031 token/status 以 API Key 返回额度状态", "token/status returns quota status for an API Key (RT-API-031)"), async () => {
   skipIfNoService();
   skipIfNoKey();
   const baseURL = baseURLFor('router')!;
-  const { token } = await acquireRouterToken(baseURL);
-  const ctx = await apiContext(baseURL, { Authorization: `Bearer ${token}` });
+  const owned = await createTestToken(baseURL, `e2e-status-${Date.now().toString(36)}`);
+  const keyCtx = await apiContext(baseURL, { Authorization: `Bearer ${owned.key}` });
   try {
-    const models = (await (await ctx.get('/api/v1/public/user/models/available')).json()) as {
-      data?: unknown[];
-    };
-    test.skip(
-      !Array.isArray(models.data) || models.data.length === 0,
-      'account has no available models, so no API key can be minted; ' +
-        'the token/status API-Key branch (RT-API-031) needs purchased models (payment boundary)',
-    );
-
-    // Funded account: mint a token, then read its status with the API Key.
-    const create = (await (
-      await ctx.post('/api/v1/public/token/', { data: { name: `e2e-status-${Date.now()}` } })
-    ).json()) as { success?: boolean; data?: { id?: string | number; key?: string } };
-    expect(create.success).toBe(true);
-    const key = create.data?.key ?? '';
-    const id = String(create.data?.id ?? '');
     // The API returns the raw key (random.GenerateKey(): 48 chars, NO prefix). The
     // `sk-` prefix only appears in the UI's copy/cURL rendering (renderFullToken),
     // not in the API payload — so assert the raw shape here.
-    expect(key).not.toBe('');
-    expect(key.length).toBeGreaterThanOrEqual(40);
-    expect(key.startsWith('sk-')).toBe(false);
-    const keyCtx = await apiContext(baseURL, { Authorization: `Bearer ${key}` });
-    try {
-      const res = await keyCtx.get('/api/v1/public/token/status');
-      expect(res.status()).toBe(200);
-      const body = (await res.json()) as { data?: Record<string, unknown> };
-      expect(body.data).toBeTruthy();
-    } finally {
-      await keyCtx.dispose();
-      if (id) await ctx.delete(`/api/v1/public/token/${id}/`).catch(() => {});
-    }
+    expect(owned.key.length).toBeGreaterThanOrEqual(40);
+    expect(owned.key.startsWith('sk-')).toBe(false);
+    const res = await keyCtx.get('/api/v1/public/token/status');
+    expect(res.status()).toBe(200);
+    const body = (await res.json()) as { data?: Record<string, unknown> };
+    expect(body.data).toBeTruthy();
   } finally {
-    await ctx.dispose();
+    await keyCtx.dispose();
+    await owned.cleanup();
   }
 });

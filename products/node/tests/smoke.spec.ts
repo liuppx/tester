@@ -18,9 +18,11 @@ test(localizedTitle("【首页与导航 / UI】 首页呈现", "home page render
 test(localizedTitle("【首页与导航 / UI】 主导航包含预期条目", "primary navigation contains expected entries"), async ({ page }) => {
   test.skip(!baseURLFor('node'), 'NODE_BASE_URL not configured');
   await page.goto(envFor('node').baseURL!);
-  // The node control plane exposes "应用 / Apps" and similar nav entries.
-  const body = await page.locator('body').innerText();
-  expect(body.length).toBeGreaterThan(0);
+  // Guests currently land on the email-first sign-in screen; the primary
+  // navigation affordance is the login-method tablist before authentication.
+  await expect(page.getByRole('tablist', { name: '登录方式' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '邮箱' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '钱包' })).toBeVisible();
 });
 
 test(localizedTitle("【首页与导航 / API】 配置 NODE_API_URL 后，后端 /health 返回 2xx", "backend /health responds 2xx when NODE_API_URL is set"), async () => {
