@@ -7,8 +7,10 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+from datetime import datetime, time as clock_time, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from http.server import ThreadingHTTPServer
@@ -46,6 +48,40 @@ class TesterControlTests(unittest.TestCase):
         second = control.enqueue("router", "manual")
         self.assertEqual(first["id"], second["id"])
         self.assertEqual(len(control.STATE["pending"]), 1)
+
+    def test_daily_schedule_queues_the_full_suite_once_per_day(self):
+        control = self.module
+        schedule = control.daily_schedule({
+            "TESTER_DAILY_RUN_ENABLED": "true",
+            "TESTER_DAILY_RUN_TIME": "03:00",
+            "TESTER_DAILY_RUN_TIMEZONE": "Asia/Shanghai",
+        })
+        self.assertEqual(schedule, (clock_time(3, 0), ZoneInfo("Asia/Shanghai")))
+        before = datetime(2026, 11, 20, 2, 59, tzinfo=ZoneInfo("Asia/Shanghai"))
+        self.assertEqual(control.next_daily_run(before, *schedule).date(), before.date())
+        after = datetime(2026, 11, 20, 3, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+        self.assertEqual(
+            control.next_daily_run(after, *schedule).date(),
+            before.date() + timedelta(days=1),
+        )
+        first = control.enqueue(control.FULL, "daily-schedule")
+        second = control.enqueue(control.FULL, "daily-schedule")
+        self.assertEqual(first["id"], second["id"])
+        self.assertEqual(len(control.STATE["pending"]), 1)
+
+    def test_daily_schedule_is_disabled_by_default_and_rejects_invalid_values(self):
+        control = self.module
+        self.assertIsNone(control.daily_schedule({}))
+        with self.assertRaisesRegex(ValueError, "HH:MM"):
+            control.daily_schedule({
+                "TESTER_DAILY_RUN_ENABLED": "true",
+                "TESTER_DAILY_RUN_TIME": "3am",
+            })
+        with self.assertRaisesRegex(ValueError, "timezone"):
+            control.daily_schedule({
+                "TESTER_DAILY_RUN_ENABLED": "true",
+                "TESTER_DAILY_RUN_TIMEZONE": "Unknown/Timezone",
+            })
 
     def test_manual_full_run_is_separate_from_project_and_deduplicated(self):
         control = self.module

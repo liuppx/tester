@@ -1,6 +1,6 @@
 # Tester 发布包
 
-Tester 作为一个 `service` 单元交付：包内 Playwright 运行器、报告处理脚本与 Python 控制服务共同版本化。生成的 HTML、JUnit、截图、运行日志和凭据属于外置数据。代码接入与本地验收不表示服务器已迁移，也不会自动安装 cron、改 Nginx 或启用发布。
+Tester 作为一个 `service` 单元交付：包内 Playwright 运行器、报告处理脚本与 Python 控制服务共同版本化。生成的 HTML、JUnit、截图、运行日志和凭据属于外置数据。代码接入与本地验收不表示服务器已迁移，也不会自动安装 systemd 服务单元、改 Nginx 或启用发布。
 
 ## 构建接口
 
@@ -29,6 +29,8 @@ package-api.json 声明四个统一参数。构建输入的 tag commit 与 main 
 - 报告 /data/test-results；私有状态 /data/tester/private；临时结果 /data/tester/runtime。
 - PID /data/tester/control.pid；操作日志 /opt/logs/tester-control.log。
 - 日志持续轮转：默认每份 1 MiB、保留 3 份备份；TESTER_LOG_MAX_BYTES、TESTER_LOG_BACKUPS 可调整。
+- API 控制服务和每日全量测试任务由同一个 Tester 控制服务管理；默认关闭每日任务。生产启用时设置 `TESTER_DAILY_RUN_ENABLED=true`，并使用 `TESTER_DAILY_RUN_TIME` 和 `TESTER_DAILY_RUN_TIMEZONE` 配置时间。不要同时保留旧的 `/etc/cron.d/yeying-tester-full`，避免重复运行。
+- 升级后的 `scripts/config_backup.sh` 会把 runtime、项目、环境、通知、Tester systemd unit 及其 drop-in 配置备份到 `TESTER_CONFIG_BACKUP_DIR`；报告、日志和测试结果保存在各自的数据目录，不纳入配置备份。
 
 ```bash
 scripts/starter.sh start
@@ -38,6 +40,8 @@ scripts/starter.sh stop
 ```
 
 start 检查监听端口及本次启动进程身份；stop 确认 PID 属于本版本的进程组后再发送信号，等待退出，必要时强制结束。restart 只有停止成功才启动。健康响应包含版本与源码 commit，避免把旧进程当作新版本成功。
+
+当每日测试正在运行时，`starter.sh stop` 会检查 Tester 的运行锁并拒绝停止；Deployer 会在后续检查周期重试升级，不会切断正在执行的测试。
 
 artifact mode 固定执行包内版本，不拉取 Tester main 或部署产品源码。原源码模式保留。项目模板默认关闭源码部署轮询；模板中的源码路径不代表自动获得部署权限。
 
@@ -66,7 +70,9 @@ scripts/test.sh --suite e2e --project router --environment test --timeout 600 --
 
 ## 升级与回退
 
-scripts/upgrade.sh 提供 prepare、copy-config、post-copy、finalize 四阶段；仅复制缺失配置，不覆盖目标已配置值或外置结果。通用升级器负责停止旧服务、启动新版本、检查健康与切换稳定链接；smoke 独立执行。失败时先停止新版本，再从旧目录启动并重新执行健康和 smoke，最后恢复链接。
+scripts/upgrade.sh 提供 prepare、copy-config、post-copy、finalize 四阶段；仅复制缺失配置，不覆盖目标已配置值或外置结果。通用升级器通过 `starter.sh` 停止旧 Tester、启动新版本；每日任务随服务一起停止和启动。健康检查通过后切换稳定链接；配置由 `config_backup.sh` 备份。Deployer 负责轮询制品、下载和调用项目升级钩子，不另行管理 Tester 的日常测试时间表。
+
+GPU 测试机历史上的 `host-overlay` 是独立于 release archive 的主机适配层，不是 Nginx overlay，也不是普通配置文件。`overlay.json` 为每个附加文件记录基础文件 SHA-256、目标 SHA-256 和可选 patch；升级时校验这些值，再把文件应用到已解包的 release，并写入 `host-adaptations.json`。因此最终部署目录可能包含 manifest 没有列出的 GPU 主机改动，且 overlay 变更会产生不同的部署目录后缀。GPU 机当前仍有 48 条此类条目，覆盖产品 E2E、Tester 控制脚本和 runner 适配，所以运行目录中的代码可能与发布包源码不同。它可以用于短期的单机测试兼容；共享测试修复应并回 Tester 源码，服务启停、配置备份和定时任务应由 Tester 包内脚本管理。上游源码已经包含某项修复后，应移除相应 overlay 条目，防止旧 patch 再应用。
 
 首次接入前需确认浏览器系统库、Xvfb/bubblewrap、受保护报告路由、数据目录权限、账号与调度配置。现有 GPU 测试环境不会因这次开发自动迁移。TypeScript 全量检查仍有与原 main 相同的既有错误；接入审计必须保留这一项，不能声称所有仓库检查已通过。
 

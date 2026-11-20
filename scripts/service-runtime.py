@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Package-local service lifecycle and standard health/test interfaces."""
 import argparse
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 import fcntl
 import hashlib
@@ -9,6 +10,7 @@ import math
 import os
 from pathlib import Path
 import re
+import shlex
 import signal
 import socket
 import subprocess
@@ -21,6 +23,7 @@ from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
+STANDARD_RUNTIME_CONFIG = Path("/data/test-results-private/control/runtime-artifact.json")
 
 class CleanupError(RuntimeError):
     pass
@@ -33,9 +36,33 @@ def cleanup_folder(path):
         raise CleanupError("temporary test data cleanup failed") from error
 SUITES = ("unit", "integration", "smoke", "e2e", "all")
 
+def systemd_runtime_config():
+    try:
+        result = subprocess.run(
+            ["systemctl", "show", "tester-control.service", "--property=Environment", "--value"],
+            capture_output=True, text=True, timeout=5, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode:
+        return None
+    try:
+        assignments = shlex.split(result.stdout)
+    except ValueError as error:
+        raise ValueError("Tester systemd environment is malformed") from error
+    for assignment in assignments:
+        if assignment.startswith("TESTER_RUNTIME_CONFIG="):
+            return assignment.split("=", 1)[1]
+    return None
+
 def environment(config=None, required=True):
     values = os.environ.copy()
-    path = Path(config or values.get("TESTER_RUNTIME_CONFIG", ROOT / "config/runtime.json"))
+    configured_path = config or values.get("TESTER_RUNTIME_CONFIG") or systemd_runtime_config()
+    if configured_path:
+        path = Path(configured_path)
+    else:
+        path = next((candidate for candidate in
+                     (STANDARD_RUNTIME_CONFIG, ROOT / "config/runtime.json")
+                     if candidate.is_file()), ROOT / "config/runtime.json")
     if path.is_file():
         raw = json.loads(path.read_text())
         if not isinstance(raw, dict) or any(not isinstance(k, str) or (not k.startswith("TESTER_") and k not in ("STOP_TIMEOUT_SECONDS", "FORCE_STOP_TIMEOUT_SECONDS")) or not isinstance(v, str) for k, v in raw.items()):
@@ -51,15 +78,31 @@ def environment(config=None, required=True):
 
 def alive(pid):
     try:
-        return Path(f"/proc/{pid}/stat").read_text().split(") ", 1)[1][0] != "Z"
-    except (OSError, ProcessLookupError):
+        os.kill(pid, 0)
+    except ProcessLookupError:
         return False
+    except PermissionError:
+        return True
+    stat = Path(f"/proc/{pid}/stat")
+    try:
+        return stat.read_text().split(") ", 1)[1][0] != "Z"
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return True
 
 def owned(pid):
     try:
-        args = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
         scripts = ("tester-control.py", "service-supervisor.py")
-        return any(str(ROOT / "scripts" / name).encode() in args for name in scripts) and os.getpgid(pid) == pid
+        cmdline = Path(f"/proc/{pid}/cmdline")
+        if cmdline.exists():
+            args = cmdline.read_bytes().split(b"\0")
+            matches = any(str(ROOT / "scripts" / name).encode() in args for name in scripts)
+        else:
+            result = subprocess.run(["ps", "-o", "command=", "-p", str(pid)],
+                                    capture_output=True, text=True, check=True, timeout=3)
+            matches = any(str(ROOT / "scripts" / name) in result.stdout for name in scripts)
+        return matches and os.getpgid(pid) == pid
     except (OSError, ValueError):
         return False
 
@@ -120,76 +163,122 @@ def stop_timeouts(env):
         raise ValueError("stop timeouts must be non-negative integers")
     return graceful, forced
 
+@contextmanager
+def service_stop_guard(env):
+    """Do not stop Tester while a queued or active test could be interrupted."""
+    # The flock is the source of truth. State files can retain a stale active
+    # item after a crash, while holding this lock also closes the race where a
+    # queued worker starts just as the service is stopping.
+    lock_path = Path(env.get("TESTER_LOCK_FILE", "/run/lock/yeying-tester-full.lock"))
+    lock_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    stream = lock_path.open("a")
+    try:
+        try:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise RuntimeError("Tester run is active; refusing to stop") from error
+        yield
+    finally:
+        try:
+            fcntl.flock(stream, fcntl.LOCK_UN)
+        finally:
+            stream.close()
+
+def control_port_in_use(env):
+    host = env.get("TESTER_CONTROL_HOST", "127.0.0.1")
+    if host == "0.0.0.0":
+        host = "127.0.0.1"
+    elif host == "::":
+        host = "::1"
+    try:
+        with socket.create_connection((host, int(env.get("TESTER_CONTROL_PORT", "18082"))), timeout=0.25):
+            return True
+    except OSError:
+        return False
+
+def wait_for_control_port_release(env, timeout=10):
+    deadline = time.monotonic() + timeout
+    stable_checks = 0
+    while time.monotonic() < deadline:
+        if control_port_in_use(env):
+            stable_checks = 0
+        else:
+            stable_checks += 1
+            if stable_checks >= 5:
+                return
+        time.sleep(0.1)
+    raise RuntimeError("control service did not release its listening port")
+
 def service(action, env):
     graceful_timeout, forced_timeout = stop_timeouts(env)
     pidfile = Path(env.get("TESTER_PID_FILE", "/data/tester/control.pid"))
     pidfile.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    with pidfile.with_suffix(".lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        pid = int(pidfile.read_text()) if pidfile.exists() else None
-        if pid is not None and alive(pid) and not owned(pid):
-            raise ValueError("PID ownership mismatch")
-        if action in ("stop", "restart") and pid is not None and alive(pid):
-            for sig, limit in ((signal.SIGTERM, graceful_timeout),
-                               (signal.SIGKILL, forced_timeout)):
-                if not alive(pid):
-                    break
-                if not owned(pid):
-                    raise ValueError("process identity changed")
-                os.killpg(pid, sig)
-                deadline = time.monotonic() + limit
-                while alive(pid) and time.monotonic() < deadline:
+    stop_guard = service_stop_guard(env) if action in ("stop", "restart") else nullcontext()
+    with stop_guard:
+        with pidfile.with_suffix(".lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            pid = int(pidfile.read_text()) if pidfile.exists() else None
+            if pid is not None and alive(pid) and not owned(pid):
+                raise ValueError("PID ownership mismatch")
+            if action in ("stop", "restart") and pid is not None and alive(pid):
+                for sig, limit in ((signal.SIGTERM, graceful_timeout),
+                                   (signal.SIGKILL, forced_timeout)):
+                    if not alive(pid):
+                        break
+                    if not owned(pid):
+                        raise ValueError("process identity changed")
+                    os.killpg(pid, sig)
+                    deadline = time.monotonic() + limit
+                    while alive(pid) and time.monotonic() < deadline:
+                        time.sleep(0.1)
+                if alive(pid):
+                    raise RuntimeError("service did not stop")
+                wait_for_control_port_release(env)
+                pidfile.unlink(missing_ok=True)
+                pid = None
+            if action == "stop":
+                pidfile.unlink(missing_ok=True)
+                return
+            if pid is not None and alive(pid):
+                payload = get_json(env, "/healthz", 3)
+                if payload.get("service_pid", payload.get("pid")) != pid:
+                    raise RuntimeError("readiness identity mismatch")
+                return
+            if control_port_in_use(env):
+                raise RuntimeError("Tester control port is already in use")
+            log = Path(env.get("TESTER_CONTROL_LOG", "/opt/logs/tester-control.log"))
+            log.parent.mkdir(parents=True, exist_ok=True)
+            process = subprocess.Popen([sys.executable, str(ROOT / "scripts/service-supervisor.py")],
+                                       cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                       start_new_session=True)
+            fd, tmp = tempfile.mkstemp(dir=pidfile.parent, prefix=".pid.")
+            with os.fdopen(fd, "w") as output:
+                output.write(str(process.pid) + "\n")
+            os.replace(tmp, pidfile)
+            deadline = time.monotonic() + 10
+            try:
+                while time.monotonic() < deadline:
+                    if process.poll() is not None:
+                        raise RuntimeError("control service exited")
+                    try:
+                        payload = get_json(env, "/healthz", 1)
+                        if payload.get("service_pid") == process.pid and payload.get("status") == "pass":
+                            return
+                    except (OSError, ValueError):
+                        pass
                     time.sleep(0.1)
-            if alive(pid):
-                raise RuntimeError("service did not stop")
-            pidfile.unlink(missing_ok=True)
-            pid = None
-        if action == "stop":
-            pidfile.unlink(missing_ok=True)
-            return
-        if pid is not None and alive(pid):
-            payload = get_json(env, "/healthz", 3)
-            if payload.get("service_pid", payload.get("pid")) != pid:
-                raise RuntimeError("readiness identity mismatch")
-            return
-        host = env.get("TESTER_CONTROL_HOST", "127.0.0.1")
-        family = socket.AF_INET6 if ":" in host else socket.AF_INET
-        with socket.socket(family) as probe:
-            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            probe.bind((host, int(env.get("TESTER_CONTROL_PORT", "18082"))))
-        log = Path(env.get("TESTER_CONTROL_LOG", "/opt/logs/tester-control.log"))
-        log.parent.mkdir(parents=True, exist_ok=True)
-        process = subprocess.Popen([sys.executable, str(ROOT / "scripts/service-supervisor.py")],
-                                   cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                   start_new_session=True)
-        fd, tmp = tempfile.mkstemp(dir=pidfile.parent, prefix=".pid.")
-        with os.fdopen(fd, "w") as output:
-            output.write(str(process.pid) + "\n")
-        os.replace(tmp, pidfile)
-        deadline = time.monotonic() + 10
-        try:
-            while time.monotonic() < deadline:
-                if process.poll() is not None:
-                    raise RuntimeError("control service exited")
-                try:
-                    payload = get_json(env, "/healthz", 1)
-                    if payload.get("service_pid") == process.pid and payload.get("status") == "pass":
-                        return
-                except (OSError, ValueError):
-                    pass
-                time.sleep(0.1)
-            raise RuntimeError("control service readiness timed out")
-        except BaseException:
-            if process.poll() is None:
-                os.killpg(process.pid, signal.SIGTERM)
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    process.wait()
-            pidfile.unlink(missing_ok=True)
-            raise
+                raise RuntimeError("control service readiness timed out")
+            except BaseException:
+                if process.poll() is None:
+                    os.killpg(process.pid, signal.SIGTERM)
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        os.killpg(process.pid, signal.SIGKILL)
+                        process.wait()
+                pidfile.unlink(missing_ok=True)
+                raise
 
 def format_result(result, output_format, quiet=False):
     if output_format == "json":
