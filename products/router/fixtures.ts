@@ -1,1 +1,1 @@
-export { test, expect, envFor, baseURLFor, hasEnv } from '../../shared/fixtures';
+export { test, expect, envFor, baseURLFor, hasEnv, routerWebURLFor } from '../../shared/fixtures';

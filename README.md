@@ -12,7 +12,7 @@ of the E2E cases each product should have (see its `README.md` for progress).
 | ------------ | -------------------- | ----------------------- | ----------------------------------------------------------- |
 | warehouse    | 5173 (Vite)          | 6065 WebDAV, 6066 admin | admin login, WebDAV PROPFIND/PUT/GET, bucket UI             |
 | node         | 8991                 | 8100                    | home, navigation, publish-app view                          |
-| router       | 3011 (bundled)       | 3011 (Go binary)        | admin root page, sidebar items                              |
+| router       | 5181 (Vite)          | 3011 (Go API)           | admin root page, sidebar items                              |
 | chat         | 3020                 | embedded Next.js API    | home, new-chat dialog; LLM conversation tests gated on keys |
 | social       | 8082                 | 8888 (via /api)         | login, nav after auth                                       |
 | project      | 20833 (APP_DEV_PORT) | same                    | login, dashboard sidebar                                    |

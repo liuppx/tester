@@ -14,7 +14,7 @@
  *   - ROUTER_WALLET_PRIVATE_KEY
  */
 import { localizedTitle } from '../../../shared/title';
-import { test, expect, baseURLFor, envFor } from '../fixtures';
+import { test, expect, baseURLFor, envFor, routerWebURLFor } from '../fixtures';
 import { apiContext, expectStatus } from '../../../shared/api';
 import { loginWithWallet, type RouterTokens } from '../helpers/auth';
 
@@ -133,6 +133,6 @@ test(localizedTitle("【鉴权与权限边界 / API】 配置文件拒绝未经�
 
 test(localizedTitle("【管理后台 UI 与登录导航 / UI】 管理 UI HTML 页面呈现", "admin UI HTML page renders"), async ({ page }) => {
   skipIfNoService();
-  await page.goto(baseURLFor('router')!);
+  await page.goto(routerWebURLFor()!);
   await expect(page).toHaveTitle(/Router/);
 });

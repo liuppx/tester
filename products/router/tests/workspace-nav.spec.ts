@@ -101,8 +101,8 @@ test(
 // RT-UI-015 (P2)
 test(
   localizedTitle(
-    '【管理后台与工作台 / UI】 /workspace/条目按余额/包重定向',
-    '/workspace/entry redirects by balance/package',
+    '【管理后台与工作台 / UI】 /workspace/entry 依据 API 调用进度重定向',
+    '/workspace/entry redirects by API-call progress',
   ),
   async ({ page, baseURL, recorder }) => {
     skipIfNoService();
@@ -112,16 +112,33 @@ test(
     );
     await seed(page, baseURL!);
 
-    await page.goto(`${baseURL}/workspace/entry`, { waitUntil: 'domcontentloaded' });
-    // UserWorkspaceEntryRedirect: no active package AND zero balance → pricing;
-    // an active package OR balance>0 → topup?tab=quota. Either landing is a valid
-    // resolution of the redirect.
-    await expect(page).toHaveURL(/\/workspace\/(service\/pricing|topup\?tab=quota)/, {
-      timeout: 15_000,
+    const hasApiCall = await page.evaluate(async () => {
+      const browserGlobal = globalThis as unknown as {
+        localStorage: { getItem(key: string): string | null };
+        fetch: (
+          input: string,
+          init: { headers: Record<string, string> },
+        ) => Promise<{
+          ok: boolean;
+          json: () => Promise<{ success?: boolean; data?: { has_api_call?: boolean } }>;
+        }>;
+      };
+      const user = JSON.parse(browserGlobal.localStorage.getItem('user') || '{}');
+      const response = await browserGlobal.fetch('/api/v1/public/user/onboarding/progress', {
+        headers: { Authorization: `Bearer ${user.token || ''}` },
+      });
+      const body: { success?: boolean; data?: { has_api_call?: boolean } } = await response.json();
+      return !!(response.ok && body?.success && body?.data?.has_api_call);
     });
-    // This account has package/balance, so it resolves to the quota branch.
-    await expect(page).toHaveURL(/\/workspace\/topup\?tab=quota/, { timeout: 15_000 });
-    await recorder.step(page, 'workspace/entry 依据余额重定向');
+
+    await page.goto(`${baseURL}/workspace/entry`, { waitUntil: 'domcontentloaded' });
+    // UserWorkspaceEntryRedirect sends users with a prior API call to quota;
+    // users who have not made one yet go to the onboarding checklist.
+    await expect(page).toHaveURL(
+      hasApiCall ? /\/workspace\/topup\?tab=quota$/ : /\/workspace\/start$/,
+      { timeout: 15_000 },
+    );
+    await recorder.step(page, 'workspace/entry 依据 onboarding 进度重定向');
   },
 );
 

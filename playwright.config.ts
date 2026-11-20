@@ -1,5 +1,5 @@
 import { defineConfig, devices, type Project } from '@playwright/test';
-import { baseURLFor } from './shared/env';
+import { baseURLFor, routerWebURLFor } from './shared/env';
 import { defaultReporters } from './shared/reporters';
 
 const HEADED = process.env.PWHEADLESS === '0';
@@ -84,7 +84,7 @@ const projects: Project[] = products.map((product: ProductName) => ({
   ...(product === 'project' ? { retries: process.env.CI ? 2 : 1, timeout: 60_000 } : {}),
   use: {
     ...devices['Desktop Chrome'],
-    baseURL: baseURLFor(product),
+    baseURL: product === 'router' ? routerWebURLFor() : baseURLFor(product),
     headless: !HEADED,
     launchOptions: { slowMo: SLOW_MO },
     trace: 'on-first-retry',

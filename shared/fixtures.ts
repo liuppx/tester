@@ -1,5 +1,5 @@
 import { test as base, expect, type Page } from '@playwright/test';
-import { baseURLFor, envFor, hasEnv } from './env';
+import { baseURLFor, envFor, hasEnv, routerWebURLFor } from './env';
 import type { ProductName } from './types';
 import { Recorder } from './record';
 
@@ -66,4 +66,4 @@ export { expect };
 export type { Page };
 
 /** Re-export the env loader for product fixtures. */
-export { envFor, baseURLFor, hasEnv };
+export { envFor, baseURLFor, hasEnv, routerWebURLFor };
