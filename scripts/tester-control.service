@@ -1,22 +1,24 @@
 [Unit]
-Description=Tester single-project control and main watcher
+Description=Tester packaged control service and scheduled test runner
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=forking
 User=root
 Group=root
-WorkingDirectory=/root/code/tester
+WorkingDirectory=/opt/deploy/tester
+Environment=TESTER_RUNTIME_CONFIG=/data/test-results-private/control/runtime-artifact.json
 Environment=PYTHONUNBUFFERED=1
-Environment=TESTER_CONTROL_HOST=127.0.0.1
-Environment=TESTER_CONTROL_PORT=18082
-Environment=TESTER_NODE_BIN=/opt/node-v24/bin/node
-Environment=TESTER_STUCK_CHROME_LIMIT=4
-ExecStart=/usr/bin/python3 /root/code/tester/scripts/tester-control.py
+PIDFile=/data/tester/control.pid
+ExecStart=/bin/bash /opt/deploy/tester/scripts/starter.sh start
+ExecStop=/bin/bash /opt/deploy/tester/scripts/starter.sh stop
 Restart=on-failure
 RestartSec=5
-TimeoutStopSec=20
+TimeoutStartSec=35
+TimeoutStopSec=45
+KillMode=control-group
+UMask=0077
 LimitNOFILE=4096
 
 [Install]

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time as clock_time, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -14,6 +14,7 @@ import sys
 import tempfile
 import threading
 import time
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from urllib.parse import urlsplit
 
 
@@ -35,6 +36,36 @@ ROUTER_COOLDOWN_SECONDS = int(os.environ.get("TESTER_ROUTER_COOLDOWN_SECONDS", "
 CSRF_TOKEN = secrets.token_urlsafe(32)
 MUTEX = threading.RLock()
 ARTIFACT_MODE = os.environ.get("TESTER_ARTIFACT_MODE") == "1"
+
+
+def daily_schedule(env: dict | None = None) -> tuple[clock_time, ZoneInfo] | None:
+    values = os.environ if env is None else env
+    enabled = values.get("TESTER_DAILY_RUN_ENABLED", "false").lower()
+    if enabled not in ("true", "false", "1", "0"):
+        raise ValueError("TESTER_DAILY_RUN_ENABLED must be true or false")
+    if enabled in ("false", "0"):
+        return None
+    raw_time = values.get("TESTER_DAILY_RUN_TIME", "03:00")
+    try:
+        hour, minute = map(int, raw_time.split(":"))
+        run_at = clock_time(hour, minute)
+    except (ValueError, TypeError) as error:
+        raise ValueError("TESTER_DAILY_RUN_TIME must use HH:MM") from error
+    if raw_time != f"{hour:02d}:{minute:02d}":
+        raise ValueError("TESTER_DAILY_RUN_TIME must use zero-padded HH:MM")
+    try:
+        zone = ZoneInfo(values.get("TESTER_DAILY_RUN_TIMEZONE", "Asia/Shanghai"))
+    except (ZoneInfoNotFoundError, ValueError) as error:
+        raise ValueError("TESTER_DAILY_RUN_TIMEZONE is not a known timezone") from error
+    return run_at, zone
+
+
+def next_daily_run(now_at: datetime, run_at: clock_time, zone: ZoneInfo) -> datetime:
+    local_now = now_at.astimezone(zone)
+    candidate = datetime.combine(local_now.date(), run_at, tzinfo=zone)
+    if candidate <= local_now:
+        candidate = datetime.combine(local_now.date() + timedelta(days=1), run_at, tzinfo=zone)
+    return candidate
 
 
 def now() -> str:
@@ -333,6 +364,17 @@ def worker() -> None:
             time.sleep(2)
 
 
+def daily_scheduler(schedule: tuple[clock_time, ZoneInfo]) -> None:
+    run_at, zone = schedule
+    while True:
+        target = next_daily_run(datetime.now(timezone.utc), run_at, zone)
+        delay = max(1, (target - datetime.now(zone)).total_seconds())
+        time.sleep(delay)
+        with MUTEX:
+            item = enqueue(FULL, "daily-schedule")
+        print(f"Tester daily full run queued: {item['id']} for {target.isoformat()}", flush=True)
+
+
 PAGE = """<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tester 手动测试</title><style>
@@ -501,9 +543,17 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     PRIVATE.mkdir(parents=True, exist_ok=True, mode=0o700)
+    schedule = daily_schedule()
+    if schedule is None:
+        print("Tester daily full run is disabled", flush=True)
+    else:
+        run_at, zone = schedule
+        print(f"Tester daily full run enabled: {run_at.strftime('%H:%M')} {zone.key}", flush=True)
     threading.Thread(target=poller, daemon=True).start()
     thread = threading.Thread(target=worker, daemon=True)
     thread.start()
+    if schedule is not None:
+        threading.Thread(target=daily_scheduler, args=(schedule,), daemon=True).start()
     host = os.environ.get("TESTER_CONTROL_HOST", "127.0.0.1")
     port = int(os.environ.get("TESTER_CONTROL_PORT", "18082"))
     ThreadingHTTPServer((host, port), Handler).serve_forever()

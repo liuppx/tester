@@ -1,7 +1,0 @@
-# On the test machine, whose system timezone is Asia/Shanghai.
-SHELL=/bin/bash
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-# Preserve the safe Chromium D-state threshold on this test machine.
-TESTER_NODE_BIN=/opt/node-v24/bin/node
-TESTER_STUCK_CHROME_LIMIT=4
-0 3 * * * root /root/code/tester/scripts/test-tester-main.sh >> /data/test-results-private/cron.log 2>&1
