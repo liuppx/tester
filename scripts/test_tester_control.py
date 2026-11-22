@@ -159,6 +159,41 @@ class TesterControlTests(unittest.TestCase):
         self.assertEqual(control.STATE["pending"][0]["target_sha"], new)
         self.assertEqual(control.STATE["pending"][0]["source"], "main")
 
+    def test_artifact_mode_watches_approved_project_mains(self):
+        control = self.module
+        control.ARTIFACT_MODE = True
+        control.ALLOW_ARTIFACT_SOURCE_DEPLOY = True
+        old = "a" * 40
+        new = "b" * 40
+        control.STATE["seen"]["router"] = old
+        with patch.object(control, "git_sha", side_effect=[new, new]):
+            control.poll_main()
+        item = control.STATE["pending"][0]
+        self.assertEqual((item["project"], item["source"], item["target_sha"], item["mode"]),
+                         ("router", "main", new, "deploy"))
+
+    def test_artifact_mode_requires_explicit_source_deploy_permission(self):
+        control = self.module
+        control.ARTIFACT_MODE = True
+        control.ALLOW_ARTIFACT_SOURCE_DEPLOY = False
+        with self.assertRaisesRegex(ValueError, "does not deploy"):
+            control.enqueue("router", "manual", mode="deploy")
+
+    def test_artifact_mode_routes_project_main_to_source_deployment_runner(self):
+        control = self.module
+        control.ARTIFACT_MODE = True
+        control.ALLOW_ARTIFACT_SOURCE_DEPLOY = True
+        item = control.enqueue("router", "main", "b" * 40)
+        summary = {"request_id": item["id"], "run": "2026-10-17_10-00-00+0800",
+                   "status": "passed", "target_sha": "b" * 40}
+        with patch.object(control, "cooldown_until", return_value=None), \
+             patch.object(control, "git_sha", return_value="b" * 40), \
+             patch.object(control, "latest_summary", return_value=summary), \
+             patch.object(control.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as run:
+            self.assertTrue(control.execute(item))
+        self.assertEqual(run.call_args.args[0], [str(control.RUNNER), "router", "b" * 40])
+        self.assertEqual(control.STATE["recent"][0]["result"], "passed")
+
     def test_new_main_during_active_run_stays_queued(self):
         control = self.module
         active = control.enqueue("router", "manual", "a" * 40)
@@ -291,9 +326,11 @@ class TesterControlTests(unittest.TestCase):
 class ArtifactModeBoundaryTests(unittest.TestCase):
     setUp = TesterControlTests.setUp
 
-    def test_artifact_mode_disables_git_polling(self):
+    def test_upstream_polling_can_be_disabled_in_artifact_mode(self):
         control = self.module
-        with patch.object(control, "ARTIFACT_MODE", True), patch.object(control, "git_sha") as git:
+        with patch.object(control, "ARTIFACT_MODE", True), \
+             patch.object(control, "WATCH_UPSTREAM_MAIN", False), \
+             patch.object(control, "git_sha") as git:
             control.poll_main()
             control.poll_tester_main()
         git.assert_not_called()
