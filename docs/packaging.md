@@ -12,7 +12,7 @@ scripts/package.sh --ref "$RELEASE_COMMIT" --source-commit "$MAIN_COMMIT" --vers
 
 从指定已提交版本提取临时源码，使用 npm 安装依赖且不生成 package-lock.json，下载对应 Chromium，输出版本化 tar.gz 和 release-manifest.json。仓库按项目约定不保留依赖锁文件，因此依赖版本按 package.json 的 semver 范围解析。包中带 node_modules 与浏览器，不需要运行机的开发缓存；Node、Python、Chromium 系统库，以及原测试执行脚本使用的 Bash/coreutils、flock、Xvfb 和 bubblewrap 由部署环境准备。构建不会 sudo、fetch、切换调用者分支、打 tag、推送、上传或部署。
 
-package-api.json 声明四个统一参数。构建输入的 tag commit 与 main source commit 分开记录；归档名与清单身份采用 main source commit。输出目录必须为空，不覆盖已有不同字节的制品。构建默认将 Playwright 浏览器缓存到打包用户的 `~/.cache/yeying-tester/playwright`，后续版本复用相同的浏览器 revision；可用 `TESTER_BUILD_BROWSER_CACHE` 指定其他持久化缓存目录。安全配置统一使用完整 Chromium channel，因此打包命令使用 `--no-shell`，不下载单独的 headless shell；安装器只把当前版本需要的 Chromium 和 ffmpeg 目录复制入包，避免把旧 revision 一起打入制品。运行时仍不依赖打包机缓存。
+package-api.json 声明四个统一参数。构建输入的 tag commit 与 main source commit 分开记录；归档名与清单身份采用 main source commit。输出目录必须为空，不覆盖已有不同字节的制品。构建默认将 Playwright 浏览器缓存到打包用户的 `~/.cache/yeying-tester/playwright`，后续版本复用相同的浏览器 revision；npm 默认使用 `https://registry.npmmirror.com`，Playwright 浏览器默认使用 `https://npmmirror.com/mirrors/playwright`，两者都可用 `NPM_CONFIG_REGISTRY` 和 `PLAYWRIGHT_DOWNLOAD_HOST` 覆盖。可用 `TESTER_BUILD_BROWSER_CACHE` 指定其他持久化缓存目录。安全配置统一使用完整 Chromium channel，因此打包命令使用 `--no-shell`，不下载单独的 headless shell；安装器只把当前版本需要的 Chromium 和 ffmpeg 目录复制入包，避免把旧 revision 一起打入制品。运行时仍不依赖打包机缓存。
 
 独立的 scripts/tag.sh 在获批发布事件中调用，支持 --bump patch|minor|major、--unit-version tester-service=版本。它在临时 worktree 更新 package.json 与 artifact-versions.conf，仅推送 tag，不改 main。package.sh 不调用它。正式发布通过 Deployer 的 compile_packages.sh --publish；开发验收不需要推送任何真实 tag。
 

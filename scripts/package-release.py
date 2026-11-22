@@ -15,6 +15,8 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 SEMVER = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
 DEFAULT_BROWSER_CACHE = Path.home() / ".cache" / "yeying-tester" / "playwright"
+DEFAULT_NPM_REGISTRY = "https://registry.npmmirror.com"
+DEFAULT_PLAYWRIGHT_DOWNLOAD_HOST = "https://npmmirror.com/mirrors/playwright"
 FILES = ("package.json", ".nvmrc", ".env.template",
          "LICENSE", "README.md", "playwright.config.ts", "playwright.safe.config.ts", "tsconfig.json")
 DIRS = ("products", "shared", "scripts", "config", "docs")
@@ -131,10 +133,14 @@ def build(args):
         if (major, minor) < (24, 18):
             raise ValueError("Node.js >=24.18 is required")
         env = dict(os.environ, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD="1")
+        # Keep package builds usable on the mainland network while allowing
+        # CI or an enterprise mirror to override each source explicitly.
+        env.setdefault("NPM_CONFIG_REGISTRY", DEFAULT_NPM_REGISTRY)
         npm_version = install_dependencies(checkout, env)
         browsers = checkout / "browsers"
         cache = browser_cache_path()
         env["PLAYWRIGHT_BROWSERS_PATH"] = str(cache)
+        env.setdefault("PLAYWRIGHT_DOWNLOAD_HOST", DEFAULT_PLAYWRIGHT_DOWNLOAD_HOST)
         env.pop("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", None)
         run(browser_install_command(), cwd=checkout, env=env)
         copy_browser_bundle(cache, browsers, required_browser_directories(checkout))

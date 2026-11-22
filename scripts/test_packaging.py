@@ -89,6 +89,12 @@ class PackageContractTests(unittest.TestCase):
             "node", "node_modules/@playwright/test/cli.js", "install", "chromium", "--no-shell"
         ])
 
+    def test_package_build_defines_domestic_defaults(self):
+        build = module("package-release")
+        self.assertEqual(build.DEFAULT_NPM_REGISTRY, "https://registry.npmmirror.com")
+        self.assertEqual(build.DEFAULT_PLAYWRIGHT_DOWNLOAD_HOST,
+                         "https://npmmirror.com/mirrors/playwright")
+
     def test_release_dependencies_use_npm_without_a_lockfile(self):
         build = module("package-release")
         self.assertIn("package.json", build.FILES)
