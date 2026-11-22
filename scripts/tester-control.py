@@ -36,6 +36,8 @@ ROUTER_COOLDOWN_SECONDS = int(os.environ.get("TESTER_ROUTER_COOLDOWN_SECONDS", "
 CSRF_TOKEN = secrets.token_urlsafe(32)
 MUTEX = threading.RLock()
 ARTIFACT_MODE = os.environ.get("TESTER_ARTIFACT_MODE") == "1"
+ALLOW_ARTIFACT_SOURCE_DEPLOY = os.environ.get("TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY", "false").lower() in ("1", "true", "yes")
+WATCH_UPSTREAM_MAIN = os.environ.get("TESTER_WATCH_UPSTREAM_MAIN", "1").lower() not in ("0", "false", "no")
 
 
 def daily_schedule(env: dict | None = None) -> tuple[clock_time, ZoneInfo] | None:
@@ -137,7 +139,7 @@ def enqueue(project: str, source: str, target_sha: str | None = None,
         mode = "test"
     elif project not in PROJECTS:
         raise ValueError(f"Unknown project: {project}")
-    if ARTIFACT_MODE and mode == "deploy":
+    if ARTIFACT_MODE and mode == "deploy" and not ALLOW_ARTIFACT_SOURCE_DEPLOY:
         raise ValueError("Artifact mode does not deploy product source checkouts")
     if mode not in ("test", "deploy"):
         raise ValueError("Unknown test mode")
@@ -172,7 +174,7 @@ def enqueue(project: str, source: str, target_sha: str | None = None,
 
 
 def poll_main() -> None:
-    if ARTIFACT_MODE:
+    if not WATCH_UPSTREAM_MAIN:
         return
     for name, config in PROJECTS.items():
         if not config.get("enabled", False):
@@ -196,6 +198,8 @@ def poll_main() -> None:
 
 
 def poll_tester_main() -> None:
+    if not WATCH_UPSTREAM_MAIN or ARTIFACT_MODE:
+        return
     if ARTIFACT_MODE:
         return
     try:
@@ -276,7 +280,13 @@ def execute(item: dict) -> bool:
                 metadata = REPO / "release.json"
                 if metadata.exists():
                     environment["TESTER_SOURCE_SHA"] = json.loads(metadata.read_text())["source_commit"]
-                command = [str(FULL_RUNNER)] + ([] if project == FULL else [project])
+                if project != FULL and mode == "deploy":
+                    # The Tester artifact is released by Deployer, while the
+                    # packaged control service still watches approved product
+                    # mains and updates their isolated test deployments.
+                    command = [str(RUNNER), project, target_sha]
+                else:
+                    command = [str(FULL_RUNNER)] + ([] if project == FULL else [project])
             elif project == FULL and item["source"] == "tester-main":
                 command = [str(TESTER_MAIN_RUNNER), item["target_sha"]]
             elif mode == "test":

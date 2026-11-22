@@ -49,8 +49,7 @@ class PackageContractTests(unittest.TestCase):
         build = module("package-release")
         for name in ("scripts/__pycache__/x.pyc", "scripts/.env.local", ".project/task.json", "x.log"):
             self.assertFalse(build.publishable(Path(name)))
-        for name in ("config/runtime.json.template", "config/tester-package-update.service",
-                     ".env.template", "products/router/tests/smoke.spec.ts", "updater.py"):
+        for name in ("config/runtime.json.template", ".env.template", "products/router/tests/smoke.spec.ts"):
             self.assertTrue(build.publishable(Path(name)))
 
     def test_browser_build_cache_is_persistent_and_overridable(self):
@@ -101,7 +100,6 @@ class PackageContractTests(unittest.TestCase):
     def test_release_dependencies_use_npm_without_a_lockfile(self):
         build = module("package-release")
         self.assertIn("package.json", build.FILES)
-        self.assertIn("updater.py", build.FILES)
         self.assertFalse(any("lock" in name.lower() for name in build.FILES))
         manifest = json.loads((ROOT / "package.json").read_text())
         self.assertNotIn("packageManager", manifest)
@@ -124,32 +122,6 @@ class PackageContractTests(unittest.TestCase):
     def test_stale_or_foreign_pid_is_never_owned(self):
         runtime = module("service-runtime")
         self.assertFalse(runtime.owned(os.getpid()))
-
-    def test_updater_keeps_standard_release_directory_name(self):
-        spec = importlib.util.spec_from_file_location("tester_updater", ROOT / "updater.py")
-        updater = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(updater)
-        with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder)
-            deploy = root / "deploy"
-            deploy.mkdir()
-            overlay = root / "overlay"
-            overlay.mkdir()
-            (overlay / "overlay.json").write_text("{}\n")
-            target = deploy / "tester-service-v0.1.9-32ec78a"
-            target.mkdir()
-            (target / "host-adaptations.json").write_text(json.dumps({
-                "archive_sha256": "a" * 64,
-                "overlay_sha256": "b" * 64,
-                "files": [],
-            }))
-            instance = object.__new__(updater.Updater)
-            instance.deploy = deploy
-            instance.config = {"overlay": str(overlay)}
-            artifact = {"package_root": target.name, "sha256": "a" * 64}
-            with self.assertRaisesRegex(updater.Refused, "different host adaptation"):
-                instance.stage(Path("/does/not/matter.tar.gz"), {}, artifact)
-            self.assertFalse((deploy / (target.name + "-host" + "b" * 12)).exists())
 
 
 class ArtifactServiceTests(unittest.TestCase):
