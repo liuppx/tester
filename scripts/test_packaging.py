@@ -125,6 +125,32 @@ class PackageContractTests(unittest.TestCase):
         runtime = module("service-runtime")
         self.assertFalse(runtime.owned(os.getpid()))
 
+    def test_updater_keeps_standard_release_directory_name(self):
+        spec = importlib.util.spec_from_file_location("tester_updater", ROOT / "updater.py")
+        updater = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(updater)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            deploy = root / "deploy"
+            deploy.mkdir()
+            overlay = root / "overlay"
+            overlay.mkdir()
+            (overlay / "overlay.json").write_text("{}\n")
+            target = deploy / "tester-service-v0.1.9-32ec78a"
+            target.mkdir()
+            (target / "host-adaptations.json").write_text(json.dumps({
+                "archive_sha256": "a" * 64,
+                "overlay_sha256": "b" * 64,
+                "files": [],
+            }))
+            instance = object.__new__(updater.Updater)
+            instance.deploy = deploy
+            instance.config = {"overlay": str(overlay)}
+            artifact = {"package_root": target.name, "sha256": "a" * 64}
+            with self.assertRaisesRegex(updater.Refused, "different host adaptation"):
+                instance.stage(Path("/does/not/matter.tar.gz"), {}, artifact)
+            self.assertFalse((deploy / (target.name + "-host" + "b" * 12)).exists())
+
 
 class ArtifactServiceTests(unittest.TestCase):
     def test_isolated_service_can_start_smoke_and_stop_without_git_or_products(self):

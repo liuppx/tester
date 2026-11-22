@@ -431,17 +431,13 @@ class Updater:
         overlay_sha = digest(Path(self.config["overlay"]) / "overlay.json")
         if target.exists():
             marker = target / "host-adaptations.json"
-            if marker.is_file() and json.loads(marker.read_text()).get("overlay_sha256") != overlay_sha:
-                # Preserve an existing deployment unchanged when only the
-                # separately maintained host adaptation gets a new revision.
-                target = self.deploy / (artifact["package_root"] + "-host" + overlay_sha[:12])
-        if target.exists():
-            marker = target / "host-adaptations.json"
             if not marker.is_file():
                 raise Refused("existing target has no adaptation provenance")
             provenance = json.loads(marker.read_text())
-            if provenance.get("archive_sha256") != artifact["sha256"] or provenance.get("overlay_sha256") != overlay_sha:
+            if provenance.get("archive_sha256") != artifact["sha256"]:
                 raise Refused("existing release differs from the candidate")
+            if provenance.get("overlay_sha256") != overlay_sha:
+                raise Refused("existing release has a different host adaptation; review and remove it before retrying")
             if any(digest(target / row["path"]) != row["installed_sha256"] for row in provenance["files"]):
                 raise Refused("existing adaptation files differ from their provenance")
             return target
