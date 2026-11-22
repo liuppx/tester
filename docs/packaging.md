@@ -81,6 +81,8 @@ scripts/test.sh --suite e2e --project router --environment test --timeout 600 --
 
 scripts/upgrade.sh 提供 prepare、copy-config、post-copy、finalize 四阶段；仅复制缺失配置，不覆盖目标已配置值或外置结果。通用升级器通过 `starter.sh` 停止旧 Tester、启动新版本；每日任务随服务一起停止和启动。健康检查通过后切换稳定链接；配置由 `config_backup.sh` 备份。Deployer 负责轮询制品、下载和调用项目升级钩子，不另行管理 Tester 的日常测试时间表。
 
+发布包根目录的 `updater.py` 是 Tester 制品更新器，随每个版本一起交付。systemd 更新单元应通过稳定入口 `/opt/deploy/tester/updater.py` 调用它，不能再依赖独立的 `/opt/deploy/tester-updater/updater.py` 副本。更新器的仓库凭据、运行状态和备份仍放在受保护的 `/data` 路径；GPU 主机的临时 overlay 在完成逐项上游化前也单独保存，不能把凭据或主机私有文件打进公共安装包。
+
 GPU 测试机历史上的 `host-overlay` 是独立于 release archive 的主机适配层，不是 Nginx overlay，也不是普通配置文件。`overlay.json` 为每个附加文件记录基础文件 SHA-256、目标 SHA-256 和可选 patch；升级时校验这些值，再把文件应用到已解包的 release，并写入 `host-adaptations.json`。因此最终部署目录可能包含 manifest 没有列出的 GPU 主机改动，且 overlay 变更会产生不同的部署目录后缀。GPU 机当前仍有 48 条此类条目，覆盖产品 E2E、Tester 控制脚本和 runner 适配，所以运行目录中的代码可能与发布包源码不同。它可以用于短期的单机测试兼容；共享测试修复应并回 Tester 源码，服务启停、配置备份和定时任务应由 Tester 包内脚本管理。上游源码已经包含某项修复后，应移除相应 overlay 条目，防止旧 patch 再应用。
 
 首次接入前需确认浏览器系统库、Xvfb/bubblewrap、受保护报告路由、数据目录权限、账号与调度配置。现有 GPU 测试环境不会因这次开发自动迁移。TypeScript 全量检查仍有与原 main 相同的既有错误；接入审计必须保留这一项，不能声称所有仓库检查已通过。
