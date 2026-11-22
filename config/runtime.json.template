@@ -20,6 +20,7 @@
   "TESTER_DAILY_RUN_TIME": "03:00",
   "TESTER_DAILY_RUN_TIMEZONE": "Asia/Shanghai",
   "TESTER_CONFIG_BACKUP_DIR": "/data/backups/tester/config",
+  "TESTER_CONFIG_ARCHIVE_DIR": "/opt/backup",
   "STOP_TIMEOUT_SECONDS": "30",
   "FORCE_STOP_TIMEOUT_SECONDS": "5"
 }

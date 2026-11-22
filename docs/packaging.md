@@ -30,7 +30,7 @@ package-api.json 声明四个统一参数。构建输入的 tag commit 与 main 
 - PID /data/tester/control.pid；操作日志 /opt/logs/tester-control.log。
 - 日志持续轮转：默认每份 1 MiB、保留 3 份备份；TESTER_LOG_MAX_BYTES、TESTER_LOG_BACKUPS 可调整。
 - API 控制服务和每日全量测试任务由同一个 Tester 控制服务管理；默认关闭每日任务。生产启用时设置 `TESTER_DAILY_RUN_ENABLED=true`，并使用 `TESTER_DAILY_RUN_TIME` 和 `TESTER_DAILY_RUN_TIMEZONE` 配置时间。不要同时保留旧的 `/etc/cron.d/yeying-tester-full`，避免重复运行。
-- 升级后的 `scripts/config_backup.sh` 会把 runtime、项目、环境、通知、Tester systemd unit 及其 drop-in 配置备份到 `TESTER_CONFIG_BACKUP_DIR`；报告、日志和测试结果保存在各自的数据目录，不纳入配置备份。
+- 升级后的 `scripts/config_backup.sh` 会备份 runtime、项目、环境变量、备份策略、Tester 控制/报告 systemd unit 与 drop-in、报告 Nginx 配置及控制页访问凭据。私有快照保存在 `TESTER_CONFIG_BACKUP_DIR`；用于标准上传器的 `.tar.gz` 归档保存在 `/opt/backup`，文件权限为 `600`。报告、运行日志和测试结果不纳入配置备份。
 
 ```bash
 scripts/starter.sh start
@@ -80,6 +80,22 @@ scripts/test.sh --suite e2e --project router --environment test --timeout 600 --
 ## 升级与回退
 
 scripts/upgrade.sh 提供 prepare、copy-config、post-copy、finalize 四阶段；仅复制缺失配置，不覆盖目标已配置值或外置结果。通用升级器通过 `starter.sh` 停止旧 Tester、启动新版本；每日任务随服务一起停止和启动。健康检查通过后切换稳定链接；配置由 `config_backup.sh` 备份。Deployer 负责轮询制品、下载和调用项目升级钩子，不另行管理 Tester 的日常测试时间表。
+
+### 配置备份与远端归档
+
+`scripts/config_backup.sh` 每次运行都会创建两份本地副本：可直接恢复的权限受限目录，以及 `/opt/backup/tester-config-<UTC时间>-<PID>.tar.gz` 归档。归档用于 Deployer 的标准配置上传器；`config/backup.conf.template` 是 `/data/tester/backup.conf` 的模板，设置 `BACKUP_CONF_FLAG=True` 才会尝试上传，文件名前缀和后缀必须分别为 `tester-config-` 与 `.tar.gz`。
+
+归档包含 runtime、其引用的项目/环境配置、`/data/tester/backup.conf`、Tester 的 control/report systemd unit 及 drop-in、测试机 Nginx 配置和 `/etc/nginx/.htpasswd-tester-control`。其中可能包含 API key、Webhook secret、账号口令及密码哈希；归档只允许存放在权限为 `700` 的本地备份目录，文件权限为 `600`。远端上传只能使用有访问控制的专用 WebDAV 备份目录和专用 `WEBDAV_FILE_*` 凭据，不能复用制品库凭据或上传到公开共享目录。没有配置并验证专用目标时，保持 `BACKUP_CONF_FLAG=False`，本地备份仍会照常生成。
+
+检查本地备份：
+
+```bash
+/opt/deploy/tester/scripts/config_backup.sh
+find /data/backups/tester/config -maxdepth 2 -type f -printf '%m %p\n' | sort
+find /opt/backup -maxdepth 1 -type f -name 'tester-config-*.tar.gz' -printf '%m %s %p\n' | sort
+```
+
+启用远端上传前，先按 Deployer `operator/backup-config` 文档配置专用 WebDAV `.env`，再把 `/data/tester/backup.conf` 中的 `BACKUP_CONF_FLAG` 改为 `True`，手动执行 `upload_config_backup.sh tester` 并检查 `/opt/logs/upload-config-backup.log` 和备份目录中的归档。上传目标权限未验证前不要启用上传。
 
 GPU 测试机历史上的 `host-overlay` 是独立于 release archive 的主机适配层，不是 Nginx overlay，也不是普通配置文件。`overlay.json` 为每个附加文件记录基础文件 SHA-256、目标 SHA-256 和可选 patch；升级时校验这些值，再把文件应用到已解包的 release，并写入 `host-adaptations.json`。项目侧适配必须保留标准部署目录名 `tester-service-vVERSION-COMMIT`，不能用 overlay 哈希添加 `-host...` 后缀，否则会破坏 Deployer 的通用制品命名契约。若标准目录已存在但 overlay provenance 不同，项目升级钩子应拒绝覆盖并要求先审计、清理冲突目录，再重试。GPU 机当前仍有 48 条此类条目，覆盖产品 E2E、Tester 控制脚本和 runner 适配，所以运行目录中的代码可能与发布包源码不同。它可以用于短期的单机测试兼容；共享测试修复应并回 Tester 源码，服务启停、配置备份和定时任务应由 Tester 包内脚本管理。上游源码已经包含某项修复后，应移除相应 overlay 条目，防止旧 patch 再应用。
 
