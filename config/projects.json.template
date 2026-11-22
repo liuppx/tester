@@ -1,5 +1,10 @@
 {
   "projects": {
+    "agent": {
+      "repo": "/root/code/agent",
+      "enabled": false,
+      "reason": "Tester has no agent Playwright project or deployment adapter."
+    },
     "warehouse": {
       "repo": "/root/code/warehouse",
       "enabled": false,

@@ -43,7 +43,7 @@ start 检查监听端口及本次启动进程身份；stop 确认 PID 属于本�
 
 当每日测试正在运行时，`starter.sh stop` 会检查 Tester 的运行锁并拒绝停止；Deployer 会在后续检查周期重试升级，不会切断正在执行的测试。
 
-artifact mode 固定执行包内 Tester 版本，不拉取 Tester main；产品项目仍可由控制服务按配置轮询上游 `main` 并部署到隔离测试环境。只有 runtime 中显式设置 `TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY=true` 时，产品项目的 `deploy` 队列才会启用；项目本身还必须在项目配置中标记为 enabled。Tester 自身升级由统一 Deployer 的标准制品流程完成，控制服务只负责发现 Tester main 变化并排队全量验证，不负责替换自身运行目录。
+artifact mode 固定执行包内 Tester 版本，不拉取 Tester main；产品项目仍可由控制服务按配置轮询上游 `main` 并部署到隔离测试环境。只有 runtime 中显式设置 `TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY=true` 时，产品项目的 `deploy` 队列才会启用；项目本身还必须在项目配置中标记为 enabled。Tester 自身升级完全由统一 Deployer 的标准制品流程负责；artifact mode 的控制服务不会轮询 Tester main 或触发自更新。
 
 ## 健康检查和测试
 

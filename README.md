@@ -83,17 +83,17 @@ gitignored.
 
 ## Common commands
 
-| Command                     | What it does                                      |
-| --------------------------- | ------------------------------------------------- |
-| `npm test`                         | run every project's tests                         |
-| `npm run test:<product>`           | run a single product (e.g. `npm run test:warehouse`) |
-| `npm run list`                     | enumerate every test without executing            |
-| `npm run env:check`                | verify each `*_BASE_URL` is reachable             |
-| `npm run env:list`                 | print per-product env-var matrix                  |
-| `npm run typecheck`                | `tsc -b` across every project                     |
-| `npm run lint` / `npm run format`  | eslint / prettier                                 |
-| `npm run report`                   | open the last HTML report                         |
-| `npm run clean`                    | remove reports, results, tsbuildinfo              |
+| Command                           | What it does                                         |
+| --------------------------------- | ---------------------------------------------------- |
+| `npm test`                        | run every project's tests                            |
+| `npm run test:<product>`          | run a single product (e.g. `npm run test:warehouse`) |
+| `npm run list`                    | enumerate every test without executing               |
+| `npm run env:check`               | verify each `*_BASE_URL` is reachable                |
+| `npm run env:list`                | print per-product env-var matrix                     |
+| `npm run typecheck`               | `tsc -b` across every project                        |
+| `npm run lint` / `npm run format` | eslint / prettier                                    |
+| `npm run report`                  | open the last HTML report                            |
+| `npm run clean`                   | remove reports, results, tsbuildinfo                 |
 
 On a Linux test machine, use the isolated browser entrypoint for safe runs:
 
@@ -133,19 +133,10 @@ pass against any HTTP server.
 
 ## Bring-up recipes
 
-> The tester never starts products itself. Pick one product to verify a release
-> and start it using the recipe below.
-
-- **warehouse** — `cd ../warehouse && docker compose up -d` (see repo README)
-- **node** — start Postgres, then `cd ../node && npm install && npm run dev`
-- **router** — `cd ../router && cp config.yaml.template config.yaml && go run ./cmd/router`
-- **chat** — `cd ../chat && npm install && npm run dev` (Next.js on 3020)
-- **social** — `cd ../social/web && npm install && npm run dev`; separately start Spring Boot
-- **project** — `cd ../project && cp .env.template .env && ./cmd local-start`
-- **knowledge** — `cd ../knowledge && docker compose up -d postgres && uvicorn ...`
-- **marketplace** — no service needed (tests read `MARKETPLACE_REPO_PATH`)
-- **books** — no service needed (tests read `BOOKS_REPO_PATH`)
-- **orchestrator** — start the backend with `cd ../orchestrator/backend && uv run orchestrator`, then the web app with `cd ../orchestrator/web && npm run dev`
+The Tester harness does not start product services or shared middleware. The
+GPU test-machine architecture, current configuration, dependency order, and
+verified bring-up commands are maintained in
+[`docs/test-machine-architecture.md`](docs/test-machine-architecture.md).
 
 ## Conventions
 
@@ -163,6 +154,9 @@ Daily execution, public reports grouped by product, and Feishu notifications
 are documented in [docs/test-machine-report.md](docs/test-machine-report.md).
 For protected manual runs and main-update triggers on the test machine, see
 [docs/test-control.md](docs/test-control.md).
+The GPU host's current Tester architecture, product/middleware dependency map,
+configuration paths, service bring-up order, and readiness checklist are in
+[docs/test-machine-architecture.md](docs/test-machine-architecture.md).
 
 ## License
 
