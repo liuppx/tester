@@ -68,10 +68,12 @@ class PackageContractTests(unittest.TestCase):
             (manifest / "browsers.json").write_text(json.dumps({"browsers": [
                 {"name": "chromium", "revision": "1255", "installByDefault": True},
                 {"name": "chromium-headless-shell", "revision": "1255", "installByDefault": True},
+                {"name": "ffmpeg", "revision": "1013", "installByDefault": True},
+                {"name": "firefox", "revision": "1572", "installByDefault": True},
                 {"name": "chromium", "revision": "old", "installByDefault": False},
             ]}))
             cache = root / "cache"
-            for name in ("chromium-1255", "chromium-headless-shell-1255", "chromium-old"):
+            for name in ("chromium-1255", "ffmpeg-1013", "chromium-headless-shell-1255", "firefox-1572", "chromium-old"):
                 (cache / name).mkdir(parents=True)
                 (cache / name / "marker").write_text(name)
             destination = root / "browsers"
@@ -79,7 +81,7 @@ class PackageContractTests(unittest.TestCase):
             (destination / "stale").mkdir()
             names = build.required_browser_directories(checkout)
             build.copy_browser_bundle(cache, destination, names)
-            self.assertEqual(names, ["chromium-1255"])
+            self.assertEqual(names, ["chromium-1255", "ffmpeg-1013"])
             self.assertFalse((destination / "stale").exists())
             self.assertTrue((destination / "chromium-1255/marker").exists())
 
