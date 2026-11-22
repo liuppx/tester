@@ -79,9 +79,15 @@ class PackageContractTests(unittest.TestCase):
             (destination / "stale").mkdir()
             names = build.required_browser_directories(checkout)
             build.copy_browser_bundle(cache, destination, names)
-            self.assertEqual(names, ["chromium-1255", "chromium-headless-shell-1255"])
+            self.assertEqual(names, ["chromium-1255"])
             self.assertFalse((destination / "stale").exists())
             self.assertTrue((destination / "chromium-1255/marker").exists())
+
+    def test_browser_install_skips_unused_headless_shell(self):
+        build = module("package-release")
+        self.assertEqual(build.browser_install_command(), [
+            "node", "node_modules/@playwright/test/cli.js", "install", "chromium", "--no-shell"
+        ])
 
     def test_release_dependencies_use_npm_without_a_lockfile(self):
         build = module("package-release")

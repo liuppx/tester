@@ -52,8 +52,9 @@ cp .env.template .env.local   # tweak BASE_URL / path values to match your local
 ```
 
 Linux 打包会复用 `~/.cache/yeying-tester/playwright` 中的 Playwright 浏览器
-revision；可用 `TESTER_BUILD_BROWSER_CACHE` 指定共享缓存目录。缓存只用于构建，
-浏览器仍会完整复制进发布包，运行机不依赖打包机目录。
+revision，并使用完整 Chromium channel 跳过不需要的 headless shell 下载；可用
+`TESTER_BUILD_BROWSER_CACHE` 指定共享缓存目录。缓存只用于构建，浏览器仍会完整
+复制进发布包，运行机不依赖打包机目录。
 
 ## Environment selection (local / test / prod)
 

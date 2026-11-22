@@ -42,11 +42,16 @@ def browser_cache_path():
 
 
 def required_browser_directories(checkout):
-    """List the browser directories installed by `playwright install chromium`."""
+    """List browser directories needed by the safe Tester runtime.
+
+    The safe configs select the full Chromium channel, so the separate
+    headless-shell download is unnecessary and would add about 126 MiB.
+    """
     manifest = checkout / "node_modules" / "playwright-core" / "browsers.json"
     browsers = json.loads(manifest.read_text())["browsers"]
     return [f"{entry['name']}-{entry['revision']}"
-            for entry in browsers if entry.get("installByDefault")]
+            for entry in browsers
+            if entry.get("installByDefault") and entry["name"] != "chromium-headless-shell"]
 
 
 def copy_browser_bundle(cache, destination, directory_names):
@@ -59,6 +64,10 @@ def copy_browser_bundle(cache, destination, directory_names):
         if not source.is_dir():
             raise FileNotFoundError(f"Playwright browser cache is missing {name}")
         shutil.copytree(source, destination / name, symlinks=True)
+
+
+def browser_install_command():
+    return ["node", "node_modules/@playwright/test/cli.js", "install", "chromium", "--no-shell"]
 
 def git(*args):
     return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
@@ -127,7 +136,7 @@ def build(args):
         cache = browser_cache_path()
         env["PLAYWRIGHT_BROWSERS_PATH"] = str(cache)
         env.pop("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", None)
-        run(["node", "node_modules/@playwright/test/cli.js", "install", "chromium"], cwd=checkout, env=env)
+        run(browser_install_command(), cwd=checkout, env=env)
         copy_browser_bundle(cache, browsers, required_browser_directories(checkout))
         staged = temp / package_root
         staged.mkdir()

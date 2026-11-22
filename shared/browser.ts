@@ -16,6 +16,7 @@ export function cpuBrowserLaunchOptions(options: LaunchOptions = {}): LaunchOpti
   assertCpuBrowserIsolation();
   return {
     ...options,
+    channel: options.channel ?? 'chromium',
     args: [...(options.args ?? []), ...policy.args],
     env: {
       ...process.env,

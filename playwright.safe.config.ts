@@ -21,6 +21,7 @@ const projects = (base.projects ?? [])
         ...project.use,
         launchOptions: {
           ...launchOptions,
+          channel: launchOptions.channel ?? 'chromium',
           args: [...existingArgs, ...policy.args],
         },
       },

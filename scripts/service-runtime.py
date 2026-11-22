@@ -309,6 +309,7 @@ def browser_fixture(env, timeout, keep=False):
         module = json.dumps(str(ROOT / "node_modules/@playwright/test"))
         result_path = parent / "result.json"
         policy = json.loads((ROOT / "shared/browser-policy.json").read_text())
+        policy = {"channel": "chromium", **policy}
         config = "module.exports={testDir:__dirname,testMatch:'fixture.spec.cjs',workers:1,retries:0,use:{headless:true,launchOptions:" + json.dumps(policy) + "},reporter:[['json',{outputFile:" + json.dumps(str(result_path)) + "}]]};"
         (parent / "playwright.config.cjs").write_text(config)
         (parent / "fixture.spec.cjs").write_text("const {test,expect}=require(" + module + ");test('local packaged browser',async({page})=>{await page.setContent('<title>Tester fixture</title>');await expect(page).toHaveTitle('Tester fixture');});")
