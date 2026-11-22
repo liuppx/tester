@@ -13,6 +13,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import tarfile
 import tempfile
 
 
@@ -27,6 +28,14 @@ CONFIG_KEYS = {
     "TESTER_FEISHU_CONFIG",
     "TESTER_REPORT_ACCESS_KEY_FILE",
 }
+STANDARD_CONFIG_FILES = (
+    Path("/data/tester/backup.conf"),
+    Path("/data/test-results-private/nginx/nginx.conf"),
+    Path("/etc/nginx/conf.d/tester.conf"),
+    Path("/etc/nginx/conf.d/tester-report-local.conf"),
+    Path("/etc/nginx/.htpasswd-tester-control"),
+)
+SYSTEMD_UNITS = ("tester-control", "tester-report")
 
 
 def digest(path: Path) -> str:
@@ -119,17 +128,20 @@ def configured_files() -> list[tuple[str, Path]]:
             if regular_file(path):
                 candidates.append((name.lstrip("."), path))
 
+    candidates.extend((path.name, path) for path in STANDARD_CONFIG_FILES)
+
     for key, value in runtime_data.items():
         if key in CONFIG_KEYS or (key.startswith("TESTER_") and key.endswith("_FILE")):
             if value:
                 candidates.append((Path(value).name or key.lower(), Path(value)))
 
-    systemd_unit = Path("/etc/systemd/system/tester-control.service")
-    if regular_file(systemd_unit):
-        candidates.append(("tester-control.service", systemd_unit))
-    drop_in_dir = Path("/etc/systemd/system/tester-control.service.d")
-    if drop_in_dir.is_dir() and not drop_in_dir.is_symlink():
-        candidates.extend((f"systemd-{path.name}", path) for path in sorted(drop_in_dir.iterdir()))
+    for unit in SYSTEMD_UNITS:
+        systemd_unit = Path(f"/etc/systemd/system/{unit}.service")
+        if regular_file(systemd_unit):
+            candidates.append((f"{unit}.service", systemd_unit))
+        drop_in_dir = Path(f"/etc/systemd/system/{unit}.service.d")
+        if drop_in_dir.is_dir() and not drop_in_dir.is_symlink():
+            candidates.extend((f"{unit}-{path.name}", path) for path in sorted(drop_in_dir.iterdir()))
     legacy_cron = Path("/etc/cron.d/yeying-tester-full")
     if regular_file(legacy_cron):
         candidates.append((legacy_cron.name, legacy_cron))
@@ -160,6 +172,42 @@ def runtime_backup_directory() -> str:
     if not isinstance(value, str):
         raise ValueError("TESTER_CONFIG_BACKUP_DIR must be a string")
     return value
+
+
+def archive_directory() -> Path:
+    configured = os.environ.get("TESTER_CONFIG_ARCHIVE_DIR", "")
+    if not configured:
+        runtime_path = runtime_config_path()
+        if runtime_path is not None:
+            configured = load_runtime(runtime_path).get("TESTER_CONFIG_ARCHIVE_DIR", "")
+    return Path(configured or "/opt/backup")
+
+
+def create_upload_archive(snapshot: Path) -> Path:
+    """Create a private archive in the standard Deployer upload directory."""
+    target_dir = archive_directory()
+    target_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if target_dir.is_symlink() or not target_dir.is_dir():
+        raise ValueError("Tester configuration archive directory is unsafe")
+    os.chmod(target_dir, 0o700)
+    archive = target_dir / f"{snapshot.name}.tar.gz"
+    if archive.exists() or archive.is_symlink():
+        raise FileExistsError("Tester configuration archive already exists")
+    fd, temporary_name = tempfile.mkstemp(prefix=".tester-config-", suffix=".tar.gz", dir=target_dir)
+    os.close(fd)
+    temporary = Path(temporary_name)
+    try:
+        os.chmod(temporary, 0o600)
+        with tarfile.open(temporary, "w:gz") as output:
+            for path in sorted(snapshot.iterdir()):
+                if path.is_symlink() or not path.is_file():
+                    raise ValueError("Tester configuration snapshot contains an unsafe entry")
+                output.add(path, arcname=f"{snapshot.name}/{path.name}", recursive=False)
+        os.replace(temporary, archive)
+        os.chmod(archive, 0o600)
+        return archive
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def backup() -> Path:
@@ -214,7 +262,8 @@ def backup() -> Path:
         except BaseException:
             shutil.rmtree(temporary, ignore_errors=True)
             raise
-    return final
+    archive = create_upload_archive(final)
+    return archive
 
 
 if __name__ == "__main__":
@@ -222,4 +271,4 @@ if __name__ == "__main__":
         destination = backup()
     except (OSError, ValueError, json.JSONDecodeError) as error:
         raise SystemExit(f"Tester configuration backup failed: {error}") from error
-    print(f"Tester configuration backup created: {destination}")
+    print(f"Tester configuration backup archive created: {destination}")

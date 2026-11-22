@@ -49,7 +49,8 @@ class PackageContractTests(unittest.TestCase):
         build = module("package-release")
         for name in ("scripts/__pycache__/x.pyc", "scripts/.env.local", ".project/task.json", "x.log"):
             self.assertFalse(build.publishable(Path(name)))
-        for name in ("config/runtime.json.template", ".env.template", "products/router/tests/smoke.spec.ts"):
+        for name in ("config/runtime.json.template", "config/backup.conf.template",
+                     ".env.template", "products/router/tests/smoke.spec.ts"):
             self.assertTrue(build.publishable(Path(name)))
 
     def test_browser_build_cache_is_persistent_and_overridable(self):
