@@ -9,6 +9,7 @@
  * down (the fetch fails with ECONNREFUSED and we log + skip).
  */
 import { baseURLFor } from '../shared/env';
+import { assertCpuBrowserIsolation } from '../shared/browser';
 
 async function warmup(name: string, url: string | undefined, timeoutMs = 30_000): Promise<void> {
   if (!url) {
@@ -28,6 +29,7 @@ async function warmup(name: string, url: string | undefined, timeoutMs = 30_000)
 }
 
 export default async function globalSetup(): Promise<void> {
+  assertCpuBrowserIsolation();
   // Pre-compile both warehouse and node in parallel. Other products are
   // either backend-only (router, social, project) or down (chat,
   // knowledge, orchestrator) and don't need warming.

@@ -89,6 +89,20 @@ gitignored.
 | `npm run report`                   | open the last HTML report                         |
 | `npm run clean`                    | remove reports, results, tsbuildinfo              |
 
+On a Linux test machine, use the isolated browser entrypoint for safe runs:
+
+```bash
+bash scripts/browser-runtime.sh node node_modules/@playwright/test/cli.js test \
+  --config=playwright.safe.config.ts --project=router --workers=1
+```
+
+This requires Bubblewrap and Xvfb (when `DISPLAY` is unset). It masks host
+sysfs and GPU devices and uses software rendering. `scripts/test.sh` integration
+and E2E suites and the scheduled report runner already use this entrypoint.
+Direct Linux safe-config execution without isolation is rejected before tests
+start; `--list` still works without launching a browser. Regular local
+`playwright.config.ts` runs retain their existing development behavior.
+
 > Prefix any of the above with `TEST_ENV=local|test|prod` to pick the config
 > file — see [Environment selection](#environment-selection-local--test--prod).
 

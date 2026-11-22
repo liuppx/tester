@@ -23,7 +23,7 @@
  * rather than being faked green.
  */
 import { localizedTitle } from '../../../shared/title';
-import { chromium } from '@playwright/test';
+import { request } from '@playwright/test';
 import type { BrowserContext, Page } from '@playwright/test';
 
 import { test, expect, baseURLFor } from '../../wallet/fixtures';
@@ -84,16 +84,14 @@ test.describe.configure({ mode: 'serial' });
 
 /** Skip the running test unless the Node issuer answers its health probe. */
 async function requireNodeReachable(nodeUrl: string): Promise<void> {
-  const probe = await chromium.launch();
+  const api = await request.newContext();
   try {
-    const api = await probe.newContext();
-    const health = await api.request
+    const health = await api
       .get(`${nodeUrl}/api/v1/health`, { timeout: 5_000 })
       .catch(() => null);
     test.skip(!health, `Node issuer not reachable at ${nodeUrl}`);
-    await api.close();
   } finally {
-    await probe.close();
+    await api.dispose();
   }
 }
 

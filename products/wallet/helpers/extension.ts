@@ -27,6 +27,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { chromium, type BrowserContext, type LaunchOptions } from '@playwright/test';
+import { cpuBrowserLaunchOptions } from '../../../shared/browser';
 
 const HEADED = process.env.PWHEADLESS === '0';
 // Slow-motion delay (ms) between actions, so a headed run is watchable by
@@ -94,7 +95,7 @@ export async function loadWalletContext(options: WalletContextOptions = {}): Pro
   // Mirrors the launch flags from
   // wallet/tests/e2e/extension-smoke.test.mjs (which is the source of
   // truth for this configuration).
-  const launchOptions: LaunchOptions = {
+  const launchOptions = cpuBrowserLaunchOptions({
     channel: 'chromium',
     headless,
     slowMo: SLOW_MO,
@@ -103,7 +104,7 @@ export async function loadWalletContext(options: WalletContextOptions = {}): Pro
       `--load-extension=${extensionPath}`,
     ],
     ...options.launchOptions,
-  };
+  });
 
   const context = await chromium.launchPersistentContext(userDataDir, launchOptions);
 

@@ -13,6 +13,34 @@ Python 3.10+, GNU `timeout`, `flock`, Xvfb, and Bubblewrap (`bwrap`). Configure
 GPU device information; this configuration excludes the retired Knowledge
 project. Other product assertions are unchanged by this report pipeline.
 
+All browser execution goes through `scripts/browser-runtime.sh`, including the
+standard `test.sh --suite integration|e2e|all` entrypoints. On Linux it creates a
+Bubblewrap mount namespace with an empty, read-only `/sys`, a minimal `/dev`
+without NVIDIA/DRM nodes, and an empty `/run/udev`. Masking only
+`/sys/bus/pci/devices` and `/sys/class/drm` is insufficient: libudev can still
+read `/sys/devices/.../uevent` and block in a host driver. Network access and
+repository paths remain available for real product and wallet-extension tests.
+These mounts affect only the runner and its children, not the host.
+
+Software-rendering flags and environment settings are supplemental. They do
+not guarantee the absence of a Chromium GPU subprocess; the namespace prevents
+that subprocess from enumerating host GPUs. The Wallet persistent-context
+helper uses the same policy. Missing Bubblewrap/display dependencies or a
+failed isolation check stop execution without falling back to host devices.
+Listing tests does not launch browsers or require the namespace.
+
+To check browser execution without product services or notifications:
+
+```bash
+python3 -m unittest scripts.test_browser_runtime -v
+bash scripts/browser-runtime.sh node node_modules/@playwright/test/cli.js test \
+  --config=scripts/browser-isolation.config.ts
+```
+
+The second check renders and clicks a page, then loads a synthetic MV3 extension
+using the real Wallet launch helper. Existing D-state processes are not cleared
+by this change; the runner's existing stuck-process preflight still applies.
+
 The runner checks available memory, disk space and stuck Chromium processes.
 A nonblocking lock prevents overlap, and execution is limited to 2.5 hours.
 

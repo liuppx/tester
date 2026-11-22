@@ -56,6 +56,15 @@ test.sh 无参数执行 unit，支持：
 - e2e：调用已有跨产品 Playwright 测试；必须提供明确的 TESTER_ENV_FILE，生产环境拒绝执行。
 - all：依次执行上述适用套件，不能把未执行或全跳过当作成功。
 
+integration、e2e 和报告 runner 统一通过 `scripts/browser-runtime.sh` 启动浏览器。
+Linux 必须提供 Bubblewrap，未设置 DISPLAY 时还必须提供 Xvfb。隔离空间内的整个
+`/sys` 为空且只读，`/dev` 不暴露 NVIDIA/DRM 设备，`/run/udev` 为空；只隐藏
+PCI/DRM 索引不能阻断 `/sys/devices/.../uevent` 探测。Wallet 自建的 persistent
+context 同样使用软件渲染参数。隔离失败时拒绝启动，不回退到宿主 GPU。
+这不会修复或回收主机上已存在的内核 D 状态进程，也不会重启任何服务。
+GPU 主机升级时，应检查 host-overlay 不会把旧的 `run-full-on-test-machine.sh`、
+浏览器启动 helper 或 safe config 覆盖回来；以部署目录实际文件和上述隔离验证为准。
+
 统一参数：--suite、--timeout、--format text|json|junit、--output、可重复 --case、--fail-fast、--keep-data、--quiet、--help。另有 --environment、--config、--project、--base-url、--list-cases。用例 ID 不存在返回 2；失败返回 1、框架异常 3、超时 4、清理失败 5。测试失败不自动重试。--keep-data 仅供非生产本地 fixture 调试；跨产品 E2E 保持既有清理策略，拒绝该选项。
 
 ```bash
