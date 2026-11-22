@@ -51,9 +51,10 @@ def required_browser_directories(checkout):
     """
     manifest = checkout / "node_modules" / "playwright-core" / "browsers.json"
     browsers = json.loads(manifest.read_text())["browsers"]
+    required = {"chromium", "ffmpeg"}
     return [f"{entry['name']}-{entry['revision']}"
             for entry in browsers
-            if entry.get("installByDefault") and entry["name"] != "chromium-headless-shell"]
+            if entry.get("installByDefault") and entry["name"] in required]
 
 
 def copy_browser_bundle(cache, destination, directory_names):
