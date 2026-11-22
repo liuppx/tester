@@ -52,6 +52,37 @@ class PackageContractTests(unittest.TestCase):
         for name in ("config/runtime.json.template", ".env.template", "products/router/tests/smoke.spec.ts"):
             self.assertTrue(build.publishable(Path(name)))
 
+    def test_browser_build_cache_is_persistent_and_overridable(self):
+        build = module("package-release")
+        self.assertTrue(str(build.browser_cache_path()).endswith(".cache/yeying-tester/playwright"))
+        with patch.dict(os.environ, {"TESTER_BUILD_BROWSER_CACHE": "/tmp/tester-browser-cache"}):
+            self.assertEqual(build.browser_cache_path(), Path("/tmp/tester-browser-cache"))
+
+    def test_browser_bundle_copies_only_current_playwright_revisions(self):
+        build = module("package-release")
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            checkout = root / "checkout"
+            manifest = checkout / "node_modules/playwright-core"
+            manifest.mkdir(parents=True)
+            (manifest / "browsers.json").write_text(json.dumps({"browsers": [
+                {"name": "chromium", "revision": "1255", "installByDefault": True},
+                {"name": "chromium-headless-shell", "revision": "1255", "installByDefault": True},
+                {"name": "chromium", "revision": "old", "installByDefault": False},
+            ]}))
+            cache = root / "cache"
+            for name in ("chromium-1255", "chromium-headless-shell-1255", "chromium-old"):
+                (cache / name).mkdir(parents=True)
+                (cache / name / "marker").write_text(name)
+            destination = root / "browsers"
+            destination.mkdir()
+            (destination / "stale").mkdir()
+            names = build.required_browser_directories(checkout)
+            build.copy_browser_bundle(cache, destination, names)
+            self.assertEqual(names, ["chromium-1255", "chromium-headless-shell-1255"])
+            self.assertFalse((destination / "stale").exists())
+            self.assertTrue((destination / "chromium-1255/marker").exists())
+
     def test_release_dependencies_use_npm_without_a_lockfile(self):
         build = module("package-release")
         self.assertIn("package.json", build.FILES)
