@@ -179,6 +179,34 @@ class ServiceContractTests(unittest.TestCase):
         self.assertEqual(cases[0][0], "RT-API-001")
         self.assertEqual(cases[0][2]["results"][0]["status"], "skipped")
 
+    def test_e2e_selection_lists_without_browsers_then_executes_in_namespace(self):
+        report = {"suites": [{"specs": [
+            {"title": "RT-API-999 isolation regression", "file": "fixture.spec.ts", "line": 1,
+             "tests": [{"projectName": "router", "results": []}]}]}]}
+        executed = []
+
+        def run(command, env, timeout, quiet=False):
+            if "--list" in command:
+                # Collection must not depend on Xvfb or launch any browser.
+                self.assertEqual(command[0], "node")
+            else:
+                # This is the direct test.sh E2E path that previously bypassed bwrap.
+                self.assertEqual(command[:2], ["bash", str(ROOT / "scripts/browser-runtime.sh")])
+                report["suites"][0]["specs"][0]["tests"][0]["results"] = [{"status": "passed"}]
+                executed.append(command)
+            Path(env["PLAYWRIGHT_JSON_OUTPUT_FILE"]).write_text(json.dumps(report))
+
+        with tempfile.TemporaryDirectory() as folder:
+            config = Path(folder) / "fixture.env"
+            config.write_text("")
+            stdout = io.StringIO()
+            with patch.object(self.runtime, "run_command", side_effect=run), contextlib.redirect_stdout(stdout):
+                code = self.runtime.checks(arguments(suite="e2e", case=["RT-API-999"]),
+                                           {"TESTER_ENV_FILE": str(config)})
+        self.assertEqual(code, 0)
+        self.assertEqual(len(executed), 1)
+        self.assertEqual(json.loads(stdout.getvalue())["summary"]["passed"], 1)
+
     def test_upgrade_copies_private_config_without_overwriting_target(self):
         with tempfile.TemporaryDirectory() as folder:
             current, target = [Path(folder) / name for name in ("old", "new")]

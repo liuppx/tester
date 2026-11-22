@@ -120,13 +120,7 @@ fi
 
 set +e
 timeout --signal=TERM --kill-after=30s 9000s \
-    xvfb-run -a -s '-screen 0 1920x1080x24' \
-    bwrap --die-with-parent \
-        --bind / / --dev /dev --proc /proc \
-        --tmpfs /run/udev \
-        --tmpfs /sys/bus/pci/devices \
-        --tmpfs /sys/class/drm \
-        --chdir "$tester" \
+    bash "$runner_home/scripts/browser-runtime.sh" \
         "$node_bin" node_modules/@playwright/test/cli.js "${playwright_args[@]}" \
     > "$run_dir/test.log" 2>&1
 test_rc=$?

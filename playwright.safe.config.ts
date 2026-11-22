@@ -1,15 +1,13 @@
 import { defineConfig, type PlaywrightTestConfig } from '@playwright/test';
 import base from './playwright.config';
+import policy from './shared/browser-policy.json' with { type: 'json' };
+
+// Inherited by workers, including helpers that launch their own contexts.
+process.env.TESTER_CPU_BROWSER = '1';
+process.env.LIBGL_ALWAYS_SOFTWARE = '1';
+process.env.GALLIUM_DRIVER = 'llvmpipe';
 
 type ScheduledProject = NonNullable<PlaywrightTestConfig['projects']>[number];
-
-const safeChromiumArgs = [
-  '--disable-gpu',
-  '--disable-gpu-compositing',
-  '--disable-dev-shm-usage',
-  '--disable-features=Vulkan',
-  '--no-sandbox',
-];
 
 const projects = (base.projects ?? [])
   .filter((project: ScheduledProject) => project.name !== 'knowledge')
@@ -23,7 +21,7 @@ const projects = (base.projects ?? [])
         ...project.use,
         launchOptions: {
           ...launchOptions,
-          args: [...existingArgs, ...safeChromiumArgs],
+          args: [...existingArgs, ...policy.args],
         },
       },
     };

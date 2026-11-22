@@ -282,6 +282,9 @@ Path(args.output).write_bytes(Path(args.report).read_bytes())
 ''')
         shutil.copyfile(SCRIPTS / 'run-full-on-test-machine.sh',
                         scripts / 'run-full-on-test-machine.sh')
+        # Namespace behavior is checked separately on Linux; this suite uses
+        # a synthetic runner and only verifies report publication semantics.
+        (scripts / 'browser-runtime.sh').write_text('exec "$@"\n')
         (repo / '.env.local').write_text('# Synthetic fixture only\n')
         cli = repo / 'node_modules' / '@playwright' / 'test' / 'cli.js'
         cli.parent.mkdir(parents=True)
@@ -296,16 +299,6 @@ Path(args.output).write_bytes(Path(args.report).read_bytes())
             'free': "printf 'Mem: 17179869184 0 0 0 0 8589934592\\n'\n",
             'df': "printf 'Avail\\n10737418240\\n'\n",
             'ps': "printf 'STAT COMMAND\\n'\n",
-            'xvfb-run': 'shift; shift 2; exec "$@"\n',
-            'bwrap': '''while [ "$#" -gt 0 ]; do
-case "$1" in
---die-with-parent) shift ;;
---bind) shift 3 ;;
---dev|--proc|--tmpfs|--chdir) shift 2 ;;
-*) exec "$@" ;;
-esac
-done
-''',
             'node': '''mkdir -p reports
 cp "$FAKE_HTML" reports/index.html
 cp "$FAKE_JUNIT" junit.xml

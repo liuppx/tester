@@ -300,16 +300,20 @@ def format_result(result, output_format, quiet=False):
     summary = result["summary"]
     return lines + f"RESULT status={result.get('status', 'fail' if summary.get('failed') else 'pass')} passed={summary.get('passed',0)} failed={summary.get('failed',0)} skipped={summary.get('skipped',0)} duration_ms={result.get('duration_ms',0)}\n"
 
+def browser_command(command):
+    return ["bash", str(ROOT / "scripts/browser-runtime.sh"), *command]
+
 def browser_fixture(env, timeout, keep=False):
     parent = Path(tempfile.mkdtemp(prefix="tester-local-fixture-"))
     try:
         module = json.dumps(str(ROOT / "node_modules/@playwright/test"))
         result_path = parent / "result.json"
-        config = "module.exports={testDir:__dirname,testMatch:'fixture.spec.cjs',workers:1,retries:0,use:{headless:true,launchOptions:{args:['--disable-gpu']}},reporter:[['json',{outputFile:" + json.dumps(str(result_path)) + "}]]};"
+        policy = json.loads((ROOT / "shared/browser-policy.json").read_text())
+        config = "module.exports={testDir:__dirname,testMatch:'fixture.spec.cjs',workers:1,retries:0,use:{headless:true,launchOptions:" + json.dumps(policy) + "},reporter:[['json',{outputFile:" + json.dumps(str(result_path)) + "}]]};"
         (parent / "playwright.config.cjs").write_text(config)
         (parent / "fixture.spec.cjs").write_text("const {test,expect}=require(" + module + ");test('local packaged browser',async({page})=>{await page.setContent('<title>Tester fixture</title>');await expect(page).toHaveTitle('Tester fixture');});")
-        run_command([env.get("TESTER_NODE_BIN", "node"), str(ROOT / "node_modules/@playwright/test/cli.js"),
-                     "test", "--config=" + str(parent / "playwright.config.cjs")], env, timeout, quiet=True)
+        run_command(browser_command([env.get("TESTER_NODE_BIN", "node"), str(ROOT / "node_modules/@playwright/test/cli.js"),
+                     "test", "--config=" + str(parent / "playwright.config.cjs")]), env, timeout, quiet=True)
         result = json.loads(result_path.read_text())
         if result["stats"]["expected"] != 1 or result["stats"]["unexpected"] != 0 or result["stats"]["skipped"]:
             raise AssertionError("browser fixture was not executed")
@@ -484,7 +488,7 @@ def checks(args, env):
                 if args.fail_fast:
                     command.append("--max-failures=1")
                 try:
-                    run_command(command, run_env, max(0.01, deadline - time.monotonic()), quiet=args.quiet)
+                    run_command(browser_command(command), run_env, max(0.01, deadline - time.monotonic()), quiet=args.quiet)
                 except subprocess.CalledProcessError:
                     pass
                 results = specs_from_report(json.loads(report_path.read_text()))

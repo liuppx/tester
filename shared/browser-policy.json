@@ -1,0 +1,10 @@
+{
+  "args": [
+    "--disable-gpu",
+    "--disable-gpu-compositing",
+    "--disable-dev-shm-usage",
+    "--disable-features=Vulkan",
+    "--use-angle=swiftshader",
+    "--no-sandbox"
+  ]
+}
