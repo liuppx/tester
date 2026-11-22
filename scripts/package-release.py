@@ -14,7 +14,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SEMVER = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
-DEFAULT_BROWSER_CACHE = Path.home() / ".cache" / "yeying-tester" / "playwright"
+DEFAULT_BROWSER_CACHE = Path.home() / ".cache" / "yeying" / "tester" / "playwright"
 DEFAULT_NPM_REGISTRY = "https://registry.npmmirror.com"
 DEFAULT_PLAYWRIGHT_DOWNLOAD_HOST = "https://npmmirror.com/mirrors/playwright"
 FILES = ("package.json", ".nvmrc", ".env.template",

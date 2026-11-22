@@ -54,7 +54,7 @@ class PackageContractTests(unittest.TestCase):
 
     def test_browser_build_cache_is_persistent_and_overridable(self):
         build = module("package-release")
-        self.assertTrue(str(build.browser_cache_path()).endswith(".cache/yeying-tester/playwright"))
+        self.assertTrue(str(build.browser_cache_path()).endswith(".cache/yeying/tester/playwright"))
         with patch.dict(os.environ, {"TESTER_BUILD_BROWSER_CACHE": "/tmp/tester-browser-cache"}):
             self.assertEqual(build.browser_cache_path(), Path("/tmp/tester-browser-cache"))
 
