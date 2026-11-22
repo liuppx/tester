@@ -1,0 +1,16 @@
+[Unit]
+Description=Download and safely upgrade the Tester service artifact
+Wants=network-online.target
+After=network-online.target tester-control.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/deploy/tester/updater.py --config /data/tester/updater/config.json
+TimeoutStartSec=1800
+TimeoutStopSec=150
+Nice=10
+IOSchedulingClass=idle

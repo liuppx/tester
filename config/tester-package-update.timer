@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for a newer published Tester package every five minutes
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=5min
+RandomizedDelaySec=15s
+Unit=tester-package-update.service
+
+[Install]
+WantedBy=timers.target
