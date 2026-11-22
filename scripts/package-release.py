@@ -14,6 +14,9 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 SEMVER = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+DEFAULT_BROWSER_CACHE = Path.home() / ".cache" / "yeying-tester" / "playwright"
+DEFAULT_NPM_REGISTRY = "https://registry.npmmirror.com"
+DEFAULT_PLAYWRIGHT_DOWNLOAD_HOST = "https://npmmirror.com/mirrors/playwright"
 FILES = ("package.json", ".nvmrc", ".env.template",
          "LICENSE", "README.md", "playwright.config.ts", "playwright.safe.config.ts", "tsconfig.json")
 DIRS = ("products", "shared", "scripts", "config", "docs")
@@ -27,6 +30,46 @@ def install_dependencies(checkout, env):
     # creating an untracked package-lock in the isolated release checkout.
     run(["npm", "install", "--package-lock=false", "--include=dev"], cwd=checkout, env=env)
     return npm_version
+
+
+def browser_cache_path():
+    """Return the persistent Playwright cache used by package builds.
+
+    The cache is outside the temporary checkout and therefore survives each
+    compile_packages run.  TESTER_BUILD_BROWSER_CACHE remains an explicit
+    override for CI or an isolated build worker.
+    """
+    configured = os.environ.get("TESTER_BUILD_BROWSER_CACHE")
+    return Path(configured).expanduser().absolute() if configured else DEFAULT_BROWSER_CACHE.absolute()
+
+
+def required_browser_directories(checkout):
+    """List browser directories needed by the safe Tester runtime.
+
+    The safe configs select the full Chromium channel, so the separate
+    headless-shell download is unnecessary and would add about 126 MiB.
+    """
+    manifest = checkout / "node_modules" / "playwright-core" / "browsers.json"
+    browsers = json.loads(manifest.read_text())["browsers"]
+    return [f"{entry['name']}-{entry['revision']}"
+            for entry in browsers
+            if entry.get("installByDefault") and entry["name"] != "chromium-headless-shell"]
+
+
+def copy_browser_bundle(cache, destination, directory_names):
+    """Copy only this Playwright version's browsers into the release."""
+    if destination.exists():
+        shutil.rmtree(destination)
+    destination.mkdir(parents=True)
+    for name in directory_names:
+        source = cache / name
+        if not source.is_dir():
+            raise FileNotFoundError(f"Playwright browser cache is missing {name}")
+        shutil.copytree(source, destination / name, symlinks=True)
+
+
+def browser_install_command():
+    return ["node", "node_modules/@playwright/test/cli.js", "install", "chromium", "--no-shell"]
 
 def git(*args):
     return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
@@ -90,14 +133,17 @@ def build(args):
         if (major, minor) < (24, 18):
             raise ValueError("Node.js >=24.18 is required")
         env = dict(os.environ, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD="1")
+        # Keep package builds usable on the mainland network while allowing
+        # CI or an enterprise mirror to override each source explicitly.
+        env.setdefault("NPM_CONFIG_REGISTRY", DEFAULT_NPM_REGISTRY)
         npm_version = install_dependencies(checkout, env)
         browsers = checkout / "browsers"
-        cache = Path(os.environ.get("TESTER_BUILD_BROWSER_CACHE", browsers)).absolute()
+        cache = browser_cache_path()
         env["PLAYWRIGHT_BROWSERS_PATH"] = str(cache)
+        env.setdefault("PLAYWRIGHT_DOWNLOAD_HOST", DEFAULT_PLAYWRIGHT_DOWNLOAD_HOST)
         env.pop("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", None)
-        run(["node", "node_modules/@playwright/test/cli.js", "install", "chromium"], cwd=checkout, env=env)
-        if cache != browsers:
-            shutil.copytree(cache, browsers, ignore=shutil.ignore_patterns(".links"))
+        run(browser_install_command(), cwd=checkout, env=env)
+        copy_browser_bundle(cache, browsers, required_browser_directories(checkout))
         staged = temp / package_root
         staged.mkdir()
         for name in FILES:
