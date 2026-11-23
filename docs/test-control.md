@@ -2,20 +2,45 @@
 
 这是 Linux 测试机上的可选控制模块。报告仍在 `/report/`；受保护的 `/report/control/` 页面可以选择“全量测试”或一个项目，手动测试**当前已部署的环境**。手动测试不会拉取或部署产品代码。
 
-控制服务每 5 分钟检查一次已启用项目和 Tester 的上游 `main`，通过项目 checkout 的 `origin` 执行 `git ls-remote origin refs/heads/main` 获取最新 SHA。产品有新提交时，按目标 SHA 入队；仅对已启用且配置了部署适配器的项目执行源码更新和测试。Tester 本身有新提交时，在独立 worktree 中检出该提交并运行全量测试；artifact mode 中真正的 Tester 版本切换仍由 Deployer 的标准制品升级流程负责。每日全量计划由 Tester 控制服务按照 runtime 配置调度。所有测试入口共用运行队列和运行锁，避免并发测试或部署。
+控制服务每 5 分钟检查一次已启用产品仓库的上游 `main`，通过项目 checkout 的 `origin` 执行 `git ls-remote origin refs/heads/main` 获取最新 SHA。产品有新提交时，按目标 SHA 入队；仅对已启用且有对应部署适配器的项目执行源码更新和定向测试。当前已适配 `books`、`chat`、`marketplace`、`router`、`wallet`。artifact mode 下 Tester 自身的版本切换由 Deployer 标准制品升级流程负责，控制服务不轮询 Tester main。每日全量计划由 Tester 控制服务按照 runtime 配置调度，默认关闭。所有测试入口共用运行队列和运行锁，避免并发测试或部署。
 
-目前已验证自动更新适配器的项目为 `books`、`chat`、`marketplace`、`router`、`wallet`。`orchestrator` 的新 `backend/web` 目录尚未完成隔离部署适配，和 `node`、`project`、`social`、`warehouse` 一样在配置中保持禁用；仍可在控制页手动测试当前环境，但不能把该结果解释为“最新 main 已部署”。
+控制服务使用 `TESTER_CONTROL_CONFIG` 指定项目 watcher 配置；GPU 机当前文件为 `/data/test-results-private/control/consolidated-projects.json`。该文件中的 `enabled` 只控制 main 轮询/更新，不决定 Playwright 全量项目范围，也不会启停共享中间件或其他产品服务。`agent` 不是当前 Tester 的 Playwright 项目，也没有部署适配器，不应启用。`orchestrator` 的隔离部署尚未完成；`node`、`project`、`social`、`warehouse` 也保持 watcher disabled。禁用 watcher 不会从全量 Playwright 运行中排除这些项目；全量范围和当前环境启动步骤见 [测试机架构与环境运行手册](test-machine-architecture.md)。
+
+## 钱包身份授权
+
+Tester 控制台使用 Web3-BS Wallet Identity 登录。后端通过一次性 nonce 验证 Presentation 的 DID 文档签名和登录签名，然后检查受保护的 DID allowlist；没有数据库。授权名单缺失、格式错误或为空时一律拒绝登录。控制台页面本身不含测试状态；状态 API、测试排队 API 均要求有效的 HttpOnly 会话 Cookie。会话有效期为 8 小时，退出或控制服务重启后会话失效，执行操作仍要求同源检查和 CSRF token。
+
+部署时将 `config/authorized-dids.json.template` 复制为 runtime 中 `TESTER_AUTHORIZED_DIDS_FILE` 指定的外部文件，默认 `/data/test-results-private/control/authorized-dids.json`。目录设为 `700`、文件设为 `600`，每个获准身份需配置 DID 和从可信来源取得的完整、已签名身份文档：
+
+```json
+{
+  "identities": [
+    {
+      "did": "did:yeying:wid_...",
+      "identity_document": {
+        "id": "did:yeying:wid_...",
+        "version": 1,
+        "revision": 1,
+        "controllers": [],
+        "proof": {}
+      }
+    }
+  ]
+}
+```
+
+将需要查看用例和执行测试的每个钱包身份 DID 及可信身份文档加入数组。服务会验证文档签名，并要求登录 Presentation 中的文档与配置中的固定文档完全相同，防止攻击者只伪造 DID 字符串并替换控制密钥。新用户首次尝试登录时，页面会显示签名验证通过的 DID；管理员需从可信渠道核实身份并取得相应的权威身份文档，再更新名单，用户重新登录即可。更换或轮换控制密钥时，管理员要审核并同步更新固定文档。编辑名单后立即生效，无需重启服务。不要把钱包私钥或助记词写入配置。该文件会由 Tester 配置备份流程归档。
 
 ## 测试机配置
 
-1. 检查 `scripts/tester-control-projects.json` 中的仓库路径、启用状态和禁用理由。自动部署只允许已验证的项目。
+1. 检查 runtime 指定的项目配置文件中的仓库路径、启用状态和禁用理由。自动更新只允许有已验证适配器的项目。
 2. 检查 `scripts/tester-control.service` 的工作目录、Node 路径、运行用户和端口；作为 systemd 服务安装。控制程序默认只监听 `127.0.0.1:18082`。
-3. 在 HTTPS 站点的 Nginx `server` 块加入 `scripts/nginx-control-location.conf` 的 `location`。先用 `htpasswd` 交互式创建 `/etc/nginx/.htpasswd-tester-control`，再运行 `nginx -t` 并重载 Nginx。不要把口令或哈希提交到仓库。
+3. 在 HTTPS 站点的 Nginx `server` 块加入 `scripts/nginx-control-location.conf` 的 `location`，移除该控制路径上旧的 `auth_basic` 配置，然后运行 `nginx -t` 并重载 Nginx。TLS 必须在公网入口启用；应用会通过 Secure Cookie 建立登录会话。公开报告 `/report/` 继续保持只读访问，不能代理到控制接口。
 4. `TESTER_CONTROL_ORIGIN` 要与用户打开页面的 HTTPS 域名一致。路径、端口、轮询间隔、报告目录和锁文件可通过 `TESTER_*` 环境变量调整；不要把凭证写在 systemd 单元、命令行或报告中。
 5. artifact mode 若要自动跟进产品 `main`，runtime 中应设置 `TESTER_WATCH_UPSTREAM_MAIN=true` 和 `TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY=true`，并只启用已有隔离部署适配器的项目。关闭部署许可时仍可在控制页手动测试当前部署环境。Tester 自身制品升级不由这个 watcher 执行。
 6. artifact mode 要运行每日全量任务时，在 runtime 配置中设置 `TESTER_DAILY_RUN_ENABLED` 为 `true`，并指定 `TESTER_DAILY_RUN_TIME`、`TESTER_DAILY_RUN_TIMEZONE`。之后通过 `starter.sh restart` 让新配置生效。删除旧 cron 条目，避免重复触发。
 
-Nginx 的 Basic Auth、服务的本机监听、同源检查和页面 CSRF token 共同保护写操作。部署前确认整个 `/report/control/` 前缀都受 Basic Auth 保护，`/report/` 的公开只读报告不能直接代理到控制接口。
+Nginx 将 `/report/control/` 同源代理到仅监听本机的控制服务；Tester 的钱包身份会话保护控制页面中的状态和操作 API。部署后检查匿名访问 `/report/control/api/status` 返回 `401`，登录后可读取状态；未授权 DID 登录返回 `403`，名单为空时不允许任何登录。
 
 ## 报告与源码
 

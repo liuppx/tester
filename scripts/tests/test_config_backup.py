@@ -131,21 +131,24 @@ class ConfigBackupTests(unittest.TestCase):
             ):
                 self.assertEqual(MODULE.runtime_config_path(), runtime)
 
-    def test_includes_tester_backup_and_report_access_configuration(self):
+    def test_includes_tester_backup_and_wallet_allowlist_configuration(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             runtime = root / "runtime.json"
             backup_policy = root / "backup.conf"
             nginx = root / "tester.conf"
-            access = root / ".htpasswd-tester-control"
+            allowlist = root / "authorized-dids.json"
             backup_policy.write_text("BACKUP_CONF_FLAG=False\n")
             nginx.write_text("server {}\n")
-            access.write_text("tester:$apr1$hash\n")
-            runtime.write_text(json.dumps({"TESTER_CONTROL_PORT": "18082"}))
+            allowlist.write_text('{"dids":["did:yeying:wid_example"]}\n')
+            runtime.write_text(json.dumps({
+                "TESTER_CONTROL_PORT": "18082",
+                "TESTER_AUTHORIZED_DIDS_FILE": str(allowlist),
+            }))
             with patch.object(
                 MODULE,
                 "STANDARD_CONFIG_FILES",
-                (backup_policy, nginx, access),
+                (backup_policy, nginx),
             ), patch.object(MODULE, "SYSTEMD_UNITS", ()), patch.object(
                 MODULE, "STANDARD_RUNTIME_CONFIGS", (runtime,)
             ), patch.dict(
@@ -156,7 +159,7 @@ class ConfigBackupTests(unittest.TestCase):
                 names = {name for name, _ in MODULE.configured_files()}
             self.assertIn("backup.conf", names)
             self.assertIn("tester.conf", names)
-            self.assertIn(".htpasswd-tester-control", names)
+            self.assertIn("authorized-dids.json", names)
 
 
 if __name__ == "__main__":

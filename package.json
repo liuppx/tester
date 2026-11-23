@@ -36,6 +36,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
+    "@yeying-community/web3-bs": "^1.0.28",
     "@types/node": "^22.10.5",
     "@typescript-eslint/eslint-plugin": "^8.19.0",
     "@typescript-eslint/parser": "^8.19.0",
