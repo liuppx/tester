@@ -2,7 +2,7 @@
 
 部署、配置备份和版本回退步骤见[Tester 部署手册](deployment.md)。
 
-这是 Linux 测试机上的可选控制模块。报告仍在 `/report/`；钱包身份授权后的 `/report/control/` 控制台可以选择“全量测试”或一个项目，手动测试**当前已部署的环境**。手动测试不会拉取或部署产品代码。控制台内的“查看测试用例脑图”（`/report/control/cases`）按项目展示 Markdown 中的功能模块与用例，可展开节点、搜索编号/名称，并查看优先级、类型、状态、前置条件、步骤和预期结果；脑图数据与测试状态使用同一登录会话保护。
+这是 Linux 测试机上的可选控制模块。报告仍在 `/report/`；钱包身份授权后的 `/` 控制台可以选择“全量测试”或一个项目，手动测试**当前已部署的环境**。手动测试不会拉取或部署产品代码。控制台内的“查看测试用例脑图”（`/cases`）按项目展示 Markdown 中的功能模块与用例，可展开节点、搜索编号/名称，并查看优先级、类型、状态、前置条件、步骤和预期结果；脑图数据与测试状态使用同一登录会话保护。
 
 控制服务每 5 分钟检查一次已启用产品仓库的上游 `main`，通过项目 checkout 的 `origin` 执行 `git ls-remote origin refs/heads/main` 获取最新 SHA。产品有新提交时，按目标 SHA 入队；仅对已启用且有对应部署适配器的项目执行源码更新和定向测试。当前已适配 `books`、`chat`、`marketplace`、`router`、`wallet`。artifact mode 下 Tester 自身的版本切换由 Deployer 标准制品升级流程负责，控制服务不轮询 Tester main。每日全量计划由 Tester 控制服务按照 runtime 配置调度，默认关闭。所有测试入口共用运行队列和运行锁，避免并发测试或部署。
 
@@ -31,14 +31,14 @@ SQLite 状态通过 `scripts/config_backup.sh` 使用 SQLite 在线备份接口�
 
 1. 检查 runtime 指定的项目配置文件中的仓库路径、启用状态和禁用理由。自动更新只允许有已验证适配器的项目。
 2. 检查 `scripts/tester-control.service` 的工作目录、Node 路径、运行用户和端口；作为 systemd 服务安装。控制程序默认只监听 `127.0.0.1:18082`。
-3. 在 HTTPS 站点的 Nginx `server` 块加入或更新 `scripts/nginx-control-location.conf` 的 `location`。根路径 `/` 应重定向到 `/report/control/`，控制路由包含 `auth_basic off`、`client_max_body_size 1m` 和本机代理。不要在此 location 上叠加报告专用 Cookie 或 HTTP Basic Auth 门禁：钱包身份登录由 Tester 控制服务验证，额外门禁会挡住登录请求。较大的 Wallet Identity Presentation 经 JSON 包装后可能超过 64 KiB，因此预留 1 MiB 请求体上限。修改后运行 `nginx -t` 并平滑重载 Nginx。TLS 必须在公网入口启用；应用会通过 Secure Cookie 建立登录会话。公开报告 `/report/` 继续保持只读访问，不能代理到控制接口。
+3. 在 HTTPS 站点的 Nginx `server` 块加入或更新 `scripts/nginx-control-location.conf` 的 `location`。根路径 `/` 直接提供静态控制台；`/api/` 路由包含 `auth_basic off`、`client_max_body_size 1m` 和本机代理。不要在此 location 上叠加报告专用 Cookie 或 HTTP Basic Auth 门禁：钱包身份登录由 Tester 控制服务验证，额外门禁会挡住登录请求。较大的 Wallet Identity Presentation 经 JSON 包装后可能超过 64 KiB，因此预留 1 MiB 请求体上限。修改后运行 `nginx -t` 并平滑重载 Nginx。TLS 必须在公网入口启用；应用会通过 Secure Cookie 建立登录会话。公开报告 `/report/` 继续保持只读访问，不能代理到控制接口。
 4. `TESTER_CONTROL_ORIGIN` 要与用户打开页面的 HTTPS 域名一致。路径、端口、轮询间隔、报告目录和锁文件可通过 `TESTER_*` 环境变量调整；不要把凭证写在 systemd 单元、命令行或报告中。
 5. artifact mode 若要自动跟进产品 `main`，runtime 中应设置 `TESTER_WATCH_UPSTREAM_MAIN=true` 和 `TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY=true`，并只启用已有隔离部署适配器的项目。关闭部署许可时仍可在控制页手动测试当前部署环境。Tester 自身制品升级不由这个 watcher 执行。
 6. artifact mode 要运行每日全量任务时，在 runtime 配置中设置 `TESTER_DAILY_RUN_ENABLED` 为 `true`，并指定 `TESTER_DAILY_RUN_TIME`、`TESTER_DAILY_RUN_TIMEZONE`。之后通过 `starter.sh restart` 让新配置生效。删除旧 cron 条目，避免重复触发。
 
-Nginx 将 `/report/control/` 同源代理到仅监听本机的控制服务；Tester 的钱包身份会话保护控制页面中的状态和操作 API。部署后检查匿名访问 `/report/control/api/status` 返回 `401`，登录后可读取状态；未授权 DID 登录返回 `403`，名单为空时不允许任何登录。
+Nginx 从独立静态目录提供根路径 `/` 的控制台，仅将 `/api/` 同源代理到只监听本机的控制服务；Tester 的钱包身份会话保护控制页面中的状态和操作 API。部署后检查匿名访问 `/api/status` 返回 `401`，登录后可读取状态；未授权 DID 登录返回 `403`，名单为空时不允许任何登录。
 
-Tester 前端是独立的 Vite 多页面项目，依赖、脚本和锁文件都在 `web/`。发布时生成独立 `tester-web` static 制品，安装到 `/opt/deploy/static/tester-web/current`；service 制品不包含 `web/`。Nginx 从 static current 提供 `/report/control/` 页面、`/assets/*` 和 `/web3-bs.js`，只将 `/report/control/api/` 代理到本机控制服务。验证时确认页面资源走 static 目录，API 登录路径没有额外 Cookie 门禁或 HTTP Basic Auth 挑战。
+Tester 前端是独立的 Vite 多页面项目，依赖、脚本和锁文件都在 `web/`。发布时生成独立 `tester-web` static 制品，安装到 `/opt/deploy/static/tester-web/current`；service 制品不包含 `web/`。Nginx 从 static current 提供 `/` 页面、`/assets/*` 和 `/web3-bs.js`，只将 `/api/` 代理到本机控制服务。验证时确认页面资源走 static 目录，API 登录路径没有额外 Cookie 门禁或 HTTP Basic Auth 挑战。
 
 ## 报告与源码
 

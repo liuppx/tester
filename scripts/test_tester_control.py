@@ -143,10 +143,12 @@ class TesterControlTests(unittest.TestCase):
 
     def test_nginx_separates_static_routes_from_control_api_proxy(self):
         config = (Path(__file__).parent.parent / "scripts/nginx-control-location.conf").read_text()
-        self.assertIn("location ^~ /report/control/api/", config)
+        self.assertIn("location ^~ /api/", config)
         self.assertIn("proxy_pass http://127.0.0.1:18082/api/", config)
         self.assertIn("alias /opt/deploy/static/tester-web/current/assets/", config)
-        self.assertNotIn("location ^~ /report/control/ {", config)
+        self.assertIn("location / {", config)
+        self.assertIn("root /opt/deploy/static/tester-web/current;", config)
+        self.assertNotIn("return 302", config)
 
     def test_overview_reads_published_counts_and_redacts_private_state(self):
         control = self.module
@@ -398,6 +400,7 @@ class TesterControlTests(unittest.TestCase):
                 cookie = response.headers["Set-Cookie"].split(";", 1)[0]
                 self.assertIn("HttpOnly", response.headers["Set-Cookie"])
                 self.assertIn("Secure", response.headers["Set-Cookie"])
+                self.assertIn("Path=/;", response.headers["Set-Cookie"])
             auth_request = Request(base + "/api/auth/status", headers={"Cookie": cookie})
             with urlopen(auth_request, timeout=2) as response:
                 auth = json.load(response)
@@ -501,8 +504,9 @@ class TesterControlTests(unittest.TestCase):
             logout = Request(base + "/api/auth/logout", data=b"", method="POST", headers={
                 **origin, "Cookie": cookie, "X-Tester-CSRF": auth["csrf"],
             })
-            with urlopen(logout, timeout=2):
-                pass
+            with urlopen(logout, timeout=2) as response:
+                self.assertIn("Path=/;", response.headers["Set-Cookie"])
+                self.assertIn("Max-Age=0;", response.headers["Set-Cookie"])
             with self.assertRaises(HTTPError) as error:
                 urlopen(auth_request, timeout=2)
             self.assertEqual(error.exception.code, 401)

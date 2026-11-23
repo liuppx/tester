@@ -41,7 +41,7 @@ GPU 机当前的 Tester 组件如下：
 
 ## 3. 两类依赖
 
-Agent 和社区成员可先查看[项目与 E2E 依赖图](project-dependency-map.md)或线上只读图 `/report/control/architecture`。它聚焦项目之间的服务调用和共享依赖；本手册继续记录测试机的实际配置与启动状态。
+Agent 和社区成员可先查看[项目与 E2E 依赖图](project-dependency-map.md)或线上只读图 `/architecture`。它聚焦项目之间的服务调用和共享依赖；本手册继续记录测试机的实际配置与启动状态。
 
 第一类是**共享中间件**。不同产品共同使用 PostgreSQL、Redis、MySQL、Mailpit、搜索或对象存储等服务。它们由 Deployer 的 middleware 目录、Docker Compose 或独立运维流程启动；Tester 不负责拉起或初始化它们。容器显示 `healthy` 只说明容器级探针通过，不代表产品数据库已创建、迁移完成、凭据正确或业务服务健康。
 

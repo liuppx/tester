@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
-export default defineConfig(({ command }) => ({
-  base: command === 'build' ? '/report/control/' : '/',
+export default defineConfig({
+  base: '/',
   plugins: [{
     name: 'wallet-sdk',
     configureServer(server) {
@@ -30,4 +30,4 @@ export default defineConfig(({ command }) => ({
       },
     },
   },
-}));
+});
