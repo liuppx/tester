@@ -767,6 +767,7 @@ class Handler(BaseHTTPRequestHandler):
                 }
             self.json_reply(200, {"code": 0, "message": "ok", "data": {
                 "session_id": session_id, "nonce": nonce, "audience": ORIGIN.rstrip("/"),
+                "issuerEndpoint": IDENTITY_ISSUER_URL,
                 "scopes": ["identity.basic", "identity.wallet", "identity.username", "identity.email"],
                 "expires_at": datetime.fromtimestamp(current + LOGIN_TTL_SECONDS, timezone.utc).isoformat(),
             }})

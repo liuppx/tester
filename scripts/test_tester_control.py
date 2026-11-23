@@ -391,6 +391,7 @@ class TesterControlTests(unittest.TestCase):
             session_request = Request(base + "/api/auth/identity/login/session", data=b"{}", method="POST", headers=origin)
             with urlopen(session_request, timeout=2) as response:
                 login = json.load(response)["data"]
+            self.assertEqual(login["issuerEndpoint"], control.IDENTITY_ISSUER_URL)
             verify_request = Request(
                 base + "/api/auth/identity/login/verify",
                 data=json.dumps({"session_id": login["session_id"], "presentation": {"holder": admin_did, "identityDocument": admin_document}}).encode(),
