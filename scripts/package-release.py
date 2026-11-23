@@ -19,7 +19,7 @@ DEFAULT_NPM_REGISTRY = "https://registry.npmmirror.com"
 DEFAULT_PLAYWRIGHT_DOWNLOAD_HOST = "https://npmmirror.com/mirrors/playwright"
 FILES = ("package.json", ".nvmrc", ".env.template",
          "LICENSE", "README.md", "playwright.config.ts", "playwright.safe.config.ts", "tsconfig.json")
-DIRS = ("products", "shared", "scripts", "config", "docs")
+DIRS = ("products", "shared", "scripts", "config", "docs", "web")
 
 def run(args, **kwargs):
     return subprocess.run(args, check=True, **kwargs)
@@ -30,6 +30,13 @@ def install_dependencies(checkout, env):
     # creating an untracked package-lock in the isolated release checkout.
     run(["npm", "install", "--package-lock=false", "--include=dev"], cwd=checkout, env=env)
     return npm_version
+
+
+def build_web(checkout, env):
+    web = checkout / "web"
+    run(["npm", "ci", "--no-audit", "--no-fund"], cwd=web, env=env)
+    run(["npm", "run", "build"], cwd=web, env=env)
+    run(["npm", "prune", "--omit=dev", "--no-audit", "--no-fund"], cwd=web, env=env)
 
 
 def browser_cache_path():
@@ -138,6 +145,7 @@ def build(args):
         # CI or an enterprise mirror to override each source explicitly.
         env.setdefault("NPM_CONFIG_REGISTRY", DEFAULT_NPM_REGISTRY)
         npm_version = install_dependencies(checkout, env)
+        build_web(checkout, env)
         browsers = checkout / "browsers"
         cache = browser_cache_path()
         env["PLAYWRIGHT_BROWSERS_PATH"] = str(cache)

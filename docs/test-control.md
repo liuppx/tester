@@ -8,39 +8,35 @@
 
 ## 钱包身份授权
 
-Tester 控制台使用 Web3-BS Wallet Identity 登录。后端通过一次性 nonce 验证 Presentation 的 DID 文档签名和登录签名，然后检查受保护的 DID allowlist；没有数据库。授权名单缺失、格式错误或为空时一律拒绝登录。控制台页面本身不含测试状态；状态 API、测试排队 API 均要求有效的 HttpOnly 会话 Cookie。会话有效期为 8 小时，退出或控制服务重启后会话失效，执行操作仍要求同源检查和 CSRF token。
+Tester 控制服务使用内置 SQLite 管理钱包身份和成员权限，不需要另行启动数据库服务。首次启动和每次升级时会自动执行版本化迁移；数据库位于 `TESTER_PRIVATE_REPORT_DIR/control/tester-auth.sqlite3`，默认 `/data/tester/private/control/tester-auth.sqlite3`，父目录权限 `700`、数据库权限 `600`。配置 `TESTER_ADMIN_DID` 指定管理员 DID 即可。管理员用 Web3-BS Wallet Identity 登录后，可在控制台“成员授权”中批准待审核的身份或撤销已有成员。
 
-部署时将 `config/authorized-dids.json.template` 复制为 runtime 中 `TESTER_AUTHORIZED_DIDS_FILE` 指定的外部文件，默认 `/data/test-results-private/control/authorized-dids.json`。目录设为 `700`、文件设为 `600`，每个获准身份需配置 DID 和从可信来源取得的完整、已签名身份文档：
+首次部署或迁移到此版本时，在受保护的 runtime JSON 中设置唯一管理员 DID；修改后通过 Tester 的标准升级流程或 `scripts/starter.sh restart` 重启服务，使它自动建表并引导管理员记录：
 
 ```json
 {
-  "identities": [
-    {
-      "did": "did:yeying:wid_...",
-      "identity_document": {
-        "id": "did:yeying:wid_...",
-        "version": 1,
-        "revision": 1,
-        "controllers": [],
-        "proof": {}
-      }
-    }
-  ]
+  "TESTER_ADMIN_DID": "did:yeying:wid_...",
+  "TESTER_IDENTITY_ISSUER_URL": "https://node.yeying.pub"
 }
 ```
 
-将需要查看用例和执行测试的每个钱包身份 DID 及可信身份文档加入数组。服务会验证文档签名，并要求登录 Presentation 中的文档与配置中的固定文档完全相同，防止攻击者只伪造 DID 字符串并替换控制密钥。新用户首次尝试登录时，页面会显示签名验证通过的 DID；管理员需从可信渠道核实身份并取得相应的权威身份文档，再更新名单，用户重新登录即可。更换或轮换控制密钥时，管理员要审核并同步更新固定文档。编辑名单后立即生效，无需重启服务。不要把钱包私钥或助记词写入配置。该文件会由 Tester 配置备份流程归档。
+管理 DID 必须对应已在配置的 Node issuer 完成身份注册、邮箱验证和 EVM 钱包绑定的身份。一般成员也需先完成同样的身份凭证流程：第一次登录会建立待审批账号；管理员打开“成员授权”批准后，成员重新登录即可。停止或撤销成员后，该账号现有会话立即失效。建议首次管理员登录并完成批准测试后，按常规流程备份配置和数据库。
+
+新成员使用钱包登录后会创建“等待授权”申请，批准后身份文档固定保存于 SQLite，后续登录必须提供完全匹配的签名文档。管理员身份也会在首次成功登录时固定文档。登录要求一次性 nonce、DID 文档和登录签名，以及 Node 为该 DID 签发且状态有效的 `WalletAccountCredential`、`UsernameCredential`、`EmailCredential`。因此管理员和成员身份都要先完成社区 Node 身份注册、邮箱验证和钱包绑定；仅在客户端创建的自签名身份不会通过校验。默认信任发行方 `https://node.yeying.pub`，可通过私有 runtime 的 `TESTER_IDENTITY_ISSUER_URL` 指定社区部署的 Node origin。缺少或撤销凭证会拒绝登录。会话有效期为 8 小时，退出或控制服务重启后会话失效；执行操作仍要求同源检查和 CSRF token。
+
+SQLite 状态通过 `scripts/config_backup.sh` 使用 SQLite 在线备份接口安全快照并归档。数据库迁移只会向前执行，不会在升级时覆盖或重建用户授权数据。
 
 ## 测试机配置
 
 1. 检查 runtime 指定的项目配置文件中的仓库路径、启用状态和禁用理由。自动更新只允许有已验证适配器的项目。
 2. 检查 `scripts/tester-control.service` 的工作目录、Node 路径、运行用户和端口；作为 systemd 服务安装。控制程序默认只监听 `127.0.0.1:18082`。
-3. 在 HTTPS 站点的 Nginx `server` 块加入 `scripts/nginx-control-location.conf` 的 `location`，移除该控制路径上旧的 `auth_basic` 配置，然后运行 `nginx -t` 并重载 Nginx。TLS 必须在公网入口启用；应用会通过 Secure Cookie 建立登录会话。公开报告 `/report/` 继续保持只读访问，不能代理到控制接口。
+3. 在 HTTPS 站点的 Nginx `server` 块加入或更新 `scripts/nginx-control-location.conf` 的 `location`，使 `/report/control/` 包含 `auth_basic off`、`client_max_body_size 1m` 和本机代理。不要在此 location 上叠加报告专用 Cookie 或 HTTP Basic Auth 门禁：钱包身份登录由 Tester 控制服务验证，额外门禁会挡住登录请求。较大的 Wallet Identity Presentation 经 JSON 包装后可能超过 64 KiB，因此预留 1 MiB 请求体上限。修改后运行 `nginx -t` 并平滑重载 Nginx。TLS 必须在公网入口启用；应用会通过 Secure Cookie 建立登录会话。公开报告 `/report/` 继续保持只读访问，不能代理到控制接口。
 4. `TESTER_CONTROL_ORIGIN` 要与用户打开页面的 HTTPS 域名一致。路径、端口、轮询间隔、报告目录和锁文件可通过 `TESTER_*` 环境变量调整；不要把凭证写在 systemd 单元、命令行或报告中。
 5. artifact mode 若要自动跟进产品 `main`，runtime 中应设置 `TESTER_WATCH_UPSTREAM_MAIN=true` 和 `TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY=true`，并只启用已有隔离部署适配器的项目。关闭部署许可时仍可在控制页手动测试当前部署环境。Tester 自身制品升级不由这个 watcher 执行。
 6. artifact mode 要运行每日全量任务时，在 runtime 配置中设置 `TESTER_DAILY_RUN_ENABLED` 为 `true`，并指定 `TESTER_DAILY_RUN_TIME`、`TESTER_DAILY_RUN_TIMEZONE`。之后通过 `starter.sh restart` 让新配置生效。删除旧 cron 条目，避免重复触发。
 
 Nginx 将 `/report/control/` 同源代理到仅监听本机的控制服务；Tester 的钱包身份会话保护控制页面中的状态和操作 API。部署后检查匿名访问 `/report/control/api/status` 返回 `401`，登录后可读取状态；未授权 DID 登录返回 `403`，名单为空时不允许任何登录。
+
+Tester 前端是独立的 Vite 多页面项目，依赖、脚本和锁文件都在 `web/`。页面源码在 `web/*.html` 与 `web/assets/`，开发时运行 `cd web && npm ci && npm run dev`；它会把 `/api` 和 `/web3-bs.js` 代理到本机控制服务 `127.0.0.1:18082`。发布时 Deployer 在隔离源码中运行 `npm ci && npm run build`，由服务托管 `web/dist/` 的 HTML、哈希 CSS/JS 和运行时 Wallet SDK；开发依赖会在打包前移除。浏览器通过同一 `/report/control/` 前缀访问资源。验证 Nginx 时确认 `/report/control/` 下的 HTML、`/assets/*.css`、`/assets/*.js`、`/web3-bs.js` 均代理到控制服务，且 API 登录路径没有额外 Cookie 门禁或 HTTP Basic Auth 挑战。
 
 ## 报告与源码
 

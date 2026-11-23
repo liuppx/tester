@@ -6,10 +6,12 @@ from __future__ import annotations
 from datetime import date, datetime, time as clock_time, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import mimetypes
 import os
 from pathlib import Path
 import re
 import secrets
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -32,9 +34,9 @@ TESTER_MAIN_RUNNER = REPO / "scripts/test-tester-main.sh"
 FULL = "__full__"
 TESTER_MAIN_KEY = "__tester_main__"
 ORIGIN = os.environ.get("TESTER_CONTROL_ORIGIN", "https://tester.tidukongjian.com")
-AUTHORIZED_DIDS_FILE = Path(os.environ.get(
-    "TESTER_AUTHORIZED_DIDS_FILE", str(PRIVATE / "authorized-dids.json")
-))
+AUTH_DATABASE = Path(os.environ.get("TESTER_AUTH_DATABASE", str(PRIVATE / "tester-auth.sqlite3")))
+ADMIN_DID = os.environ.get("TESTER_ADMIN_DID", "").strip()
+IDENTITY_ISSUER_URL = os.environ.get("TESTER_IDENTITY_ISSUER_URL", "https://node.yeying.pub").rstrip("/")
 LOGIN_TTL_SECONDS = 300
 SESSION_TTL_SECONDS = 8 * 60 * 60
 SESSION_COOKIE = "tester_session"
@@ -131,29 +133,80 @@ def load_state() -> dict:
 STATE = load_state()
 
 
-def authorized_identities() -> dict[str, dict]:
-    """Load administrator-pinned DID documents; missing/empty means deny all."""
-    try:
-        info = AUTHORIZED_DIDS_FILE.lstat()
-        if AUTHORIZED_DIDS_FILE.is_symlink() or not AUTHORIZED_DIDS_FILE.is_file() or info.st_mode & 0o022:
-            return set()
-        value = json.loads(AUTHORIZED_DIDS_FILE.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return set()
-    entries = value.get("identities") if isinstance(value, dict) else None
-    if not isinstance(entries, list):
-        return {}
-    identities = {}
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        did, document = entry.get("did"), entry.get("identity_document")
-        if (
-            isinstance(did, str) and did.startswith("did:yeying:wid_") and len(did) >= 35
-            and isinstance(document, dict) and document.get("id") == did
-        ):
-            identities[did] = document
-    return identities
+def open_auth_database() -> sqlite3.Connection:
+    AUTH_DATABASE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if AUTH_DATABASE.parent.is_symlink() or not AUTH_DATABASE.parent.is_dir():
+        raise ValueError("Tester auth database directory is unsafe")
+    os.chmod(AUTH_DATABASE.parent, 0o700)
+    if AUTH_DATABASE.is_symlink():
+        raise ValueError("Tester auth database must not be a symlink")
+    if not AUTH_DATABASE.exists():
+        descriptor = os.open(AUTH_DATABASE, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.close(descriptor)
+    if not AUTH_DATABASE.is_file():
+        raise ValueError("Tester auth database is not a regular file")
+    os.chmod(AUTH_DATABASE, 0o600)
+    connection = sqlite3.connect(AUTH_DATABASE, timeout=15)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys=ON")
+    connection.execute("PRAGMA busy_timeout=15000")
+    return connection
+
+
+def migrate_auth_database() -> None:
+    migrations = sorted((REPO / "scripts/migrations").glob("[0-9][0-9][0-9][0-9]_*.sql"))
+    with open_auth_database() as database:
+        database.execute("PRAGMA journal_mode=WAL")
+        database.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)")
+        database.commit()
+        applied = {row[0] for row in database.execute("SELECT version FROM schema_migrations")}
+        for migration in migrations:
+            version = int(migration.name.split("_", 1)[0])
+            if version in applied:
+                continue
+            statements = [part.strip() for part in migration.read_text(encoding="utf-8").split(";") if part.strip()]
+            database.execute("BEGIN IMMEDIATE")
+            try:
+                for statement in statements:
+                    database.execute(statement)
+                database.execute(
+                    "INSERT INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)",
+                    (version, migration.name, now()),
+                )
+                database.commit()
+            except BaseException:
+                database.rollback()
+                raise
+    os.chmod(AUTH_DATABASE, 0o600)
+
+
+def bootstrap_admin() -> None:
+    if not ADMIN_DID:
+        return
+    if not ADMIN_DID.startswith("did:yeying:wid_") or len(ADMIN_DID) < 35:
+        raise ValueError("TESTER_ADMIN_DID is invalid")
+    with open_auth_database() as database:
+        database.execute("UPDATE tester_users SET role='member',status='disabled' WHERE role='admin' AND did<>?", (ADMIN_DID,))
+        database.execute(
+            """INSERT INTO tester_users(did, identity_document, display_name, role, status, requested_at, approved_at, approved_by)
+               VALUES(?, NULL, 'Tester administrator', 'admin', 'active', ?, ?, 'system')
+               ON CONFLICT(did) DO UPDATE SET role='admin', status='active'""",
+            (ADMIN_DID, now(), now()),
+        )
+
+
+def find_user(did: str) -> dict | None:
+    with open_auth_database() as database:
+        row = database.execute("SELECT * FROM tester_users WHERE did=?", (did,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_users() -> list[dict]:
+    with open_auth_database() as database:
+        rows = database.execute(
+            "SELECT did,display_name,role,status,requested_at,approved_at,approved_by,last_login_at FROM tester_users ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, requested_at"
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def verify_wallet_presentation(presentation: dict, audience: str, nonce: str,
@@ -166,7 +219,7 @@ def verify_wallet_presentation(presentation: dict, audience: str, nonce: str,
         [node, str(REPO / "scripts/verify-wallet-presentation.mjs")],
         input=json.dumps({
             "presentation": presentation, "audience": audience, "nonce": nonce,
-            "trusted_document": trusted_document,
+            "trusted_document": trusted_document, "issuer_url": IDENTITY_ISSUER_URL,
         }),
         capture_output=True, text=True, timeout=8, check=False,
     )
@@ -497,53 +550,7 @@ def daily_scheduler(schedule: tuple[clock_time, ZoneInfo]) -> None:
         print(f"Tester daily full run queued: {item['id']} for {target.isoformat()}", flush=True)
 
 
-PAGE = """<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tester 手动测试</title><style>
-:root{color-scheme:light;--ink:#152238;--muted:#66758a;--line:#dce4ee;--blue:#1768bf;--bg:#f3f6fa}
-*{box-sizing:border-box}body{font:16px system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);margin:0}
-main{max-width:900px;margin:44px auto;padding:0 20px}h1{font-size:28px;margin:8px 0}.eyebrow{font-size:12px;letter-spacing:.12em;color:var(--blue);font-weight:700;text-transform:uppercase}
-article{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin:16px 0;box-shadow:0 8px 24px #1835570a}
-.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}button{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:10px 16px;font-weight:650;cursor:pointer}
-button:disabled{background:#a6b1bb;cursor:default}a{color:var(--blue)}select{padding:9px;border:1px solid #b7c4d2;border-radius:8px;min-width:220px;background:white}
-.muted{color:var(--muted)}#message{min-height:24px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px}.identity{font-size:13px;overflow-wrap:anywhere}.danger{color:#9e3e2e}
-</style></head><body><main><div class="top"><div><div class="eyebrow">Yeying community · quality gate</div><h1>Tester 手动测试</h1></div><p><a href="cases">查看测试用例脑图</a>　<a href="/report/">返回测试报告 →</a></p></div>
-<p class="muted">授权后可以查看测试状态，并运行当前已部署环境的端到端用例。</p>
-<article id="login-card" hidden><h2>钱包身份登录</h2><p class="muted">使用已加入 Tester 授权名单的钱包身份继续。</p><button id="login">连接钱包身份</button><p id="login-message" class="danger" role="status"></p></article>
-<section id="console" hidden><article><div class="top"><div><strong>已授权身份</strong><div id="identity" class="identity muted"></div></div><button id="logout">退出登录</button></div></article>
-<article><div class="row"><label for="scope">测试范围</label><select id="scope"><option value="">请选择</option></select><button id="run" disabled>开始测试</button></div>
-<p id="selected-status" class="muted"></p><p id="message" role="status"></p><a id="latest-report" hidden>查看上次报告 →</a></article></section>
-<script src="web3-bs.js"></script><script>
-const scope=document.querySelector("#scope"),run=document.querySelector("#run"),status=document.querySelector("#selected-status"),report=document.querySelector("#latest-report");
-let latest=null,csrf="";
-function updateSelection(){if(!latest)return;const selected=scope.value,info=selected==="__full__"?latest.full:latest.projects[selected];run.disabled=!info||!!info.busy;status.textContent=info?(info.busy||(info.last?"上次："+info.last.result+" · "+info.last.finished_at:"可运行")):"";report.hidden=!info?.last?.report;if(!report.hidden)report.href=info.last.report}
-scope.onchange=updateSelection;
-async function refresh(){try{const auth=await fetch("api/auth/status",{cache:"no-store"}),identity=await auth.json();if(!auth.ok||!identity.authenticated){document.querySelector("#login-card").hidden=false;document.querySelector("#console").hidden=true;return}csrf=identity.csrf;document.querySelector("#login-card").hidden=true;document.querySelector("#console").hidden=false;document.querySelector("#identity").textContent=identity.did;const response=await fetch("api/status",{cache:"no-store"});if(!response.ok)throw new Error();latest=await response.json();const previous=scope.value;scope.replaceChildren(new Option("请选择",""),new Option("全量测试","__full__"));for(const name of Object.keys(latest.projects))scope.add(new Option(name,name));scope.value=previous;updateSelection()}catch{latest=null;run.disabled=true;report.hidden=true;status.textContent="状态获取失败，请刷新页面重试"}}
-document.querySelector("#login").onclick=async()=>{const message=document.querySelector("#login-message");message.textContent="请在钱包中确认身份授权…";try{if(!window.YeYingWeb3?.loginWithWalletIdentity)throw new Error("钱包登录组件暂不可用，请刷新后重试");const result=await YeYingWeb3.loginWithWalletIdentity({baseUrl:"api/auth",provider:window.ethereum,scopes:["identity.basic"],storeToken:false});message.textContent="";document.querySelector("#identity").textContent=result.did;await refresh()}catch(error){const did=error?.payload?.data?.did;message.textContent=did?"该身份尚未获授权。请管理员将此 DID 加入白名单："+did:(String(error?.payload?.message||error?.message||"").includes("授权")?"钱包身份暂不可用，请确认授权后重试。":"登录未完成，请确认钱包插件可用并重试。")}};
-document.querySelector("#logout").onclick=async()=>{await fetch("api/auth/logout",{method:"POST",headers:{"X-Tester-CSRF":csrf}});csrf="";await refresh()};
-run.onclick=async()=>{const selected=scope.value;if(!selected||run.disabled)return;run.disabled=true;try{const result=await fetch("api/run",{method:"POST",headers:{"Content-Type":"application/json","X-Tester-CSRF":csrf},body:JSON.stringify(selected==="__full__"?{scope:"full"}:{project:selected})});const body=await result.json();document.querySelector("#message").textContent=result.ok?(selected==="__full__"?"全量测试":selected)+" 已排队，页面会自动更新。":(body.error||"提交失败")}catch{document.querySelector("#message").textContent="请求失败"}refresh()};
-refresh();setInterval(refresh,5000);
-</script></main></body></html>"""
-
-
-CASES_PAGE = r"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Tester 用例脑图</title><style>
-:root{color-scheme:light;--ink:#182a40;--muted:#62758a;--line:#d7e1ed;--blue:#356db3;--teal:#21877f;--violet:#7460aa;--red:#b7473a;--bg:#f4f7fb}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,"Segoe UI",sans-serif}header{padding:22px 28px 18px;border-bottom:1px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}h1{font-size:25px;margin:0 0 5px}header p{color:var(--muted);margin:0}.tools{display:flex;gap:9px;align-items:center;flex-wrap:wrap}select,input,button{font:inherit;border:1px solid #bdcad8;border-radius:7px;background:#fff;color:var(--ink);padding:9px 11px}button{cursor:pointer}button:hover{border-color:var(--blue)}button:focus-visible,select:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:3px solid #75a6da;outline-offset:2px}main{max-width:1540px;margin:auto;padding:20px 24px}.summary{display:flex;align-items:center;gap:14px;flex-wrap:wrap;color:var(--muted);padding:4px 0 14px}.summary strong{color:var(--ink)}.layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}.map-shell,.detail{background:#fff;border:1px solid var(--line);border-radius:10px}.map-toolbar{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;color:var(--muted);gap:10px}.viewport{overflow:auto;max-height:calc(100vh - 230px);min-height:520px}.viewport svg{display:block;min-width:1100px}.edge{fill:none;stroke:#afc1d5;stroke-width:2}.edge.case{stroke:#bfd2d9}.node rect{fill:#fff;stroke:#b7c8d9;stroke-width:1.5;rx:9}.node.root rect{fill:#182a40;stroke:#182a40}.node.root text{fill:#fff}.node.module rect{fill:#edf4fb;stroke:#88a9cc}.node.case rect{fill:#f4f9f8;stroke:#9acac1}.node.case.todo rect{fill:#fff8e9;stroke:#e2c98d}.node text{pointer-events:none;font-family:inherit}.node .id{font-size:12px;font-weight:700;fill:#55718f}.node.root .id{fill:#c4d7eb}.node .label{font-size:14px;font-weight:650;fill:var(--ink)}.node .meta{font-size:11px;fill:var(--muted)}.node{cursor:pointer}.node:hover rect,.node.selected rect{stroke:var(--blue);stroke-width:3}.module rect{fill:#edf4fb}.module .label{font-size:15px}.detail{padding:18px;position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto}.detail h2{font-size:19px;line-height:1.4;margin:0 0 6px}.detail .case-id{font:700 12px ui-monospace,monospace;color:var(--blue)}.badges{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 18px}.badge{padding:4px 8px;background:#eef3f8;border-radius:5px;font-size:12px;color:#455e77}.badge.todo{background:#fff2d7;color:#745214}.detail h3{font-size:13px;margin:18px 0 6px;color:#3e5872}.detail p,.detail ol{font-size:14px;line-height:1.65;color:#344960;white-space:pre-wrap}.detail ol{padding-left:22px}.empty{padding:34px;color:var(--muted);text-align:center}.legend{display:flex;gap:12px;font-size:12px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;background:#88a9cc}.dot.todo{background:#e2c98d}@media(max-width:900px){main{padding:14px}.layout{grid-template-columns:1fr}.detail{position:static;max-height:none}.viewport{min-height:440px;max-height:62vh}header{padding:16px}.summary{gap:8px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
-</style></head><body><header><div><h1>测试用例脑图</h1><p>从项目用例文档实时整理。点击模块展开用例，再选一条查看详细条件和步骤。</p></div><div class="tools"><label for="project">项目</label><select id="project"></select><input id="search" type="search" placeholder="搜索编号或用例名称" aria-label="搜索编号或用例名称"><button id="zoom-out" type="button" aria-label="缩小脑图">−</button><button id="zoom-in" type="button" aria-label="放大脑图">+</button><a href="/report/control/">返回测试控制台</a></div></header>
-<main><div class="summary" id="summary"></div><div class="layout"><section class="map-shell"><div class="map-toolbar"><span>项目 → 功能模块 → 测试用例</span><span class="legend"><span><i class="dot"></i>已实现</span><span><i class="dot todo"></i>待实现 / 待确认</span></span></div><div class="viewport" id="viewport"><svg id="map" viewBox="0 0 1200 600" role="img" aria-label="测试用例层级脑图"></svg></div></section><aside class="detail" id="detail"><div class="empty">选择一个用例查看详细信息。</div></aside></div></main>
-<script>
-const svg=document.querySelector('#map'),projectPicker=document.querySelector('#project'),search=document.querySelector('#search'),detail=document.querySelector('#detail'),summary=document.querySelector('#summary');let projects=[],expanded=new Set(),selected=null,zoom=1;
-const ns='http://www.w3.org/2000/svg',make=(tag,attrs={})=>{const el=document.createElementNS(ns,tag);for(const [key,value]of Object.entries(attrs))el.setAttribute(key,value);return el},text=(parent,x,y,value,cls)=>{const el=make('text',{x,y,class:cls});el.textContent=value;parent.append(el);return el};
-function current(){return projects.find(p=>p.id===projectPicker.value)}
-function render(){const p=current();if(!p)return;const query=search.value.trim().toLowerCase();const modules=p.modules.map(m=>({...m,cases:m.cases.filter(c=>!query||(c.id+' '+c.title+' '+m.name).toLowerCase().includes(query))})).filter(m=>m.cases.length);if(query)modules.forEach(m=>expanded.add(m.id));let y=42;const blocks=modules.map(m=>{const open=expanded.has(m.id),visible=open?m.cases:[],height=86+visible.length*102,start=y;y+=height+26;return{module:m,open,start,height,visible}});const height=Math.max(600,y+25);svg.setAttribute('viewBox',`0 0 ${1200/zoom} ${height/zoom}`);svg.style.width='1200px';svg.style.height=height+'px';svg.replaceChildren();const rootY=height/2;for(const b of blocks){const cy=b.start+b.height/2;svg.append(make('path',{d:`M204 ${rootY} C246 ${rootY},246 ${cy},270 ${cy}`,class:'edge'}));if(b.open&&b.visible.length){const top=b.start+86,first=top+35,last=top+(b.visible.length-1)*102+35,middle=(first+last)/2;svg.append(make('path',{d:`M550 ${cy} C610 ${cy},610 ${middle},675 ${middle}`,class:'edge case'}));for(let i=0;i<b.visible.length;i++){const item=b.visible[i],cyc=first+i*102;svg.append(make('path',{d:`M640 ${middle} C658 ${middle},658 ${cyc},675 ${cyc}`,class:'edge case'}));drawCase(item,675,cyc-36)}}drawModule(b.module,270,cy,b.open)}drawRoot(p,24,rootY-42);summary.replaceChildren();const done=p.modules.flatMap(m=>m.cases).filter(c=>c.status.includes('✅')).length;const values=[[p.name,p.case_count+' 条用例'],[modules.length+' 个功能模块',null],[done+' 条已标记实现',null]];for(const [label,value]of values){const item=document.createElement('span');if(value){const strong=document.createElement('strong');strong.textContent=label+'　'+value;item.append(strong)}else item.textContent=label;summary.append(item)}if(selected){const found=p.modules.flatMap(m=>m.cases).find(c=>c.id===selected);if(found)showCase(found)}}
-function drawRoot(p,x,y){const g=make('g',{class:'node root'});g.append(make('rect',{x,y,width:180,height:84}));text(g,x+14,y+25,p.id,'id');text(g,x+14,y+49,p.name.replace(/ —.*|—.*/,''),'label');text(g,x+14,y+68,p.case_count+' 条测试用例','meta');svg.append(g)}
-function drawModule(m,x,center,open){const y=center-36,g=make('g',{class:'node module',tabindex:'0',role:'button','aria-expanded':String(open)});g.append(make('rect',{x,y,width:280,height:72}));text(g,x+14,y+25,m.name,'label');text(g,x+14,y+49,m.cases.length+' 条用例 · '+(open?'点击收起':'点击展开'),'meta');g.addEventListener('click',()=>{expanded.has(m.id)?expanded.delete(m.id):expanded.add(m.id);render()});g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();g.dispatchEvent(new MouseEvent('click'))}});svg.append(g)}
-function drawCase(c,x,y){const todo=!c.status.includes('✅'),g=make('g',{class:'node case'+(todo?' todo':'')+(selected===c.id?' selected':''),tabindex:'0',role:'button'});g.append(make('rect',{x,y,width:480,height:76}));text(g,x+13,y+19,c.id,'id');const title=c.title.length>48?c.title.slice(0,47)+'…':c.title;text(g,x+13,y+41,title,'label');text(g,x+13,y+61,[c.priority,c.kind,c.status.includes('✅')?'已实现':'待实现/确认'].filter(Boolean).join('　'),'meta');g.addEventListener('click',()=>{selected=c.id;showCase(c);render()});g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();g.dispatchEvent(new MouseEvent('click'))}});svg.append(g)}
-function showCase(c){detail.replaceChildren();const id=document.createElement('div');id.className='case-id';id.textContent=c.id;detail.append(id);const h=document.createElement('h2');h.textContent=c.title;detail.append(h);const badges=document.createElement('div');badges.className='badges';for(const value of [c.priority,c.kind,c.status.includes('✅')?'已实现':'待实现 / 待确认'])if(value){const b=document.createElement('span');b.className='badge'+(value==='待实现 / 待确认'?' todo':'');b.textContent=value;badges.append(b)}detail.append(badges);for(const [label,key]of [['前置条件','preconditions'],['操作步骤','steps'],['预期结果','expected']]){if(!c[key])continue;const heading=document.createElement('h3');heading.textContent=label;detail.append(heading);if(key==='steps'){const ol=document.createElement('ol');for(const item of c.steps.split(/\n/).filter(Boolean)){const li=document.createElement('li');li.textContent=item.replace(/^\d+[.)、]\s*/, '');ol.append(li)}detail.append(ol)}else{const p=document.createElement('p');p.textContent=c[key];detail.append(p)}}}
-document.querySelector('#zoom-in').onclick=()=>{zoom=Math.min(1.5,zoom+.1);render()};document.querySelector('#zoom-out').onclick=()=>{zoom=Math.max(.65,zoom-.1);render()};search.addEventListener('input',render);projectPicker.addEventListener('change',()=>{expanded.clear();selected=null;detail.innerHTML='<div class="empty">选择一个用例查看详细信息。</div>';render()});
-fetch('api/cases',{cache:'no-store'}).then(async response=>{if(response.status===401){location.href='/report/control/';throw new Error('login required')}if(!response.ok)throw new Error('用例目录暂时不可用');projects=await response.json();for(const p of projects){const option=document.createElement('option');option.value=p.id;option.textContent=p.name;projectPicker.append(option)}render()}).catch(error=>{if(error.message!=='login required'){summary.textContent=error.message;svg.replaceChildren()}});
-</script></body></html>"""
+WEB_DIST = REPO / "web/dist"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -582,7 +589,9 @@ class Handler(BaseHTTPRequestHandler):
         with AUTH_MUTEX:
             session = AUTH_SESSIONS.get(token)
             if session and session["expires_at"] > time.time():
-                return token, session
+                user = find_user(session["did"])
+                if user and user["status"] == "active":
+                    return token, session, user
             AUTH_SESSIONS.pop(token, None)
         return None
 
@@ -601,13 +610,31 @@ class Handler(BaseHTTPRequestHandler):
                                   "service_pid": int(os.environ.get("TESTER_SERVICE_PID", os.getpid()))})
             return
         if path == "/":
-            self.reply(200, PAGE.encode(), "text/html; charset=utf-8")
+            self.reply(200, (WEB_DIST / "index.html").read_bytes(), "text/html; charset=utf-8")
             return
         if path == "/cases":
-            self.reply(200, CASES_PAGE.encode(), "text/html; charset=utf-8")
+            self.reply(200, (WEB_DIST / "cases.html").read_bytes(), "text/html; charset=utf-8")
+            return
+        if path == "/architecture":
+            self.reply(200, (WEB_DIST / "architecture.html").read_bytes(), "text/html; charset=utf-8")
+            return
+        if path == "/api/architecture":
+            topology = json.loads((REPO / "docs/project-dependency-map.json").read_text(encoding="utf-8"))
+            self.json_reply(200, topology)
+            return
+        if path.startswith("/assets/"):
+            asset_name = path.removeprefix("/assets/")
+            if not re.fullmatch(r"[A-Za-z0-9_.-]+\.(?:css|js)", asset_name):
+                self.json_reply(404, {"error": "Not found"})
+                return
+            asset = (WEB_DIST / "assets" / asset_name).resolve()
+            if not asset.is_relative_to((WEB_DIST / "assets").resolve()) or not asset.is_file():
+                self.json_reply(404, {"error": "Not found"})
+                return
+            self.reply(200, asset.read_bytes(), mimetypes.guess_type(asset.name)[0] or "application/octet-stream")
             return
         if path == "/web3-bs.js":
-            sdk = REPO / "node_modules/@yeying-community/web3-bs/dist/web3-bs.umd.js"
+            sdk = REPO / "web/node_modules/@yeying-community/web3-bs/dist/web3-bs.umd.js"
             try:
                 self.reply(200, sdk.read_bytes(), "application/javascript; charset=utf-8")
             except OSError:
@@ -618,8 +645,15 @@ class Handler(BaseHTTPRequestHandler):
             if not current:
                 self.json_reply(401, {"authenticated": False})
                 return
-            _, session = current
-            self.json_reply(200, {"authenticated": True, "did": session["did"], "csrf": session["csrf"]})
+            _, session, user = current
+            self.json_reply(200, {"authenticated": True, "did": session["did"], "csrf": session["csrf"], "role": user["role"]})
+            return
+        if path == "/api/auth/users":
+            current = self.current_session()
+            if not current or current[2]["role"] != "admin":
+                self.json_reply(403 if current else 401, {"error": "管理员权限不足"})
+                return
+            self.json_reply(200, list_users())
             return
         if path == "/api/cases":
             if not self.current_session():
@@ -666,6 +700,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/auth/identity/login/session",
             "/api/auth/identity/login/verify",
             "/api/auth/logout",
+            "/api/auth/users/approve",
+            "/api/auth/users/revoke",
             "/api/run",
         ):
             self.json_reply(404, {"error": "Not found"})
@@ -686,7 +722,7 @@ class Handler(BaseHTTPRequestHandler):
                 }
             self.json_reply(200, {"code": 0, "message": "ok", "data": {
                 "session_id": session_id, "nonce": nonce, "audience": ORIGIN.rstrip("/"),
-                "scopes": ["identity.basic"],
+                "scopes": ["identity.basic", "identity.wallet", "identity.username", "identity.email"],
                 "expires_at": datetime.fromtimestamp(current + LOGIN_TTL_SECONDS, timezone.utc).isoformat(),
             }})
             return
@@ -705,11 +741,30 @@ class Handler(BaseHTTPRequestHandler):
                 if not login or login["expires_at"] <= time.time():
                     raise ValueError("登录请求无效或已过期")
                 claimed_did = str(presentation.get("holder", ""))
-                trusted_document = authorized_identities().get(claimed_did)
+                user = find_user(claimed_did)
+                trusted_document = json.loads(user["identity_document"]) if user and user.get("identity_document") else None
                 did = verify_wallet_presentation(presentation, login["audience"], login["nonce"], trusted_document)
-                if trusted_document is None:
-                    self.json_reply(403, {"code": 1, "message": "该钱包身份尚未获授权", "data": {"did": did}})
+                if user is None:
+                    identity_document = json.dumps(presentation["identityDocument"], ensure_ascii=False, separators=(",", ":"))
+                    with open_auth_database() as database:
+                        database.execute(
+                            "INSERT OR IGNORE INTO tester_users(did,identity_document,display_name,role,status,requested_at) VALUES(?,?,?,'member','pending',?)",
+                            (did, identity_document, did[-10:], now()),
+                        )
+                    self.json_reply(403, {"code": 1, "message": "账号等待管理员审批", "data": {"did": did}})
                     return
+                if user["status"] == "pending":
+                    self.json_reply(403, {"code": 1, "message": "账号等待管理员审批", "data": {"did": did}})
+                    return
+                if user["status"] != "active":
+                    self.json_reply(403, {"code": 1, "message": "此 Tester 账号已停用"})
+                    return
+                if trusted_document is None:
+                    identity_document = json.dumps(presentation["identityDocument"], ensure_ascii=False, separators=(",", ":"))
+                    with open_auth_database() as database:
+                        database.execute("UPDATE tester_users SET identity_document=? WHERE did=? AND role='admin' AND identity_document IS NULL", (identity_document, did))
+                with open_auth_database() as database:
+                    database.execute("UPDATE tester_users SET last_login_at=? WHERE did=? AND status='active'", (now(), did))
                 token = secrets.token_urlsafe(48)
                 session = {"did": did, "csrf": secrets.token_urlsafe(32), "expires_at": time.time() + SESSION_TTL_SECONDS}
                 with AUTH_MUTEX:
@@ -743,6 +798,30 @@ class Handler(BaseHTTPRequestHandler):
         if not current or self.headers.get("X-Tester-CSRF") != current[1]["csrf"]:
             self.json_reply(401 if not current else 403, {"error": "请先登录或刷新页面后重试"})
             return
+        if path in ("/api/auth/users/approve", "/api/auth/users/revoke"):
+            if current[2]["role"] != "admin":
+                self.json_reply(403, {"error": "管理员权限不足"})
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length < 1 or length > 1024:
+                    raise ValueError("请求大小不正确")
+                body = json.loads(self.rfile.read(length))
+                did = str(body.get("did", "")).strip() if isinstance(body, dict) else ""
+                if not did or did == current[2]["did"]:
+                    raise ValueError("不能修改当前管理员账号")
+                status = "active" if path.endswith("approve") else "disabled"
+                with open_auth_database() as database:
+                    result = database.execute(
+                        "UPDATE tester_users SET status=?,approved_at=CASE WHEN ?='active' THEN ? ELSE approved_at END,approved_by=? WHERE did=? AND role='member'",
+                        (status, status, now(), current[2]["did"], did),
+                    )
+                if result.rowcount != 1:
+                    raise ValueError("成员不存在或不可修改")
+                self.json_reply(200, {"ok": True, "did": did, "status": status})
+            except (ValueError, json.JSONDecodeError) as error:
+                self.json_reply(400, {"error": str(error)})
+            return
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if length < 1 or length > 1024:
@@ -769,6 +848,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     PRIVATE.mkdir(parents=True, exist_ok=True, mode=0o700)
+    migrate_auth_database()
+    bootstrap_admin()
+    if not ADMIN_DID:
+        print("Tester wallet control is locked: TESTER_ADMIN_DID is not configured", flush=True)
     schedule = daily_schedule()
     if schedule is None:
         print("Tester daily full run is disabled", flush=True)

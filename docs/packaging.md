@@ -85,7 +85,7 @@ scripts/upgrade.sh 提供 prepare、copy-config、post-copy、finalize 四阶段
 
 `scripts/config_backup.sh` 每次运行都会创建两份本地副本：可直接恢复的权限受限目录，以及 `/opt/backup/tester-config-<UTC时间>-<PID>.tar.gz` 归档。归档用于 Deployer 的标准配置上传器；`config/backup.conf.template` 是 `/data/tester/backup.conf` 的模板，设置 `BACKUP_CONF_FLAG=True` 才会尝试上传，文件名前缀和后缀必须分别为 `tester-config-` 与 `.tar.gz`。
 
-归档包含 runtime、其引用的项目/环境/钱包 DID 授权配置、`/data/tester/backup.conf`、Tester 的 control/report systemd unit 及 drop-in 和测试机 Nginx 配置。其中可能包含 API key、Webhook secret 和钱包身份 DID；归档只允许存放在权限为 `700` 的本地备份目录，文件权限为 `600`。远端上传只能使用有访问控制的专用 WebDAV 备份目录和专用 `WEBDAV_FILE_*` 凭据，不能复用制品库凭据或上传到公开共享目录。没有配置并验证专用目标时，保持 `BACKUP_CONF_FLAG=False`，本地备份仍会照常生成。
+Tester 前端是 `web/` 下的独立 Vite 项目，使用自己的 `package.json` 与 `package-lock.json`。打包阶段在隔离源码目录中执行 `npm ci`、`npm run build` 和 `npm prune --omit=dev`，归档发布构建产物及运行时钱包 SDK；部署机不需要前端源码 checkout 或构建工具。配置备份包含 runtime、其引用的项目/环境配置、Tester SQLite 成员授权数据库、`/data/tester/backup.conf`、Tester 的 control/report systemd unit 及 drop-in 和测试机 Nginx 配置。其中可能包含 API key、Webhook secret 和钱包身份 DID；归档只允许存放在权限为 `700` 的本地备份目录，文件权限为 `600`。SQLite 数据库通过在线 backup API 生成一致快照。远端上传只能使用有访问控制的专用 WebDAV 备份目录和专用 `WEBDAV_FILE_*` 凭据，不能复用制品库凭据或上传到公开共享目录。没有配置并验证专用目标时，保持 `BACKUP_CONF_FLAG=False`，本地备份仍会照常生成。
 
 检查本地备份：
 

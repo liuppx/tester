@@ -30,17 +30,22 @@ class TesterControlTests(unittest.TestCase):
         config.write_text(json.dumps({"projects": {
             "router": {"repo": str(repo), "enabled": True}
         }}), encoding="utf-8")
+        self.admin_did = "did:yeying:wid_" + "a" * 32
         values = {
             "TESTER_ARTIFACT_MODE": "0",
             "TESTER_CONTROL_CONFIG": str(config),
             "TESTER_PRIVATE_REPORT_DIR": str(root / "private"),
             "TESTER_REPORT_DIR": str(root / "public"),
+            "TESTER_AUTH_DATABASE": str(root / "private/control/tester-auth.sqlite3"),
+            "TESTER_ADMIN_DID": self.admin_did,
         }
         with patch.dict(os.environ, values):
             spec = importlib.util.spec_from_file_location("tester_control_test", SCRIPT)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
         self.module = module
+        module.migrate_auth_database()
+        module.bootstrap_admin()
 
     def test_manual_queue_deduplicates_project(self):
         control = self.module
@@ -91,7 +96,7 @@ class TesterControlTests(unittest.TestCase):
         self.assertEqual(len(control.STATE["pending"]), 2)
 
     def test_manual_page_only_offers_scope_selection(self):
-        page = self.module.PAGE
+        page = (Path(__file__).parent.parent / "web/index.html").read_text()
         self.assertIn('id="scope"', page)
         self.assertIn('id="run"', page)
         self.assertNotIn('id="mode"', page)
@@ -109,7 +114,49 @@ class TesterControlTests(unittest.TestCase):
         self.assertTrue(case["preconditions"])
         self.assertTrue(case["steps"])
         self.assertTrue(case["expected"])
-        self.assertIn("api/cases", self.module.CASES_PAGE)
+        cases_script = (Path(__file__).parent.parent / "web/assets/cases.js").read_text()
+        self.assertIn("api/cases", cases_script)
+
+    def test_public_project_dependency_map_has_valid_references_and_key_paths(self):
+        topology = json.loads((Path(__file__).parent.parent / "docs/project-dependency-map.json").read_text())
+        node_ids = {node["id"] for node in topology["nodes"]}
+        self.assertEqual(len(node_ids), len(topology["nodes"]))
+        self.assertTrue(all(edge["from"] in node_ids and edge["to"] in node_ids for edge in topology["edges"]))
+        relations = {(edge["from"], edge["to"]) for edge in topology["edges"]}
+        self.assertIn(("tc-chat", "svc-router"), relations)
+        self.assertIn(("svc-project", "mw-mysql"), relations)
+        self.assertIn(("tester", "svc-node"), relations)
+        architecture_script = (Path(__file__).parent.parent / "web/assets/architecture.js").read_text()
+        self.assertIn("api/architecture", architecture_script)
+        raw = json.dumps(topology)
+        self.assertNotRegex(raw, r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+
+    def test_web_ui_assets_are_split_and_served_from_web_directory(self):
+        control = self.module
+        for page_name in ("index.html", "cases.html", "architecture.html"):
+            page = (Path(__file__).parent.parent / "web" / page_name).read_text()
+            self.assertIn("assets/", page)
+            self.assertNotIn("<style>", page)
+        self.assertTrue((Path(__file__).parent.parent / "web/dist/index.html").is_file())
+        self.assertTrue((Path(__file__).parent.parent / "web/dist/cases.html").is_file())
+        self.assertTrue((Path(__file__).parent.parent / "web/dist/architecture.html").is_file())
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), control.Handler)
+        self.addCleanup(server.server_close)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.shutdown)
+        assets = Path(__file__).parent.parent / "web/dist/assets"
+        control_asset = next(path for path in assets.glob("*.js")
+                             if b"loginWithWalletIdentity" in path.read_bytes())
+        with urlopen(f"http://127.0.0.1:{server.server_port}/assets/{control_asset.name}", timeout=2) as response:
+            self.assertEqual(response.headers.get_content_type(), "text/javascript")
+            self.assertIn(b"loginWithWalletIdentity", response.read())
+        with urlopen(f"http://127.0.0.1:{server.server_port}/", timeout=2) as response:
+            self.assertIn(b"/report/control/assets/", response.read())
+        with self.assertRaises(HTTPError) as error:
+            urlopen(f"http://127.0.0.1:{server.server_port}/assets/../config/runtime.json", timeout=2)
+        self.assertEqual(error.exception.code, 404)
 
     def test_test_only_allows_project_without_deployment_adapter(self):
         control = self.module
@@ -287,14 +334,16 @@ class TesterControlTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0], [str(control.TESTER_MAIN_RUNNER), "b" * 40])
         self.assertEqual(control.STATE["recent"][0]["result"], "passed")
 
-    def test_wallet_allowlist_gates_status_and_manual_runs(self):
+    def test_database_bootstraps_admin_and_admin_approves_members(self):
         control = self.module
-        did = "did:yeying:wid_" + "a" * 32
-        identity_document = {"id": did, "version": 1, "revision": 1, "controllers": [], "proof": {}}
-        allowlist = Path(self.temp.name) / "authorized-dids.json"
-        allowlist.write_text(json.dumps({"identities": [{"did": did, "identity_document": identity_document}]}), encoding="utf-8")
-        allowlist.chmod(0o600)
-        control.AUTHORIZED_DIDS_FILE = allowlist
+        control.migrate_auth_database()
+        with control.open_auth_database() as database:
+            migrations = database.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
+        self.assertEqual([row[0] for row in migrations], [1])
+        admin_did = self.admin_did
+        member_did = "did:yeying:wid_" + "b" * 32
+        admin_document = {"id": admin_did, "version": 1, "revision": 1, "controllers": [], "proof": {}}
+        member_document = {"id": member_did, "version": 1, "revision": 1, "controllers": [], "proof": {}}
         server = ThreadingHTTPServer(("127.0.0.1", 0), control.Handler)
         self.addCleanup(server.server_close)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -308,26 +357,87 @@ class TesterControlTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as error:
             urlopen(base + "/api/cases", timeout=2)
         self.assertEqual(error.exception.code, 401)
+        with urlopen(base + "/api/architecture", timeout=2) as response:
+            topology = json.load(response)
+        self.assertEqual(len(topology["nodes"]), 33)
 
-        with patch.object(control, "verify_wallet_presentation", return_value=did) as verify:
+        with patch.object(control, "verify_wallet_presentation", return_value=admin_did) as verify:
             session_request = Request(base + "/api/auth/identity/login/session", data=b"{}", method="POST", headers=origin)
             with urlopen(session_request, timeout=2) as response:
                 login = json.load(response)["data"]
             verify_request = Request(
                 base + "/api/auth/identity/login/verify",
-                data=json.dumps({"session_id": login["session_id"], "presentation": {"holder": did}}).encode(),
+                data=json.dumps({"session_id": login["session_id"], "presentation": {"holder": admin_did, "identityDocument": admin_document}}).encode(),
                 method="POST", headers={**origin, "Content-Type": "application/json"},
             )
             with urlopen(verify_request, timeout=2) as response:
                 cookie = response.headers["Set-Cookie"].split(";", 1)[0]
                 self.assertIn("HttpOnly", response.headers["Set-Cookie"])
                 self.assertIn("Secure", response.headers["Set-Cookie"])
-            self.assertEqual(verify.call_args.args[3], identity_document)
             auth_request = Request(base + "/api/auth/status", headers={"Cookie": cookie})
             with urlopen(auth_request, timeout=2) as response:
                 auth = json.load(response)
-            self.assertEqual(auth["did"], did)
+            self.assertEqual(auth["did"], admin_did)
+            self.assertEqual(auth["role"], "admin")
             self.assertTrue(auth["csrf"])
+
+            users_request = Request(base + "/api/auth/users", headers={"Cookie": cookie})
+            with urlopen(users_request, timeout=2) as response:
+                users = json.load(response)
+            self.assertEqual([(user["did"], user["status"]) for user in users], [(admin_did, "active")])
+
+            member_session = Request(base + "/api/auth/identity/login/session", data=b"{}", method="POST", headers=origin)
+            with urlopen(member_session, timeout=2) as response:
+                member_login = json.load(response)["data"]
+            with patch.object(control, "verify_wallet_presentation", return_value=member_did):
+                member_verify = Request(
+                    base + "/api/auth/identity/login/verify",
+                    data=json.dumps({"session_id": member_login["session_id"], "presentation": {"holder": member_did, "identityDocument": member_document}}).encode(),
+                    method="POST", headers={**origin, "Content-Type": "application/json"},
+                )
+                with self.assertRaises(HTTPError) as error:
+                    urlopen(member_verify, timeout=2)
+                self.assertEqual(error.exception.code, 403)
+                self.assertIn("等待管理员审批", json.load(error.exception)["message"])
+
+            with urlopen(users_request, timeout=2) as response:
+                users = json.load(response)
+            self.assertEqual(next(user for user in users if user["did"] == member_did)["status"], "pending")
+            approve = Request(base + "/api/auth/users/approve", data=json.dumps({"did": member_did}).encode(), method="POST", headers={
+                **origin, "Cookie": cookie, "X-Tester-CSRF": auth["csrf"], "Content-Type": "application/json",
+            })
+            with urlopen(approve, timeout=2) as response:
+                self.assertEqual(json.load(response)["status"], "active")
+
+            member_session = Request(base + "/api/auth/identity/login/session", data=b"{}", method="POST", headers=origin)
+            with urlopen(member_session, timeout=2) as response:
+                member_login = json.load(response)["data"]
+            with patch.object(control, "verify_wallet_presentation", return_value=member_did) as verify:
+                member_verify = Request(
+                    base + "/api/auth/identity/login/verify",
+                    data=json.dumps({"session_id": member_login["session_id"], "presentation": {"holder": member_did, "identityDocument": member_document}}).encode(),
+                    method="POST", headers={**origin, "Content-Type": "application/json"},
+                )
+                with urlopen(member_verify, timeout=2) as response:
+                    member_cookie = response.headers["Set-Cookie"].split(";", 1)[0]
+                self.assertEqual(verify.call_args.args[3], member_document)
+            member_auth_request = Request(base + "/api/auth/status", headers={"Cookie": member_cookie})
+            with urlopen(member_auth_request, timeout=2) as response:
+                self.assertEqual(json.load(response)["role"], "member")
+
+            forbidden = Request(base + "/api/auth/users", headers={"Cookie": member_cookie})
+            with self.assertRaises(HTTPError) as error:
+                urlopen(forbidden, timeout=2)
+            self.assertEqual(error.exception.code, 403)
+
+            revoke = Request(base + "/api/auth/users/revoke", data=json.dumps({"did": member_did}).encode(), method="POST", headers={
+                **origin, "Cookie": cookie, "X-Tester-CSRF": auth["csrf"], "Content-Type": "application/json",
+            })
+            with urlopen(revoke, timeout=2) as response:
+                self.assertEqual(json.load(response)["status"], "disabled")
+            with self.assertRaises(HTTPError) as error:
+                urlopen(member_auth_request, timeout=2)
+            self.assertEqual(error.exception.code, 401)
 
             status_request = Request(base + "/api/status", headers={"Cookie": cookie})
             with urlopen(status_request, timeout=2) as response:
@@ -366,22 +476,7 @@ class TesterControlTests(unittest.TestCase):
                 urlopen(auth_request, timeout=2)
             self.assertEqual(error.exception.code, 401)
 
-            empty = Path(self.temp.name) / "empty-allowlist.json"
-            empty.write_text('{"identities":[]}', encoding="utf-8")
-            empty.chmod(0o600)
-            control.AUTHORIZED_DIDS_FILE = empty
-            with patch.object(control, "verify_wallet_presentation", return_value=did):
-                session_request = Request(base + "/api/auth/identity/login/session", data=b"{}", method="POST", headers=origin)
-                with urlopen(session_request, timeout=2) as response:
-                    login = json.load(response)["data"]
-                verify_request = Request(
-                    base + "/api/auth/identity/login/verify",
-                    data=json.dumps({"session_id": login["session_id"], "presentation": {"holder": did}}).encode(),
-                    method="POST", headers={**origin, "Content-Type": "application/json"},
-                )
-                with self.assertRaises(HTTPError) as error:
-                    urlopen(verify_request, timeout=2)
-                self.assertEqual(error.exception.code, 403)
+            self.assertEqual((Path(self.temp.name) / "private/control/tester-auth.sqlite3").stat().st_mode & 0o777, 0o600)
 
     def test_wallet_presentation_signature_verifier(self):
         result = __import__("subprocess").run(
@@ -389,7 +484,7 @@ class TesterControlTests(unittest.TestCase):
             capture_output=True, text=True, timeout=10, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("signatures and challenge verification passed", result.stdout)
+        self.assertIn("issuer credential, status, and challenge verification passed", result.stdout)
 
 
 class ArtifactModeBoundaryTests(unittest.TestCase):
