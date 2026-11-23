@@ -29,7 +29,7 @@ SQLite 状态通过 `scripts/config_backup.sh` 使用 SQLite 在线备份接口�
 
 1. 检查 runtime 指定的项目配置文件中的仓库路径、启用状态和禁用理由。自动更新只允许有已验证适配器的项目。
 2. 检查 `scripts/tester-control.service` 的工作目录、Node 路径、运行用户和端口；作为 systemd 服务安装。控制程序默认只监听 `127.0.0.1:18082`。
-3. 在 HTTPS 站点的 Nginx `server` 块加入或更新 `scripts/nginx-control-location.conf` 的 `location`，使 `/report/control/` 包含 `auth_basic off`、`client_max_body_size 1m` 和本机代理。不要在此 location 上叠加报告专用 Cookie 或 HTTP Basic Auth 门禁：钱包身份登录由 Tester 控制服务验证，额外门禁会挡住登录请求。较大的 Wallet Identity Presentation 经 JSON 包装后可能超过 64 KiB，因此预留 1 MiB 请求体上限。修改后运行 `nginx -t` 并平滑重载 Nginx。TLS 必须在公网入口启用；应用会通过 Secure Cookie 建立登录会话。公开报告 `/report/` 继续保持只读访问，不能代理到控制接口。
+3. 在 HTTPS 站点的 Nginx `server` 块加入或更新 `scripts/nginx-control-location.conf` 的 `location`。根路径 `/` 应重定向到 `/report/control/`，控制路由包含 `auth_basic off`、`client_max_body_size 1m` 和本机代理。不要在此 location 上叠加报告专用 Cookie 或 HTTP Basic Auth 门禁：钱包身份登录由 Tester 控制服务验证，额外门禁会挡住登录请求。较大的 Wallet Identity Presentation 经 JSON 包装后可能超过 64 KiB，因此预留 1 MiB 请求体上限。修改后运行 `nginx -t` 并平滑重载 Nginx。TLS 必须在公网入口启用；应用会通过 Secure Cookie 建立登录会话。公开报告 `/report/` 继续保持只读访问，不能代理到控制接口。
 4. `TESTER_CONTROL_ORIGIN` 要与用户打开页面的 HTTPS 域名一致。路径、端口、轮询间隔、报告目录和锁文件可通过 `TESTER_*` 环境变量调整；不要把凭证写在 systemd 单元、命令行或报告中。
 5. artifact mode 若要自动跟进产品 `main`，runtime 中应设置 `TESTER_WATCH_UPSTREAM_MAIN=true` 和 `TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY=true`，并只启用已有隔离部署适配器的项目。关闭部署许可时仍可在控制页手动测试当前部署环境。Tester 自身制品升级不由这个 watcher 执行。
 6. artifact mode 要运行每日全量任务时，在 runtime 配置中设置 `TESTER_DAILY_RUN_ENABLED` 为 `true`，并指定 `TESTER_DAILY_RUN_TIME`、`TESTER_DAILY_RUN_TIMEZONE`。之后通过 `starter.sh restart` 让新配置生效。删除旧 cron 条目，避免重复触发。
