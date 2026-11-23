@@ -97,6 +97,20 @@ class TesterControlTests(unittest.TestCase):
         self.assertNotIn('id="mode"', page)
         self.assertNotIn('id="projects"', page)
 
+    def test_case_mind_map_source_parses_each_project_module_and_case(self):
+        projects = self.module.load_test_cases()
+        self.assertEqual(len(projects), 11)
+        self.assertGreater(sum(project["case_count"] for project in projects), 850)
+        books = next(project for project in projects if project["id"] == "books")
+        self.assertTrue(books["modules"])
+        case = books["modules"][0]["cases"][0]
+        self.assertEqual(case["id"], "BK-DATA-001")
+        self.assertEqual(case["priority"], "P0")
+        self.assertTrue(case["preconditions"])
+        self.assertTrue(case["steps"])
+        self.assertTrue(case["expected"])
+        self.assertIn("api/cases", self.module.CASES_PAGE)
+
     def test_test_only_allows_project_without_deployment_adapter(self):
         control = self.module
         control.PROJECTS["node"] = {"repo": "/tmp/node", "enabled": False}
@@ -291,6 +305,9 @@ class TesterControlTests(unittest.TestCase):
         with self.assertRaises(HTTPError) as error:
             urlopen(base + "/api/status", timeout=2)
         self.assertEqual(error.exception.code, 401)
+        with self.assertRaises(HTTPError) as error:
+            urlopen(base + "/api/cases", timeout=2)
+        self.assertEqual(error.exception.code, 401)
 
         with patch.object(control, "verify_wallet_presentation", return_value=did) as verify:
             session_request = Request(base + "/api/auth/identity/login/session", data=b"{}", method="POST", headers=origin)
@@ -316,6 +333,10 @@ class TesterControlTests(unittest.TestCase):
             with urlopen(status_request, timeout=2) as response:
                 status = json.load(response)
             self.assertIn("router", status["projects"])
+            cases_request = Request(base + "/api/cases", headers={"Cookie": cookie})
+            with urlopen(cases_request, timeout=2) as response:
+                mindmap = json.load(response)
+            self.assertEqual(len(mindmap), 11)
 
             run_url = base + "/api/run"
             body = b'{"project":"router"}'
