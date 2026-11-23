@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import shlex
 import shutil
+import sqlite3
 import subprocess
 import tarfile
 import tempfile
@@ -27,7 +28,7 @@ CONFIG_KEYS = {
     "TESTER_ENV_FILE",
     "TESTER_FEISHU_CONFIG",
     "TESTER_REPORT_ACCESS_KEY_FILE",
-    "TESTER_AUTHORIZED_DIDS_FILE",
+    "TESTER_AUTH_DATABASE",
 }
 STANDARD_CONFIG_FILES = (
     Path("/data/tester/backup.conf"),
@@ -135,6 +136,10 @@ def configured_files() -> list[tuple[str, Path]]:
             if value:
                 candidates.append((Path(value).name or key.lower(), Path(value)))
 
+    database = auth_database_path()
+    if regular_file(database):
+        candidates.append((database.name, database))
+
     for unit in SYSTEMD_UNITS:
         systemd_unit = Path(f"/etc/systemd/system/{unit}.service")
         if regular_file(systemd_unit):
@@ -181,6 +186,27 @@ def archive_directory() -> Path:
         if runtime_path is not None:
             configured = load_runtime(runtime_path).get("TESTER_CONFIG_ARCHIVE_DIR", "")
     return Path(configured or "/opt/backup")
+
+
+def auth_database_path() -> Path:
+    configured = os.environ.get("TESTER_AUTH_DATABASE", "")
+    if configured:
+        return Path(configured)
+    runtime_path = runtime_config_path()
+    if runtime_path is not None:
+        values = load_runtime(runtime_path)
+        configured = values.get("TESTER_AUTH_DATABASE", "")
+        if not configured:
+            private = values.get("TESTER_PRIVATE_REPORT_DIR", "/data/tester/private")
+            configured = str(Path(private) / "control" / "tester-auth.sqlite3")
+    return Path(configured or "/data/tester/private/control/tester-auth.sqlite3")
+
+
+def copy_sqlite_snapshot(source: Path, destination: Path) -> None:
+    source_uri = source.resolve(strict=True).as_uri() + "?mode=ro"
+    with sqlite3.connect(source_uri, uri=True, timeout=15) as database:
+        with sqlite3.connect(destination, timeout=15) as snapshot:
+            database.backup(snapshot)
 
 
 def create_upload_archive(snapshot: Path) -> Path:
@@ -243,7 +269,10 @@ def backup() -> Path:
                     safe_label = f"{source.stem}-{hashlib.sha256(str(source).encode()).hexdigest()[:8]}{source.suffix}"
                 labels.add(safe_label)
                 destination = temporary / safe_label
-                shutil.copyfile(source, destination)
+                if source.resolve() == auth_database_path().resolve():
+                    copy_sqlite_snapshot(source, destination)
+                else:
+                    shutil.copyfile(source, destination)
                 os.chmod(destination, 0o600)
                 files.append({
                     "name": safe_label,

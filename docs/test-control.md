@@ -8,28 +8,22 @@
 
 ## 钱包身份授权
 
-Tester 控制台使用 Web3-BS Wallet Identity 登录。后端通过一次性 nonce 验证 Presentation 的 DID 文档签名和登录签名，然后检查受保护的 DID allowlist；没有数据库。授权名单缺失、格式错误或为空时一律拒绝登录。控制台页面本身不含测试状态；状态 API、测试排队 API 均要求有效的 HttpOnly 会话 Cookie。会话有效期为 8 小时，退出或控制服务重启后会话失效，执行操作仍要求同源检查和 CSRF token。
+Tester 控制服务使用内置 SQLite 管理钱包身份和成员权限，不需要另行启动数据库服务。首次启动和每次升级时会自动执行版本化迁移；数据库位于 `TESTER_PRIVATE_REPORT_DIR/control/tester-auth.sqlite3`，默认 `/data/tester/private/control/tester-auth.sqlite3`，父目录权限 `700`、数据库权限 `600`。配置 `TESTER_ADMIN_DID` 指定管理员 DID 即可。管理员用 Web3-BS Wallet Identity 登录后，可在控制台“成员授权”中批准待审核的身份或撤销已有成员。
 
-部署时将 `config/authorized-dids.json.template` 复制为 runtime 中 `TESTER_AUTHORIZED_DIDS_FILE` 指定的外部文件，默认 `/data/test-results-private/control/authorized-dids.json`。目录设为 `700`、文件设为 `600`，每个获准身份需配置 DID 和从可信来源取得的完整、已签名身份文档：
+首次部署或迁移到此版本时，在受保护的 runtime JSON 中设置唯一管理员 DID；修改后通过 Tester 的标准升级流程或 `scripts/starter.sh restart` 重启服务，使它自动建表并引导管理员记录：
 
 ```json
 {
-  "identities": [
-    {
-      "did": "did:yeying:wid_...",
-      "identity_document": {
-        "id": "did:yeying:wid_...",
-        "version": 1,
-        "revision": 1,
-        "controllers": [],
-        "proof": {}
-      }
-    }
-  ]
+  "TESTER_ADMIN_DID": "did:yeying:wid_...",
+  "TESTER_IDENTITY_ISSUER_URL": "https://node.yeying.pub"
 }
 ```
 
-将需要查看用例和执行测试的每个钱包身份 DID 及可信身份文档加入数组。服务会验证文档签名，并要求登录 Presentation 中的文档与配置中的固定文档完全相同，防止攻击者只伪造 DID 字符串并替换控制密钥。新用户首次尝试登录时，页面会显示签名验证通过的 DID；管理员需从可信渠道核实身份并取得相应的权威身份文档，再更新名单，用户重新登录即可。更换或轮换控制密钥时，管理员要审核并同步更新固定文档。编辑名单后立即生效，无需重启服务。不要把钱包私钥或助记词写入配置。该文件会由 Tester 配置备份流程归档。
+管理 DID 必须对应已在配置的 Node issuer 完成身份注册、邮箱验证和 EVM 钱包绑定的身份。一般成员也需先完成同样的身份凭证流程：第一次登录会建立待审批账号；管理员打开“成员授权”批准后，成员重新登录即可。停止或撤销成员后，该账号现有会话立即失效。建议首次管理员登录并完成批准测试后，按常规流程备份配置和数据库。
+
+新成员使用钱包登录后会创建“等待授权”申请，批准后身份文档固定保存于 SQLite，后续登录必须提供完全匹配的签名文档。管理员身份也会在首次成功登录时固定文档。登录要求一次性 nonce、DID 文档和登录签名，以及 Node 为该 DID 签发且状态有效的 `WalletAccountCredential`、`UsernameCredential`、`EmailCredential`。因此管理员和成员身份都要先完成社区 Node 身份注册、邮箱验证和钱包绑定；仅在客户端创建的自签名身份不会通过校验。默认信任发行方 `https://node.yeying.pub`，可通过私有 runtime 的 `TESTER_IDENTITY_ISSUER_URL` 指定社区部署的 Node origin。缺少或撤销凭证会拒绝登录。会话有效期为 8 小时，退出或控制服务重启后会话失效；执行操作仍要求同源检查和 CSRF token。
+
+SQLite 状态通过 `scripts/config_backup.sh` 使用 SQLite 在线备份接口安全快照并归档。数据库迁移只会向前执行，不会在升级时覆盖或重建用户授权数据。
 
 ## 测试机配置
 

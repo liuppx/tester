@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sqlite3
 import tarfile
 import tempfile
 import unittest
@@ -131,19 +132,21 @@ class ConfigBackupTests(unittest.TestCase):
             ):
                 self.assertEqual(MODULE.runtime_config_path(), runtime)
 
-    def test_includes_tester_backup_and_wallet_allowlist_configuration(self):
+    def test_includes_tester_backup_and_auth_database_configuration(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             runtime = root / "runtime.json"
             backup_policy = root / "backup.conf"
             nginx = root / "tester.conf"
-            allowlist = root / "authorized-dids.json"
+            auth_database = root / "tester-auth.sqlite3"
             backup_policy.write_text("BACKUP_CONF_FLAG=False\n")
             nginx.write_text("server {}\n")
-            allowlist.write_text('{"dids":["did:yeying:wid_example"]}\n')
+            with sqlite3.connect(auth_database) as database:
+                database.execute("CREATE TABLE tester_users(did TEXT PRIMARY KEY)")
+                database.execute("INSERT INTO tester_users VALUES('did:yeying:wid_example')")
             runtime.write_text(json.dumps({
                 "TESTER_CONTROL_PORT": "18082",
-                "TESTER_AUTHORIZED_DIDS_FILE": str(allowlist),
+                "TESTER_AUTH_DATABASE": str(auth_database),
             }))
             with patch.object(
                 MODULE,
@@ -159,7 +162,34 @@ class ConfigBackupTests(unittest.TestCase):
                 names = {name for name, _ in MODULE.configured_files()}
             self.assertIn("backup.conf", names)
             self.assertIn("tester.conf", names)
-            self.assertIn("authorized-dids.json", names)
+            self.assertIn("tester-auth.sqlite3", names)
+
+    def test_live_auth_database_is_backed_up_with_sqlite_snapshot_api(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            runtime = root / "runtime.json"
+            database_path = root / "tester-auth.sqlite3"
+            backup_root = root / "backups"
+            runtime.write_text(json.dumps({
+                "TESTER_AUTH_DATABASE": str(database_path),
+                "TESTER_CONFIG_BACKUP_DIR": str(backup_root),
+                "TESTER_CONFIG_ARCHIVE_DIR": str(root / "archives"),
+            }))
+            with sqlite3.connect(database_path) as database:
+                database.execute("PRAGMA journal_mode=WAL")
+                database.execute("CREATE TABLE tester_users(did TEXT PRIMARY KEY)")
+                database.execute("INSERT INTO tester_users VALUES('did:yeying:wid_member')")
+            with patch.object(MODULE, "STANDARD_CONFIG_FILES", ()), patch.dict(os.environ, {
+                "TESTER_RUNTIME_CONFIG": str(runtime),
+                "TESTER_CONFIG_BACKUP_DIR": "",
+                "TESTER_CONFIG_ARCHIVE_DIR": "",
+                "TESTER_BACKUP_ROOT": "",
+            }, clear=False):
+                archive = MODULE.backup()
+            snapshot = next(backup_root.glob("tester-config-*")) / "tester-auth.sqlite3"
+            with sqlite3.connect(snapshot) as database:
+                self.assertEqual(database.execute("SELECT did FROM tester_users").fetchone()[0], "did:yeying:wid_member")
+            self.assertEqual(snapshot.stat().st_mode & 0o777, 0o600)
 
 
 if __name__ == "__main__":
