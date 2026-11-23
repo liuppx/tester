@@ -276,8 +276,9 @@ class TesterControlTests(unittest.TestCase):
     def test_wallet_allowlist_gates_status_and_manual_runs(self):
         control = self.module
         did = "did:yeying:wid_" + "a" * 32
+        identity_document = {"id": did, "version": 1, "revision": 1, "controllers": [], "proof": {}}
         allowlist = Path(self.temp.name) / "authorized-dids.json"
-        allowlist.write_text(json.dumps({"dids": [did]}), encoding="utf-8")
+        allowlist.write_text(json.dumps({"identities": [{"did": did, "identity_document": identity_document}]}), encoding="utf-8")
         allowlist.chmod(0o600)
         control.AUTHORIZED_DIDS_FILE = allowlist
         server = ThreadingHTTPServer(("127.0.0.1", 0), control.Handler)
@@ -291,7 +292,7 @@ class TesterControlTests(unittest.TestCase):
             urlopen(base + "/api/status", timeout=2)
         self.assertEqual(error.exception.code, 401)
 
-        with patch.object(control, "verify_wallet_presentation", return_value=did):
+        with patch.object(control, "verify_wallet_presentation", return_value=did) as verify:
             session_request = Request(base + "/api/auth/identity/login/session", data=b"{}", method="POST", headers=origin)
             with urlopen(session_request, timeout=2) as response:
                 login = json.load(response)["data"]
@@ -304,6 +305,7 @@ class TesterControlTests(unittest.TestCase):
                 cookie = response.headers["Set-Cookie"].split(";", 1)[0]
                 self.assertIn("HttpOnly", response.headers["Set-Cookie"])
                 self.assertIn("Secure", response.headers["Set-Cookie"])
+            self.assertEqual(verify.call_args.args[3], identity_document)
             auth_request = Request(base + "/api/auth/status", headers={"Cookie": cookie})
             with urlopen(auth_request, timeout=2) as response:
                 auth = json.load(response)
@@ -344,7 +346,7 @@ class TesterControlTests(unittest.TestCase):
             self.assertEqual(error.exception.code, 401)
 
             empty = Path(self.temp.name) / "empty-allowlist.json"
-            empty.write_text('{"dids":[]}', encoding="utf-8")
+            empty.write_text('{"identities":[]}', encoding="utf-8")
             empty.chmod(0o600)
             control.AUTHORIZED_DIDS_FILE = empty
             with patch.object(control, "verify_wallet_presentation", return_value=did):

@@ -130,8 +130,8 @@ def load_state() -> dict:
 STATE = load_state()
 
 
-def authorized_dids() -> set[str]:
-    """Load the administrator-managed DID allowlist; missing/empty means deny all."""
+def authorized_identities() -> dict[str, dict]:
+    """Load administrator-pinned DID documents; missing/empty means deny all."""
     try:
         info = AUTHORIZED_DIDS_FILE.lstat()
         if AUTHORIZED_DIDS_FILE.is_symlink() or not AUTHORIZED_DIDS_FILE.is_file() or info.st_mode & 0o022:
@@ -139,23 +139,34 @@ def authorized_dids() -> set[str]:
         value = json.loads(AUTHORIZED_DIDS_FILE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return set()
-    entries = value.get("dids") if isinstance(value, dict) else value
+    entries = value.get("identities") if isinstance(value, dict) else None
     if not isinstance(entries, list):
-        return set()
-    return {
-        did for did in entries
-        if isinstance(did, str) and did.startswith("did:yeying:wid_") and len(did) >= 35
-    }
+        return {}
+    identities = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        did, document = entry.get("did"), entry.get("identity_document")
+        if (
+            isinstance(did, str) and did.startswith("did:yeying:wid_") and len(did) >= 35
+            and isinstance(document, dict) and document.get("id") == did
+        ):
+            identities[did] = document
+    return identities
 
 
-def verify_wallet_presentation(presentation: dict, audience: str, nonce: str) -> str:
+def verify_wallet_presentation(presentation: dict, audience: str, nonce: str,
+                               trusted_document: dict | None = None) -> str:
     """Verify wallet proofs with Node's built-in Ed25519 implementation."""
     node = os.environ.get("TESTER_NODE_BIN", "node")
     if not os.path.isabs(node):
         node = str(REPO / "node_modules/.bin/node") if (REPO / "node_modules/.bin/node").is_file() else node
     result = subprocess.run(
         [node, str(REPO / "scripts/verify-wallet-presentation.mjs")],
-        input=json.dumps({"presentation": presentation, "audience": audience, "nonce": nonce}),
+        input=json.dumps({
+            "presentation": presentation, "audience": audience, "nonce": nonce,
+            "trusted_document": trusted_document,
+        }),
         capture_output=True, text=True, timeout=8, check=False,
     )
     if result.returncode:
@@ -606,8 +617,10 @@ class Handler(BaseHTTPRequestHandler):
                     login = LOGIN_SESSIONS.pop(session_id, None)
                 if not login or login["expires_at"] <= time.time():
                     raise ValueError("登录请求无效或已过期")
-                did = verify_wallet_presentation(presentation, login["audience"], login["nonce"])
-                if did not in authorized_dids():
+                claimed_did = str(presentation.get("holder", ""))
+                trusted_document = authorized_identities().get(claimed_did)
+                did = verify_wallet_presentation(presentation, login["audience"], login["nonce"], trusted_document)
+                if trusted_document is None:
                     self.json_reply(403, {"code": 1, "message": "该钱包身份尚未获授权", "data": {"did": did}})
                     return
                 token = secrets.token_urlsafe(48)

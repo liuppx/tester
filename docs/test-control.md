@@ -10,15 +10,26 @@
 
 Tester 控制台使用 Web3-BS Wallet Identity 登录。后端通过一次性 nonce 验证 Presentation 的 DID 文档签名和登录签名，然后检查受保护的 DID allowlist；没有数据库。授权名单缺失、格式错误或为空时一律拒绝登录。控制台页面本身不含测试状态；状态 API、测试排队 API 均要求有效的 HttpOnly 会话 Cookie。会话有效期为 8 小时，退出或控制服务重启后会话失效，执行操作仍要求同源检查和 CSRF token。
 
-部署时将 `config/authorized-dids.json.template` 复制为 runtime 中 `TESTER_AUTHORIZED_DIDS_FILE` 指定的外部文件，默认 `/data/test-results-private/control/authorized-dids.json`。目录设为 `700`、文件设为 `600`，文件内容格式为：
+部署时将 `config/authorized-dids.json.template` 复制为 runtime 中 `TESTER_AUTHORIZED_DIDS_FILE` 指定的外部文件，默认 `/data/test-results-private/control/authorized-dids.json`。目录设为 `700`、文件设为 `600`，每个获准身份需配置 DID 和从可信来源取得的完整、已签名身份文档：
 
 ```json
 {
-  "dids": ["did:yeying:wid_..."]
+  "identities": [
+    {
+      "did": "did:yeying:wid_...",
+      "identity_document": {
+        "id": "did:yeying:wid_...",
+        "version": 1,
+        "revision": 1,
+        "controllers": [],
+        "proof": {}
+      }
+    }
+  ]
 }
 ```
 
-将需要查看用例和执行测试的每个钱包身份 DID 加入数组。新用户首次尝试登录时，页面会显示经签名验证得到的 DID；管理员把该 DID 加入名单后，用户重新登录即可。编辑名单后立即生效，无需重启服务。DID 属公开身份标识，不要把钱包私钥或助记词写入配置。该文件会由 Tester 配置备份流程归档。
+将需要查看用例和执行测试的每个钱包身份 DID 及可信身份文档加入数组。服务会验证文档签名，并要求登录 Presentation 中的文档与配置中的固定文档完全相同，防止攻击者只伪造 DID 字符串并替换控制密钥。新用户首次尝试登录时，页面会显示签名验证通过的 DID；管理员需从可信渠道核实身份并取得相应的权威身份文档，再更新名单，用户重新登录即可。更换或轮换控制密钥时，管理员要审核并同步更新固定文档。编辑名单后立即生效，无需重启服务。不要把钱包私钥或助记词写入配置。该文件会由 Tester 配置备份流程归档。
 
 ## 测试机配置
 

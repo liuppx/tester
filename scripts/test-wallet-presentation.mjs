@@ -21,14 +21,26 @@ const presentation = { ...unsigned, proof: {
   type: 'YeyingIdentityPresentationProofV1', verificationMethod: `${did}#${controllerId}`, purpose: 'authentication',
   proofValue: b64(sign(null, Buffer.from(canonical(unsigned)), pair.privateKey)),
 } }
-function verify(value, audience = unsigned.audience, nonce = unsigned.nonce) {
-  return spawnSync(process.execPath, [helper], { input: JSON.stringify({ presentation: value, audience, nonce }), encoding: 'utf8' })
+function verify(value, audience = unsigned.audience, nonce = unsigned.nonce, trustedDocument = document) {
+  return spawnSync(process.execPath, [helper], { input: JSON.stringify({ presentation: value, audience, nonce, trusted_document: trustedDocument }), encoding: 'utf8' })
 }
 
 const valid = verify(presentation)
 assert.equal(valid.status, 0, valid.stderr)
 assert.deepEqual(JSON.parse(valid.stdout), { did })
 assert.notEqual(verify(presentation, unsigned.audience, 'wrong-challenge').status, 0)
+const attacker = generateKeyPairSync('ed25519')
+const attackerPublicKey = b64(attacker.publicKey.export({ format: 'der', type: 'spki' }).subarray(-32))
+const forgedController = { ...controller, publicKey: attackerPublicKey }
+const forgedDocumentUnsigned = { ...documentUnsigned, controllers: [forgedController] }
+const forgedDocument = { ...forgedDocumentUnsigned, proof: {
+  ...document.proof, proofValue: b64(sign(null, Buffer.from(canonical(forgedDocumentUnsigned)), attacker.privateKey)),
+} }
+const forgedUnsigned = { ...unsigned, identityDocument: forgedDocument }
+const forgedIdentity = { ...forgedUnsigned, proof: {
+  ...presentation.proof, proofValue: b64(sign(null, Buffer.from(canonical(forgedUnsigned)), attacker.privateKey)),
+} }
+assert.notEqual(verify(forgedIdentity).status, 0)
 const forged = structuredClone(presentation)
 forged.proof.proofValue = b64(Buffer.alloc(64))
 assert.notEqual(verify(forged).status, 0)
