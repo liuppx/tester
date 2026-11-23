@@ -53,6 +53,31 @@ class PackageContractTests(unittest.TestCase):
                      ".env.template", "products/router/tests/smoke.spec.ts"):
             self.assertTrue(build.publishable(Path(name)))
 
+    def test_release_manifest_separates_service_and_static_artifacts(self):
+        build = module("package-release")
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            service = root / "service.tar.gz"
+            web = root / "web.tar.gz"
+            service.write_bytes(b"service")
+            web.write_bytes(b"static")
+            manifest = build.release_manifest("a" * 40, "0.2.0", "0.2.1", service,
+                                              "tester-service-v0.2.0-aaaaaaa", web,
+                                              "tester-web-v0.2.1-aaaaaaa")
+        artifacts = {entry["unit_id"]: entry for entry in manifest["artifacts"]}
+        self.assertEqual(set(artifacts), {"tester-service", "tester-web"})
+        self.assertEqual(artifacts["tester-web"]["type"], "static")
+        self.assertEqual(artifacts["tester-web"]["static_targets"][0]["site_id"], "tester-web")
+        self.assertEqual(artifacts["tester-service"]["type"], "service")
+
+    def test_release_tag_accepts_independent_web_artifact_version(self):
+        release = module("tag-release")
+        self.assertEqual(release.parse_unit_versions([
+            "tester-service=0.2.0", "tester-web=0.3.0",
+        ]), {"tester-service": "0.2.0", "tester-web": "0.3.0"})
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            release.parse_unit_versions(["tester-web=0.2.0", "tester-web=0.3.0"])
+
     def test_browser_build_cache_is_persistent_and_overridable(self):
         build = module("package-release")
         self.assertTrue(str(build.browser_cache_path()).endswith(".cache/yeying/tester/playwright"))
@@ -101,7 +126,7 @@ class PackageContractTests(unittest.TestCase):
     def test_release_dependencies_use_npm_without_a_lockfile(self):
         build = module("package-release")
         self.assertIn("package.json", build.FILES)
-        self.assertIn("web", build.DIRS)
+        self.assertNotIn("web", build.DIRS)
         self.assertTrue((ROOT / "web/index.html").is_file())
         self.assertTrue((ROOT / "web/assets/control.js").is_file())
         self.assertTrue((ROOT / "web/package-lock.json").is_file())

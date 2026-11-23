@@ -10,6 +10,17 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)")
 
+def parse_unit_versions(values):
+    overrides = {}
+    for raw in values:
+        unit, sep, version = raw.partition("=")
+        if sep != "=" or unit not in ("tester-service", "tester-web") or not VERSION.fullmatch(version):
+            raise ValueError("unit version must be tester-service=VERSION or tester-web=VERSION")
+        if unit in overrides:
+            raise ValueError("duplicate unit version")
+        overrides[unit] = version
+    return overrides
+
 def git(*args, cwd=ROOT):
     return subprocess.check_output(["git", "-C", str(cwd), *args], text=True).strip()
 
@@ -18,14 +29,10 @@ def main():
     p.add_argument("--bump", choices=("patch", "minor", "major"), default="patch")
     p.add_argument("--unit-version", action="append", default=[])
     args = p.parse_args()
-    overrides = {}
-    for raw in args.unit_version:
-        unit, sep, version = raw.partition("=")
-        if sep != "=" or unit != "tester-service" or not VERSION.fullmatch(version):
-            p.error("--unit-version must be tester-service=MAJOR.MINOR.PATCH")
-        if unit in overrides:
-            p.error("duplicate unit version")
-        overrides[unit] = version
+    try:
+        overrides = parse_unit_versions(args.unit_version)
+    except ValueError as error:
+        p.error(str(error))
     if git("branch", "--show-current") != "main" or git("status", "--porcelain"):
         p.error("release requires a clean main")
     source = git("rev-parse", "HEAD")
@@ -51,7 +58,7 @@ def main():
             files = ["package.json"]
             if overrides:
                 override_file = worktree / "scripts/artifact-versions.conf"
-                override_file.write_text("tester-service " + overrides["tester-service"] + "\n")
+                override_file.write_text("".join(f"{unit} {version}\n" for unit, version in sorted(overrides.items())))
                 files.append("scripts/artifact-versions.conf")
             git("add", "--", *files, cwd=worktree)
             git("commit", "-m", "chore(release): " + tag, cwd=worktree)

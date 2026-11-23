@@ -162,6 +162,6 @@ configuration paths, service bring-up order, and readiness checklist are in
 
 MIT — see `LICENSE`.
 
-## Release packaging
+## Deployment and operations
 
-See [Tester packaging](docs/packaging.md) for the service artifact contract, offline checks and migration boundaries.
+See [Tester deployment](docs/deployment.md) for the packaged deployment, runtime configuration, Nginx integration, verification and rollback. The community artifact contract is maintained in `books/yeying/specification/PACKAGING.md`.

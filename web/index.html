@@ -1,10 +1,11 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tester 手动测试</title><link rel="stylesheet" href="/assets/control.css"></head><body><main><div class="top"><div><div class="eyebrow">Yeying community · quality gate</div><h1>Tester 手动测试</h1></div><p><a href="cases">查看测试用例脑图</a>　<a href="architecture">查看项目依赖图</a>　<a href="/report/">返回测试报告 →</a></p></div>
+<title>Tester 质量控制台</title><link rel="stylesheet" href="./assets/control.css"></head><body><main><header class="top"><div><div class="eyebrow">YEYING COMMUNITY · QUALITY GATE</div><h1>Tester 质量控制台</h1><p class="muted">用一次全量视图，确认环境是否值得信任。</p></div><nav><a href="cases">用例脑图</a><a href="architecture">依赖图</a><a href="/report/">历史报告</a></nav></header>
 <p class="muted">授权后可以查看测试状态，并运行当前已部署环境的端到端用例。</p>
-<article id="login-card" hidden><h2>钱包身份登录</h2><p class="muted">使用已加入 Tester 授权名单的钱包身份继续。</p><button id="login">连接钱包身份</button><p id="login-message" class="danger" role="status"></p></article>
-<section id="console" hidden><article><div class="top"><div><strong>已授权身份</strong><div id="identity" class="identity muted"></div></div><button id="logout">退出登录</button></div></article>
+<article id="login-card"><h2>钱包身份登录</h2><p class="muted">使用已加入 Tester 授权名单的钱包身份继续。</p><button id="login">连接钱包身份</button><p id="login-message" class="danger" role="status"></p></article>
+<section id="console" hidden><article class="identity-bar"><div><strong>当前身份</strong><div id="identity" class="identity muted"></div></div><button id="logout" class="ghost">退出</button></article><section class="overview" aria-label="质量概览"><div><span class="eyebrow">QUALITY OVERVIEW</span><h2>质量概览</h2><p id="quality-summary" class="muted">正在读取最近一次全量测试…</p></div><div class="score-wrap"><span class="muted">用例通过率</span><div id="quality-score" class="score">—</div></div></section>
+<section id="project-grid" class="project-grid" aria-label="项目状态"></section>
 <article id="admin-tools" hidden><button id="users-toggle">成员授权</button><section id="user-panel" hidden><p class="muted">待授权用户完成一次钱包身份登录申请后会列在这里。</p><div id="user-list"></div></section></article>
 <article><div class="row"><label for="scope">测试范围</label><select id="scope"><option value="">请选择</option></select><button id="run" disabled>开始测试</button></div>
-<p id="selected-status" class="muted"></p><p id="message" role="status"></p><a id="latest-report" hidden>查看上次报告 →</a></article></section>
-<script src="/web3-bs.js"></script><script type="module" src="/assets/control.js"></script></main></body></html>
+<p id="selected-status" class="muted"></p><p id="message" role="status"></p><a id="latest-report" hidden>查看上次报告 →</a></article><article><h2>历史测试报告</h2><div id="history-list"></div><a href="/report/">查看完整报告站点</a></article></section>
+<script src="./web3-bs.js" vite-ignore></script><script type="module" src="./assets/control.js"></script></main></body></html>

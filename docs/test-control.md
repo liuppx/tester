@@ -1,5 +1,7 @@
 # 测试机按项目触发测试
 
+部署、配置备份和版本回退步骤见[Tester 部署手册](deployment.md)。
+
 这是 Linux 测试机上的可选控制模块。报告仍在 `/report/`；钱包身份授权后的 `/report/control/` 控制台可以选择“全量测试”或一个项目，手动测试**当前已部署的环境**。手动测试不会拉取或部署产品代码。控制台内的“查看测试用例脑图”（`/report/control/cases`）按项目展示 Markdown 中的功能模块与用例，可展开节点、搜索编号/名称，并查看优先级、类型、状态、前置条件、步骤和预期结果；脑图数据与测试状态使用同一登录会话保护。
 
 控制服务每 5 分钟检查一次已启用产品仓库的上游 `main`，通过项目 checkout 的 `origin` 执行 `git ls-remote origin refs/heads/main` 获取最新 SHA。产品有新提交时，按目标 SHA 入队；仅对已启用且有对应部署适配器的项目执行源码更新和定向测试。当前已适配 `books`、`chat`、`marketplace`、`router`、`wallet`。artifact mode 下 Tester 自身的版本切换由 Deployer 标准制品升级流程负责，控制服务不轮询 Tester main。每日全量计划由 Tester 控制服务按照 runtime 配置调度，默认关闭。所有测试入口共用运行队列和运行锁，避免并发测试或部署。
@@ -36,7 +38,7 @@ SQLite 状态通过 `scripts/config_backup.sh` 使用 SQLite 在线备份接口�
 
 Nginx 将 `/report/control/` 同源代理到仅监听本机的控制服务；Tester 的钱包身份会话保护控制页面中的状态和操作 API。部署后检查匿名访问 `/report/control/api/status` 返回 `401`，登录后可读取状态；未授权 DID 登录返回 `403`，名单为空时不允许任何登录。
 
-Tester 前端是独立的 Vite 多页面项目，依赖、脚本和锁文件都在 `web/`。页面源码在 `web/*.html` 与 `web/assets/`，开发时运行 `cd web && npm ci && npm run dev`；它会把 `/api` 和 `/web3-bs.js` 代理到本机控制服务 `127.0.0.1:18082`。发布时 Deployer 在隔离源码中运行 `npm ci && npm run build`，由服务托管 `web/dist/` 的 HTML、哈希 CSS/JS 和运行时 Wallet SDK；开发依赖会在打包前移除。浏览器通过同一 `/report/control/` 前缀访问资源。验证 Nginx 时确认 `/report/control/` 下的 HTML、`/assets/*.css`、`/assets/*.js`、`/web3-bs.js` 均代理到控制服务，且 API 登录路径没有额外 Cookie 门禁或 HTTP Basic Auth 挑战。
+Tester 前端是独立的 Vite 多页面项目，依赖、脚本和锁文件都在 `web/`。发布时生成独立 `tester-web` static 制品，安装到 `/opt/deploy/static/tester-web/current`；service 制品不包含 `web/`。Nginx 从 static current 提供 `/report/control/` 页面、`/assets/*` 和 `/web3-bs.js`，只将 `/report/control/api/` 代理到本机控制服务。验证时确认页面资源走 static 目录，API 登录路径没有额外 Cookie 门禁或 HTTP Basic Auth 挑战。
 
 ## 报告与源码
 

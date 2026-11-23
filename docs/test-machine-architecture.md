@@ -1,6 +1,6 @@
 # Tester 测试机架构与环境运行手册
 
-> 适用机器：GPU 测试机（SSH 端口 `10022`）
+> 适用环境：Tester 专用测试环境（连接信息由受限运维清单维护）
 > 核对日期：2026-11-23
 > 维护原则：本文描述当前代码和主机状态；服务、配置或启动方式变化后同步更新。
 
@@ -60,28 +60,53 @@ Agent 和社区成员可先查看[项目与 E2E 依赖图](project-dependency-ma
 
 依赖关系示意：
 
-```mermaid
-flowchart LR
-  T[Tester Playwright runner] -->|HTTP / 浏览器| A[已运行的产品服务]
-  T -->|文件检查| F[Books / Marketplace / Wallet 仓库]
-  T -. 不启动 .-> M[共享中间件]
-  N[Node] --> PG[PostgreSQL]
-  N --> R[Redis]
-  N --> MP[Mailpit]
-  RT[Router] --> PG
-  RT --> R
-  RT --> N
-  C[Chat] --> RT
-  C --> W[Warehouse WebDAV]
-  WA[Wallet dApp 用例] --> N
-  WA --> RT
-  WA --> W
-  S[Social] --> ID[web3-identity]
-  ID --> SVC[Social platform / web]
-  SVC --> SQL[MySQL]
-  SVC --> R
-  PR[Project] --> SQL
-  PR --> R
+```plantuml
+@startuml
+title Tester 用例与环境依赖
+left to right direction
+skinparam componentStyle rectangle
+component "Tester\nPlaywright runner" as Tester
+component "Node" as Node
+component "Router" as Router
+component "Chat" as Chat
+component "Wallet dApp tests" as Wallet
+component "Social platform / web" as Social
+component "web3-identity" as Identity
+component "Project" as Project
+component "Warehouse WebDAV" as Warehouse
+database "PostgreSQL" as PG
+database "MySQL" as MySQL
+component "Redis" as Redis
+component "Mailpit" as Mailpit
+component "Books / Marketplace / Wallet repositories" as Repo
+component "shared middleware" as Middleware
+
+Tester --> Node : HTTP / browser
+Tester --> Router : HTTP / browser
+Tester --> Chat : HTTP / browser
+Tester --> Social : HTTP / browser
+Tester --> Project : HTTP / browser
+Tester --> Warehouse : HTTP / browser
+Tester --> Repo : file checks
+Tester ..> Middleware : does not start
+Node --> PG
+Node --> Redis
+Node --> Mailpit
+Router --> PG
+Router --> Redis
+Router --> Node
+Chat --> Router
+Chat --> Warehouse
+Wallet --> Node
+Wallet --> Router
+Wallet --> Warehouse
+Social --> Identity
+Identity --> Social
+Social --> MySQL
+Social --> Redis
+Project --> MySQL
+Project --> Redis
+@enduml
 ```
 
 ## 4. GPU 测试机当前状态

@@ -131,32 +131,56 @@ class TesterControlTests(unittest.TestCase):
         raw = json.dumps(topology)
         self.assertNotRegex(raw, r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
-    def test_web_ui_assets_are_split_and_served_from_web_directory(self):
-        control = self.module
+    def test_web_ui_assets_are_built_as_static_artifact(self):
         for page_name in ("index.html", "cases.html", "architecture.html"):
             page = (Path(__file__).parent.parent / "web" / page_name).read_text()
             self.assertIn("assets/", page)
             self.assertNotIn("<style>", page)
-        self.assertTrue((Path(__file__).parent.parent / "web/dist/index.html").is_file())
-        self.assertTrue((Path(__file__).parent.parent / "web/dist/cases.html").is_file())
-        self.assertTrue((Path(__file__).parent.parent / "web/dist/architecture.html").is_file())
+        web = Path(__file__).parent.parent / "web"
+        self.assertTrue((web / "package-lock.json").is_file())
+        self.assertIn("generateBundle", (web / "vite.config.js").read_text())
+        self.assertNotIn("/web3-bs.js': 'http", (web / "vite.config.js").read_text())
 
-        server = ThreadingHTTPServer(("127.0.0.1", 0), control.Handler)
-        self.addCleanup(server.server_close)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        self.addCleanup(server.shutdown)
-        assets = Path(__file__).parent.parent / "web/dist/assets"
-        control_asset = next(path for path in assets.glob("*.js")
-                             if b"loginWithWalletIdentity" in path.read_bytes())
-        with urlopen(f"http://127.0.0.1:{server.server_port}/assets/{control_asset.name}", timeout=2) as response:
-            self.assertEqual(response.headers.get_content_type(), "text/javascript")
-            self.assertIn(b"loginWithWalletIdentity", response.read())
-        with urlopen(f"http://127.0.0.1:{server.server_port}/", timeout=2) as response:
-            self.assertIn(b"/report/control/assets/", response.read())
-        with self.assertRaises(HTTPError) as error:
-            urlopen(f"http://127.0.0.1:{server.server_port}/assets/../config/runtime.json", timeout=2)
-        self.assertEqual(error.exception.code, 404)
+    def test_nginx_separates_static_routes_from_control_api_proxy(self):
+        config = (Path(__file__).parent.parent / "scripts/nginx-control-location.conf").read_text()
+        self.assertIn("location ^~ /report/control/api/", config)
+        self.assertIn("proxy_pass http://127.0.0.1:18082/api/", config)
+        self.assertIn("alias /opt/deploy/static/tester-web/current/assets/", config)
+        self.assertNotIn("location ^~ /report/control/ {", config)
+
+    def test_overview_reads_published_counts_and_redacts_private_state(self):
+        control = self.module
+        control.PUBLIC.mkdir(parents=True)
+        (control.PUBLIC / "latest.json").write_text(json.dumps({
+            "tests": 12, "passed": 9, "failed": 1, "skipped": 2,
+            "status": "failed", "finished_at": "2026-11-23T10:00:00Z",
+            "secret": "do-not-expose",
+        }))
+        control.STATE["recent"] = [{"project": "router", "result": "failed",
+                                    "log": "/private/log", "secret": "do-not-expose"}]
+        control.enqueue("router", "manual")
+        value = control.overview_payload()
+        self.assertEqual(value["full"]["summary"], {"total": 12, "passed": 9, "failed": 1, "skipped": 2})
+        self.assertTrue(value["projects"]["router"]["busy"])
+        self.assertNotIn("do-not-expose", json.dumps(value))
+        self.assertNotIn("/private/log", json.dumps(value))
+
+    def test_overview_history_uses_only_published_summary_fields(self):
+        control = self.module
+        report_dir = control.PUBLIC / "runs" / "2026-11-23_10-00-00+0800"
+        report_dir.mkdir(parents=True)
+        (report_dir / "summary.json").write_text(json.dumps({
+            "run": report_dir.name, "status": "failed", "tests": 4,
+            "passed": 2, "failed": 1, "skipped": 1,
+            "finished_at": "2026-11-23T10:00:00+08:00", "private_log": "/private/run.log",
+        }))
+        unsafe = control.PUBLIC / "runs" / "unsafe"
+        unsafe.mkdir()
+        (unsafe / "summary.json").write_text(json.dumps({"run": "../private", "status": "failed"}))
+        history = control.load_report_history()
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["report"], "/report/runs/2026-11-23_10-00-00+0800/index.html")
+        self.assertNotIn("private_log", history[0])
 
     def test_test_only_allows_project_without_deployment_adapter(self):
         control = self.module
@@ -447,6 +471,13 @@ class TesterControlTests(unittest.TestCase):
             with urlopen(cases_request, timeout=2) as response:
                 mindmap = json.load(response)
             self.assertEqual(len(mindmap), 11)
+            overview_request = Request(base + "/api/overview", headers={"Cookie": cookie})
+            with urlopen(overview_request, timeout=2) as response:
+                overview = json.load(response)
+            self.assertEqual(overview["service"]["status"], "pass")
+            self.assertIn("summary", overview["full"])
+            self.assertIn("router", overview["projects"])
+            self.assertIsInstance(overview["history"], list)
 
             run_url = base + "/api/run"
             body = b'{"project":"router"}'
