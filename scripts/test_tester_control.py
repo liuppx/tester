@@ -273,54 +273,100 @@ class TesterControlTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0], [str(control.TESTER_MAIN_RUNNER), "b" * 40])
         self.assertEqual(control.STATE["recent"][0]["result"], "passed")
 
-    def test_post_requires_origin_and_page_token(self):
+    def test_wallet_allowlist_gates_status_and_manual_runs(self):
         control = self.module
-        control.PROJECTS["node"] = {"repo": "/tmp/node", "enabled": False,
-                                    "reason": "Deployment not configured"}
+        did = "did:yeying:wid_" + "a" * 32
+        allowlist = Path(self.temp.name) / "authorized-dids.json"
+        allowlist.write_text(json.dumps({"dids": [did]}), encoding="utf-8")
+        allowlist.chmod(0o600)
+        control.AUTHORIZED_DIDS_FILE = allowlist
         server = ThreadingHTTPServer(("127.0.0.1", 0), control.Handler)
         self.addCleanup(server.server_close)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         self.addCleanup(server.shutdown)
-        url = f"http://127.0.0.1:{server.server_port}/api/run"
-        body = b'{"project":"router"}'
+        base = f"http://127.0.0.1:{server.server_port}"
+        origin = {"Origin": control.ORIGIN}
         with self.assertRaises(HTTPError) as error:
-            urlopen(Request(url, data=body, method="POST"), timeout=2)
-        self.assertEqual(error.exception.code, 403)
-        request = Request(
-            url, data=body, method="POST",
-            headers={"Origin": control.ORIGIN, "X-Tester-CSRF": control.CSRF_TOKEN},
+            urlopen(base + "/api/status", timeout=2)
+        self.assertEqual(error.exception.code, 401)
+
+        with patch.object(control, "verify_wallet_presentation", return_value=did):
+            session_request = Request(base + "/api/auth/identity/login/session", data=b"{}", method="POST", headers=origin)
+            with urlopen(session_request, timeout=2) as response:
+                login = json.load(response)["data"]
+            verify_request = Request(
+                base + "/api/auth/identity/login/verify",
+                data=json.dumps({"session_id": login["session_id"], "presentation": {"holder": did}}).encode(),
+                method="POST", headers={**origin, "Content-Type": "application/json"},
+            )
+            with urlopen(verify_request, timeout=2) as response:
+                cookie = response.headers["Set-Cookie"].split(";", 1)[0]
+                self.assertIn("HttpOnly", response.headers["Set-Cookie"])
+                self.assertIn("Secure", response.headers["Set-Cookie"])
+            auth_request = Request(base + "/api/auth/status", headers={"Cookie": cookie})
+            with urlopen(auth_request, timeout=2) as response:
+                auth = json.load(response)
+            self.assertEqual(auth["did"], did)
+            self.assertTrue(auth["csrf"])
+
+            status_request = Request(base + "/api/status", headers={"Cookie": cookie})
+            with urlopen(status_request, timeout=2) as response:
+                status = json.load(response)
+            self.assertIn("router", status["projects"])
+
+            run_url = base + "/api/run"
+            body = b'{"project":"router"}'
+            missing_csrf = Request(run_url, data=body, method="POST", headers={**origin, "Cookie": cookie})
+            with self.assertRaises(HTTPError) as error:
+                urlopen(missing_csrf, timeout=2)
+            self.assertEqual(error.exception.code, 403)
+            run_request = Request(
+                run_url, data=body, method="POST",
+                headers={**origin, "Cookie": cookie, "X-Tester-CSRF": auth["csrf"]},
+            )
+            with urlopen(run_request, timeout=2) as response:
+                self.assertEqual(response.status, 202)
+
+            status_request = Request(base + "/api/status", headers={"Cookie": cookie})
+            with urlopen(status_request, timeout=2) as response:
+                queued_status = json.load(response)
+            self.assertEqual(queued_status["projects"]["router"]["busy"], "已排队")
+            self.assertNotIn("log", queued_status["projects"]["router"]["last"] or {})
+
+            logout = Request(base + "/api/auth/logout", data=b"", method="POST", headers={
+                **origin, "Cookie": cookie, "X-Tester-CSRF": auth["csrf"],
+            })
+            with urlopen(logout, timeout=2):
+                pass
+            with self.assertRaises(HTTPError) as error:
+                urlopen(auth_request, timeout=2)
+            self.assertEqual(error.exception.code, 401)
+
+            empty = Path(self.temp.name) / "empty-allowlist.json"
+            empty.write_text('{"dids":[]}', encoding="utf-8")
+            empty.chmod(0o600)
+            control.AUTHORIZED_DIDS_FILE = empty
+            with patch.object(control, "verify_wallet_presentation", return_value=did):
+                session_request = Request(base + "/api/auth/identity/login/session", data=b"{}", method="POST", headers=origin)
+                with urlopen(session_request, timeout=2) as response:
+                    login = json.load(response)["data"]
+                verify_request = Request(
+                    base + "/api/auth/identity/login/verify",
+                    data=json.dumps({"session_id": login["session_id"], "presentation": {"holder": did}}).encode(),
+                    method="POST", headers={**origin, "Content-Type": "application/json"},
+                )
+                with self.assertRaises(HTTPError) as error:
+                    urlopen(verify_request, timeout=2)
+                self.assertEqual(error.exception.code, 403)
+
+    def test_wallet_presentation_signature_verifier(self):
+        result = __import__("subprocess").run(
+            ["node", str(Path(__file__).parent / "test-wallet-presentation.mjs")],
+            capture_output=True, text=True, timeout=10, check=False,
         )
-        with urlopen(request, timeout=2) as response:
-            self.assertEqual(response.status, 202)
-        self.assertEqual(len(control.STATE["pending"]), 1)
-        self.assertEqual(control.STATE["pending"][0]["mode"], "test")
-        full_request = Request(
-            url, data=b'{"scope":"full"}', method="POST",
-            headers={"Origin": control.ORIGIN, "X-Tester-CSRF": control.CSRF_TOKEN},
-        )
-        with urlopen(full_request, timeout=2) as response:
-            self.assertEqual(response.status, 202)
-        test_only_request = Request(
-            url, data=b'{"project":"node"}', method="POST",
-            headers={"Origin": control.ORIGIN, "X-Tester-CSRF": control.CSRF_TOKEN},
-        )
-        with urlopen(test_only_request, timeout=2) as response:
-            self.assertEqual(response.status, 202)
-        deploy_request = Request(
-            url, data=b'{"project":"node","mode":"deploy"}', method="POST",
-            headers={"Origin": control.ORIGIN, "X-Tester-CSRF": control.CSRF_TOKEN},
-        )
-        with self.assertRaises(HTTPError) as error:
-            urlopen(deploy_request, timeout=2)
-        self.assertEqual(error.exception.code, 400)
-        self.assertEqual({item["project"] for item in control.STATE["pending"]},
-                         {"router", "node", control.FULL})
-        with urlopen(f"http://127.0.0.1:{server.server_port}/api/status", timeout=2) as response:
-            status = json.load(response)
-        self.assertEqual(status["full"]["busy"], "已排队")
-        self.assertFalse(status["projects"]["node"]["enabled"])
-        self.assertNotIn("log", status["full"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("signatures and challenge verification passed", result.stdout)
 
 
 class ArtifactModeBoundaryTests(unittest.TestCase):

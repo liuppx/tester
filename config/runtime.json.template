@@ -10,6 +10,7 @@
   "TESTER_CONTROL_HOST": "127.0.0.1",
   "TESTER_CONTROL_PORT": "18082",
   "TESTER_CONTROL_ORIGIN": "https://tester.tidukongjian.com",
+  "TESTER_AUTHORIZED_DIDS_FILE": "/data/test-results-private/control/authorized-dids.json",
   "TESTER_NODE_BIN": "node",
   "TESTER_STUCK_CHROME_LIMIT": "0",
   "TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY": "true",

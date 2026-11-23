@@ -27,13 +27,13 @@ CONFIG_KEYS = {
     "TESTER_ENV_FILE",
     "TESTER_FEISHU_CONFIG",
     "TESTER_REPORT_ACCESS_KEY_FILE",
+    "TESTER_AUTHORIZED_DIDS_FILE",
 }
 STANDARD_CONFIG_FILES = (
     Path("/data/tester/backup.conf"),
     Path("/data/test-results-private/nginx/nginx.conf"),
     Path("/etc/nginx/conf.d/tester.conf"),
     Path("/etc/nginx/conf.d/tester-report-local.conf"),
-    Path("/etc/nginx/.htpasswd-tester-control"),
 )
 SYSTEMD_UNITS = ("tester-control", "tester-report")
 
