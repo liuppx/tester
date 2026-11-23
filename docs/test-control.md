@@ -1,6 +1,6 @@
 # 测试机按项目触发测试
 
-这是 Linux 测试机上的可选控制模块。报告仍在 `/report/`；受保护的 `/report/control/` 页面可以选择“全量测试”或一个项目，手动测试**当前已部署的环境**。手动测试不会拉取或部署产品代码。
+这是 Linux 测试机上的可选控制模块。报告仍在 `/report/`；钱包身份授权后的 `/report/control/` 控制台可以选择“全量测试”或一个项目，手动测试**当前已部署的环境**。手动测试不会拉取或部署产品代码。控制台内的“查看测试用例脑图”（`/report/control/cases`）按项目展示 Markdown 中的功能模块与用例，可展开节点、搜索编号/名称，并查看优先级、类型、状态、前置条件、步骤和预期结果；脑图数据与测试状态使用同一登录会话保护。
 
 控制服务每 5 分钟检查一次已启用产品仓库的上游 `main`，通过项目 checkout 的 `origin` 执行 `git ls-remote origin refs/heads/main` 获取最新 SHA。产品有新提交时，按目标 SHA 入队；仅对已启用且有对应部署适配器的项目执行源码更新和定向测试。当前已适配 `books`、`chat`、`marketplace`、`router`、`wallet`。artifact mode 下 Tester 自身的版本切换由 Deployer 标准制品升级流程负责，控制服务不轮询 Tester main。每日全量计划由 Tester 控制服务按照 runtime 配置调度，默认关闭。所有测试入口共用运行队列和运行锁，避免并发测试或部署。
 

@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import subprocess
 import sys
@@ -173,6 +174,63 @@ def verify_wallet_presentation(presentation: dict, audience: str, nonce: str,
         raise ValueError("钱包身份验证失败")
     value = json.loads(result.stdout)
     return str(value.get("did", ""))
+
+
+CASE_FIELD_NAMES = {
+    "优先级": "priority", "类型": "kind", "状态": "status",
+    "前置条件": "preconditions", "步骤": "steps", "预期结果": "expected",
+}
+
+
+def load_test_cases() -> list[dict]:
+    """Build mind-map data directly from each project's case source document."""
+    result = []
+    case_heading = re.compile(r"^###\s+([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d{3})\s+(.+?)\s*$")
+    for path in sorted((REPO / "docs/test-cases").glob("*.md")):
+        if path.name == "README.md":
+            continue
+        lines = path.read_text(encoding="utf-8").splitlines()
+        title = next((line[2:].strip() for line in lines if line.startswith("# ")), path.stem)
+        project = {"id": path.stem, "name": title, "modules": []}
+        module = None
+        index = 0
+        while index < len(lines):
+            line = lines[index]
+            if line.startswith("## "):
+                module = {"id": f"{path.stem}-module-{len(project['modules']) + 1}",
+                          "name": line[3:].strip(), "cases": []}
+                project["modules"].append(module)
+            match = case_heading.match(line)
+            if match:
+                if module is None:
+                    module = {"id": f"{path.stem}-module-uncategorized", "name": "未分类", "cases": []}
+                    project["modules"].append(module)
+                fields = {name: "" for name in CASE_FIELD_NAMES.values()}
+                index += 1
+                current = None
+                while index < len(lines) and not lines[index].startswith(("### ", "## ")):
+                    content = lines[index]
+                    if content.startswith("- "):
+                        label, separator, value = content[2:].partition(":")
+                        current = CASE_FIELD_NAMES.get(label.strip()) if separator else None
+                        if current:
+                            fields[current] = value.strip()
+                    elif current and fields[current] and current not in ("steps",):
+                        if content.strip():
+                            fields[current] += "\n" + content.strip()
+                    elif current == "steps" and content.strip():
+                        fields[current] += ("\n" if fields[current] else "") + content.strip()
+                    index += 1
+                module["cases"].append({
+                    "id": match.group(1), "title": match.group(2).strip(), **fields,
+                })
+                continue
+            index += 1
+        project["modules"] = [entry for entry in project["modules"] if entry["cases"]]
+        project["case_count"] = sum(len(entry["cases"]) for entry in project["modules"])
+        if project["case_count"]:
+            result.append(project)
+    return result
 
 
 def git_sha(repo: str, remote: bool) -> str:
@@ -449,7 +507,7 @@ article{background:#fff;border:1px solid var(--line);border-radius:14px;padding:
 .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}button{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:10px 16px;font-weight:650;cursor:pointer}
 button:disabled{background:#a6b1bb;cursor:default}a{color:var(--blue)}select{padding:9px;border:1px solid #b7c4d2;border-radius:8px;min-width:220px;background:white}
 .muted{color:var(--muted)}#message{min-height:24px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px}.identity{font-size:13px;overflow-wrap:anywhere}.danger{color:#9e3e2e}
-</style></head><body><main><div class="top"><div><div class="eyebrow">Yeying community · quality gate</div><h1>Tester 手动测试</h1></div><p><a href="/report/">返回测试报告 →</a></p></div>
+</style></head><body><main><div class="top"><div><div class="eyebrow">Yeying community · quality gate</div><h1>Tester 手动测试</h1></div><p><a href="cases">查看测试用例脑图</a>　<a href="/report/">返回测试报告 →</a></p></div>
 <p class="muted">授权后可以查看测试状态，并运行当前已部署环境的端到端用例。</p>
 <article id="login-card" hidden><h2>钱包身份登录</h2><p class="muted">使用已加入 Tester 授权名单的钱包身份继续。</p><button id="login">连接钱包身份</button><p id="login-message" class="danger" role="status"></p></article>
 <section id="console" hidden><article><div class="top"><div><strong>已授权身份</strong><div id="identity" class="identity muted"></div></div><button id="logout">退出登录</button></div></article>
@@ -466,6 +524,26 @@ document.querySelector("#logout").onclick=async()=>{await fetch("api/auth/logout
 run.onclick=async()=>{const selected=scope.value;if(!selected||run.disabled)return;run.disabled=true;try{const result=await fetch("api/run",{method:"POST",headers:{"Content-Type":"application/json","X-Tester-CSRF":csrf},body:JSON.stringify(selected==="__full__"?{scope:"full"}:{project:selected})});const body=await result.json();document.querySelector("#message").textContent=result.ok?(selected==="__full__"?"全量测试":selected)+" 已排队，页面会自动更新。":(body.error||"提交失败")}catch{document.querySelector("#message").textContent="请求失败"}refresh()};
 refresh();setInterval(refresh,5000);
 </script></main></body></html>"""
+
+
+CASES_PAGE = r"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Tester 用例脑图</title><style>
+:root{color-scheme:light;--ink:#182a40;--muted:#62758a;--line:#d7e1ed;--blue:#356db3;--teal:#21877f;--violet:#7460aa;--red:#b7473a;--bg:#f4f7fb}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,"Segoe UI",sans-serif}header{padding:22px 28px 18px;border-bottom:1px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}h1{font-size:25px;margin:0 0 5px}header p{color:var(--muted);margin:0}.tools{display:flex;gap:9px;align-items:center;flex-wrap:wrap}select,input,button{font:inherit;border:1px solid #bdcad8;border-radius:7px;background:#fff;color:var(--ink);padding:9px 11px}button{cursor:pointer}button:hover{border-color:var(--blue)}button:focus-visible,select:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:3px solid #75a6da;outline-offset:2px}main{max-width:1540px;margin:auto;padding:20px 24px}.summary{display:flex;align-items:center;gap:14px;flex-wrap:wrap;color:var(--muted);padding:4px 0 14px}.summary strong{color:var(--ink)}.layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}.map-shell,.detail{background:#fff;border:1px solid var(--line);border-radius:10px}.map-toolbar{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;color:var(--muted);gap:10px}.viewport{overflow:auto;max-height:calc(100vh - 230px);min-height:520px}.viewport svg{display:block;min-width:1100px}.edge{fill:none;stroke:#afc1d5;stroke-width:2}.edge.case{stroke:#bfd2d9}.node rect{fill:#fff;stroke:#b7c8d9;stroke-width:1.5;rx:9}.node.root rect{fill:#182a40;stroke:#182a40}.node.root text{fill:#fff}.node.module rect{fill:#edf4fb;stroke:#88a9cc}.node.case rect{fill:#f4f9f8;stroke:#9acac1}.node.case.todo rect{fill:#fff8e9;stroke:#e2c98d}.node text{pointer-events:none;font-family:inherit}.node .id{font-size:12px;font-weight:700;fill:#55718f}.node.root .id{fill:#c4d7eb}.node .label{font-size:14px;font-weight:650;fill:var(--ink)}.node .meta{font-size:11px;fill:var(--muted)}.node{cursor:pointer}.node:hover rect,.node.selected rect{stroke:var(--blue);stroke-width:3}.module rect{fill:#edf4fb}.module .label{font-size:15px}.detail{padding:18px;position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto}.detail h2{font-size:19px;line-height:1.4;margin:0 0 6px}.detail .case-id{font:700 12px ui-monospace,monospace;color:var(--blue)}.badges{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 18px}.badge{padding:4px 8px;background:#eef3f8;border-radius:5px;font-size:12px;color:#455e77}.badge.todo{background:#fff2d7;color:#745214}.detail h3{font-size:13px;margin:18px 0 6px;color:#3e5872}.detail p,.detail ol{font-size:14px;line-height:1.65;color:#344960;white-space:pre-wrap}.detail ol{padding-left:22px}.empty{padding:34px;color:var(--muted);text-align:center}.legend{display:flex;gap:12px;font-size:12px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;background:#88a9cc}.dot.todo{background:#e2c98d}@media(max-width:900px){main{padding:14px}.layout{grid-template-columns:1fr}.detail{position:static;max-height:none}.viewport{min-height:440px;max-height:62vh}header{padding:16px}.summary{gap:8px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style></head><body><header><div><h1>测试用例脑图</h1><p>从项目用例文档实时整理。点击模块展开用例，再选一条查看详细条件和步骤。</p></div><div class="tools"><label for="project">项目</label><select id="project"></select><input id="search" type="search" placeholder="搜索编号或用例名称" aria-label="搜索编号或用例名称"><button id="zoom-out" type="button" aria-label="缩小脑图">−</button><button id="zoom-in" type="button" aria-label="放大脑图">+</button><a href="/report/control/">返回测试控制台</a></div></header>
+<main><div class="summary" id="summary"></div><div class="layout"><section class="map-shell"><div class="map-toolbar"><span>项目 → 功能模块 → 测试用例</span><span class="legend"><span><i class="dot"></i>已实现</span><span><i class="dot todo"></i>待实现 / 待确认</span></span></div><div class="viewport" id="viewport"><svg id="map" viewBox="0 0 1200 600" role="img" aria-label="测试用例层级脑图"></svg></div></section><aside class="detail" id="detail"><div class="empty">选择一个用例查看详细信息。</div></aside></div></main>
+<script>
+const svg=document.querySelector('#map'),projectPicker=document.querySelector('#project'),search=document.querySelector('#search'),detail=document.querySelector('#detail'),summary=document.querySelector('#summary');let projects=[],expanded=new Set(),selected=null,zoom=1;
+const ns='http://www.w3.org/2000/svg',make=(tag,attrs={})=>{const el=document.createElementNS(ns,tag);for(const [key,value]of Object.entries(attrs))el.setAttribute(key,value);return el},text=(parent,x,y,value,cls)=>{const el=make('text',{x,y,class:cls});el.textContent=value;parent.append(el);return el};
+function current(){return projects.find(p=>p.id===projectPicker.value)}
+function render(){const p=current();if(!p)return;const query=search.value.trim().toLowerCase();const modules=p.modules.map(m=>({...m,cases:m.cases.filter(c=>!query||(c.id+' '+c.title+' '+m.name).toLowerCase().includes(query))})).filter(m=>m.cases.length);if(query)modules.forEach(m=>expanded.add(m.id));let y=42;const blocks=modules.map(m=>{const open=expanded.has(m.id),visible=open?m.cases:[],height=86+visible.length*102,start=y;y+=height+26;return{module:m,open,start,height,visible}});const height=Math.max(600,y+25);svg.setAttribute('viewBox',`0 0 ${1200/zoom} ${height/zoom}`);svg.style.width='1200px';svg.style.height=height+'px';svg.replaceChildren();const rootY=height/2;for(const b of blocks){const cy=b.start+b.height/2;svg.append(make('path',{d:`M204 ${rootY} C246 ${rootY},246 ${cy},270 ${cy}`,class:'edge'}));if(b.open&&b.visible.length){const top=b.start+86,first=top+35,last=top+(b.visible.length-1)*102+35,middle=(first+last)/2;svg.append(make('path',{d:`M550 ${cy} C610 ${cy},610 ${middle},675 ${middle}`,class:'edge case'}));for(let i=0;i<b.visible.length;i++){const item=b.visible[i],cyc=first+i*102;svg.append(make('path',{d:`M640 ${middle} C658 ${middle},658 ${cyc},675 ${cyc}`,class:'edge case'}));drawCase(item,675,cyc-36)}}drawModule(b.module,270,cy,b.open)}drawRoot(p,24,rootY-42);summary.replaceChildren();const done=p.modules.flatMap(m=>m.cases).filter(c=>c.status.includes('✅')).length;const values=[[p.name,p.case_count+' 条用例'],[modules.length+' 个功能模块',null],[done+' 条已标记实现',null]];for(const [label,value]of values){const item=document.createElement('span');if(value){const strong=document.createElement('strong');strong.textContent=label+'　'+value;item.append(strong)}else item.textContent=label;summary.append(item)}if(selected){const found=p.modules.flatMap(m=>m.cases).find(c=>c.id===selected);if(found)showCase(found)}}
+function drawRoot(p,x,y){const g=make('g',{class:'node root'});g.append(make('rect',{x,y,width:180,height:84}));text(g,x+14,y+25,p.id,'id');text(g,x+14,y+49,p.name.replace(/ —.*|—.*/,''),'label');text(g,x+14,y+68,p.case_count+' 条测试用例','meta');svg.append(g)}
+function drawModule(m,x,center,open){const y=center-36,g=make('g',{class:'node module',tabindex:'0',role:'button','aria-expanded':String(open)});g.append(make('rect',{x,y,width:280,height:72}));text(g,x+14,y+25,m.name,'label');text(g,x+14,y+49,m.cases.length+' 条用例 · '+(open?'点击收起':'点击展开'),'meta');g.addEventListener('click',()=>{expanded.has(m.id)?expanded.delete(m.id):expanded.add(m.id);render()});g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();g.dispatchEvent(new MouseEvent('click'))}});svg.append(g)}
+function drawCase(c,x,y){const todo=!c.status.includes('✅'),g=make('g',{class:'node case'+(todo?' todo':'')+(selected===c.id?' selected':''),tabindex:'0',role:'button'});g.append(make('rect',{x,y,width:480,height:76}));text(g,x+13,y+19,c.id,'id');const title=c.title.length>48?c.title.slice(0,47)+'…':c.title;text(g,x+13,y+41,title,'label');text(g,x+13,y+61,[c.priority,c.kind,c.status.includes('✅')?'已实现':'待实现/确认'].filter(Boolean).join('　'),'meta');g.addEventListener('click',()=>{selected=c.id;showCase(c);render()});g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();g.dispatchEvent(new MouseEvent('click'))}});svg.append(g)}
+function showCase(c){detail.replaceChildren();const id=document.createElement('div');id.className='case-id';id.textContent=c.id;detail.append(id);const h=document.createElement('h2');h.textContent=c.title;detail.append(h);const badges=document.createElement('div');badges.className='badges';for(const value of [c.priority,c.kind,c.status.includes('✅')?'已实现':'待实现 / 待确认'])if(value){const b=document.createElement('span');b.className='badge'+(value==='待实现 / 待确认'?' todo':'');b.textContent=value;badges.append(b)}detail.append(badges);for(const [label,key]of [['前置条件','preconditions'],['操作步骤','steps'],['预期结果','expected']]){if(!c[key])continue;const heading=document.createElement('h3');heading.textContent=label;detail.append(heading);if(key==='steps'){const ol=document.createElement('ol');for(const item of c.steps.split(/\n/).filter(Boolean)){const li=document.createElement('li');li.textContent=item.replace(/^\d+[.)、]\s*/, '');ol.append(li)}detail.append(ol)}else{const p=document.createElement('p');p.textContent=c[key];detail.append(p)}}}
+document.querySelector('#zoom-in').onclick=()=>{zoom=Math.min(1.5,zoom+.1);render()};document.querySelector('#zoom-out').onclick=()=>{zoom=Math.max(.65,zoom-.1);render()};search.addEventListener('input',render);projectPicker.addEventListener('change',()=>{expanded.clear();selected=null;detail.innerHTML='<div class="empty">选择一个用例查看详细信息。</div>';render()});
+fetch('api/cases',{cache:'no-store'}).then(async response=>{if(response.status===401){location.href='/report/control/';throw new Error('login required')}if(!response.ok)throw new Error('用例目录暂时不可用');projects=await response.json();for(const p of projects){const option=document.createElement('option');option.value=p.id;option.textContent=p.name;projectPicker.append(option)}render()}).catch(error=>{if(error.message!=='login required'){summary.textContent=error.message;svg.replaceChildren()}});
+</script></body></html>"""
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -525,6 +603,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/":
             self.reply(200, PAGE.encode(), "text/html; charset=utf-8")
             return
+        if path == "/cases":
+            self.reply(200, CASES_PAGE.encode(), "text/html; charset=utf-8")
+            return
         if path == "/web3-bs.js":
             sdk = REPO / "node_modules/@yeying-community/web3-bs/dist/web3-bs.umd.js"
             try:
@@ -539,6 +620,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
             _, session = current
             self.json_reply(200, {"authenticated": True, "did": session["did"], "csrf": session["csrf"]})
+            return
+        if path == "/api/cases":
+            if not self.current_session():
+                self.json_reply(401, {"error": "需要钱包身份登录"})
+                return
+            self.json_reply(200, load_test_cases())
             return
         if path != "/api/status":
             self.json_reply(404, {"error": "Not found"})
