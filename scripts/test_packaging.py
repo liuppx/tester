@@ -101,6 +101,11 @@ class PackageContractTests(unittest.TestCase):
     def test_release_dependencies_use_npm_without_a_lockfile(self):
         build = module("package-release")
         self.assertIn("package.json", build.FILES)
+        self.assertIn("web", build.DIRS)
+        self.assertTrue((ROOT / "web/index.html").is_file())
+        self.assertTrue((ROOT / "web/assets/control.js").is_file())
+        self.assertTrue((ROOT / "web/package-lock.json").is_file())
+        self.assertIn("vite", json.loads((ROOT / "web/package.json").read_text())["devDependencies"])
         self.assertFalse(any("lock" in name.lower() for name in build.FILES))
         manifest = json.loads((ROOT / "package.json").read_text())
         self.assertNotIn("packageManager", manifest)
@@ -113,6 +118,19 @@ class PackageContractTests(unittest.TestCase):
         run.assert_called_once_with(
             ["npm", "install", "--package-lock=false", "--include=dev"],
             cwd=Path("/tmp/tester-checkout"), env={"CI": "1"})
+
+    def test_web_build_uses_its_own_locked_dependencies(self):
+        build = module("package-release")
+        with patch.object(build, "run") as run:
+            build.build_web(Path("/tmp/tester-checkout"), {"CI": "1"})
+        self.assertEqual([call.args[0] for call in run.call_args_list], [
+            ["npm", "ci", "--no-audit", "--no-fund"],
+            ["npm", "run", "build"],
+            ["npm", "prune", "--omit=dev", "--no-audit", "--no-fund"],
+        ])
+        self.assertEqual([call.kwargs["cwd"] for call in run.call_args_list], [
+            Path("/tmp/tester-checkout/web"), Path("/tmp/tester-checkout/web"),
+            Path("/tmp/tester-checkout/web")])
 
     def test_invalid_release_version_is_rejected_before_building(self):
         proc = subprocess.run(["bash", str(ROOT / "scripts/package.sh"), "--ref", "HEAD",
@@ -154,7 +172,7 @@ class ArtifactServiceTests(unittest.TestCase):
                 started = run("starter.sh", "start")
                 self.assertEqual(started.returncode, 0, started.stderr)
                 smoke = run("test.sh", "--suite", "smoke", "--format", "json")
-                self.assertEqual(smoke.returncode, 0, smoke.stderr)
+                self.assertEqual(smoke.returncode, 0, f"{smoke.stderr}\n{smoke.stdout}")
                 restarted = run("starter.sh", "restart")
                 self.assertEqual(restarted.returncode, 0, restarted.stderr)
                 report = json.loads(smoke.stdout)

@@ -96,7 +96,7 @@ class TesterControlTests(unittest.TestCase):
         self.assertEqual(len(control.STATE["pending"]), 2)
 
     def test_manual_page_only_offers_scope_selection(self):
-        page = self.module.PAGE
+        page = (Path(__file__).parent.parent / "web/index.html").read_text()
         self.assertIn('id="scope"', page)
         self.assertIn('id="run"', page)
         self.assertNotIn('id="mode"', page)
@@ -114,7 +114,8 @@ class TesterControlTests(unittest.TestCase):
         self.assertTrue(case["preconditions"])
         self.assertTrue(case["steps"])
         self.assertTrue(case["expected"])
-        self.assertIn("api/cases", self.module.CASES_PAGE)
+        cases_script = (Path(__file__).parent.parent / "web/assets/cases.js").read_text()
+        self.assertIn("api/cases", cases_script)
 
     def test_public_project_dependency_map_has_valid_references_and_key_paths(self):
         topology = json.loads((Path(__file__).parent.parent / "docs/project-dependency-map.json").read_text())
@@ -125,9 +126,37 @@ class TesterControlTests(unittest.TestCase):
         self.assertIn(("tc-chat", "svc-router"), relations)
         self.assertIn(("svc-project", "mw-mysql"), relations)
         self.assertIn(("tester", "svc-node"), relations)
-        self.assertIn("api/architecture", self.module.TOPOLOGY_PAGE)
+        architecture_script = (Path(__file__).parent.parent / "web/assets/architecture.js").read_text()
+        self.assertIn("api/architecture", architecture_script)
         raw = json.dumps(topology)
         self.assertNotRegex(raw, r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+
+    def test_web_ui_assets_are_split_and_served_from_web_directory(self):
+        control = self.module
+        for page_name in ("index.html", "cases.html", "architecture.html"):
+            page = (Path(__file__).parent.parent / "web" / page_name).read_text()
+            self.assertIn("assets/", page)
+            self.assertNotIn("<style>", page)
+        self.assertTrue((Path(__file__).parent.parent / "web/dist/index.html").is_file())
+        self.assertTrue((Path(__file__).parent.parent / "web/dist/cases.html").is_file())
+        self.assertTrue((Path(__file__).parent.parent / "web/dist/architecture.html").is_file())
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), control.Handler)
+        self.addCleanup(server.server_close)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.shutdown)
+        assets = Path(__file__).parent.parent / "web/dist/assets"
+        control_asset = next(path for path in assets.glob("*.js")
+                             if b"loginWithWalletIdentity" in path.read_bytes())
+        with urlopen(f"http://127.0.0.1:{server.server_port}/assets/{control_asset.name}", timeout=2) as response:
+            self.assertEqual(response.headers.get_content_type(), "text/javascript")
+            self.assertIn(b"loginWithWalletIdentity", response.read())
+        with urlopen(f"http://127.0.0.1:{server.server_port}/", timeout=2) as response:
+            self.assertIn(b"/report/control/assets/", response.read())
+        with self.assertRaises(HTTPError) as error:
+            urlopen(f"http://127.0.0.1:{server.server_port}/assets/../config/runtime.json", timeout=2)
+        self.assertEqual(error.exception.code, 404)
 
     def test_test_only_allows_project_without_deployment_adapter(self):
         control = self.module

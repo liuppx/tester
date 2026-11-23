@@ -389,16 +389,39 @@ def checks(args, env):
         run_command([env.get("TESTER_NODE_BIN", "node"), str(ROOT / "node_modules/@playwright/test/cli.js"), "--version"], env, timeout, quiet=True)
 
     def status(timeout):
-        payload = get_json(env, "/api/status", timeout)
-        assert isinstance(payload.get("projects"), dict) and "full" in payload
+        for path in ("/api/auth/status", "/api/status", "/api/cases"):
+            request = Request(endpoint(env, path))
+            try:
+                urlopen(request, timeout=timeout).close()
+            except HTTPError as error:
+                assert error.code == 401
+            else:
+                raise AssertionError(f"anonymous access to protected endpoint was accepted: {path}")
+        topology = get_json(env, "/api/architecture", timeout)
+        assert isinstance(topology.get("nodes"), list) and isinstance(topology.get("edges"), list)
+        page = Request(endpoint(env, "/"))
+        with urlopen(page, timeout=timeout) as response:
+            html = response.read().decode("utf-8")
+        scripts = re.findall(r'<script[^>]+src="/report/control/(assets/[^\"]+\.js)"', html)
+        assert scripts, "built control page does not reference a control script"
+        sources = []
+        for script in scripts:
+            asset = Request(endpoint(env, "/" + script))
+            with urlopen(asset, timeout=timeout) as response:
+                assert response.headers.get_content_type() in ("text/javascript", "application/javascript")
+                sources.append(response.read())
+        assert any(b"loginWithWalletIdentity" in source for source in sources)
 
     def auth(timeout):
         request = Request(endpoint(env, "/api/run"), method="POST", data=b'{"scope":"full"}',
-                          headers={"Content-Type": "application/json"})
+                          headers={
+                              "Content-Type": "application/json",
+                              "Origin": env.get("TESTER_CONTROL_ORIGIN", "https://tester.tidukongjian.com"),
+                          })
         try:
             urlopen(request, timeout=timeout).close()
         except HTTPError as error:
-            assert error.code == 403
+            assert error.code == 401
         else:
             raise AssertionError("unauthenticated scheduling was accepted")
 
