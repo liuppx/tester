@@ -662,7 +662,7 @@ class Handler(BaseHTTPRequestHandler):
         return None
 
     def clear_session_cookie(self) -> None:
-        self.send_header("Set-Cookie", f"{SESSION_COOKIE}=; Path=/report/control/; Max-Age=0; HttpOnly; Secure; SameSite=Lax")
+        self.send_header("Set-Cookie", f"{SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax")
 
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
@@ -817,7 +817,7 @@ class Handler(BaseHTTPRequestHandler):
                         AUTH_SESSIONS.pop(key, None)
                     AUTH_SESSIONS[token] = session
                 self.json_reply(200, {"code": 0, "message": "ok", "data": {"token": token, "did": did}}, {
-                    "Set-Cookie": f"{SESSION_COOKIE}={token}; Path=/report/control/; Max-Age={SESSION_TTL_SECONDS}; HttpOnly; Secure; SameSite=Lax"
+                    "Set-Cookie": f"{SESSION_COOKIE}={token}; Path=/; Max-Age={SESSION_TTL_SECONDS}; HttpOnly; Secure; SameSite=Lax"
                 })
             except (ValueError, KeyError, json.JSONDecodeError, subprocess.SubprocessError) as error:
                 self.json_reply(401, {"code": 1, "message": str(error)})

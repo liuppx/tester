@@ -444,7 +444,7 @@ def render(junit: Path, stamp: str) -> str:
 .skip-detail{display:block;color:#69778a;font-size:12px;margin-top:3px;overflow-wrap:anywhere}
 @media(max-width:650px){main{padding:22px 12px}.project summary{padding:14px}.project-name{min-width:90px}.cases{padding:0 14px 10px}.total{min-width:calc(50% - 6px);flex:1}}
 </style></head><body><main>
-<div class="top"><div><h1>Tester 测试环境报告</h1><p class="subtitle">运行时间：$run_time（北京时间） · $project_count 个项目$version_line</p></div><div class="actions"><label class="log-language" for="log-language">项目日志语言 <select id="log-language"><option value="zh">中文</option><option value="en">English</option></select></label><a class="detail" href="/report/control/">手动测试</a><a class="detail" href="full.html">查看 Playwright 详细报告 →</a></div></div>
+<div class="top"><div><h1>Tester 测试环境报告</h1><p class="subtitle">运行时间：$run_time（北京时间） · $project_count 个项目$version_line</p></div><div class="actions"><label class="log-language" for="log-language">项目日志语言 <select id="log-language"><option value="zh">中文</option><option value="en">English</option></select></label><a class="detail" href="/">手动测试</a><a class="detail" href="full.html">查看 Playwright 详细报告 →</a></div></div>
 <div class="totals"><div class="total"><span>用例总数</span><b>$total</b></div><div class="total"><span>通过</span><b>$passed</b></div><div class="total"><span>失败</span><b>$failed</b></div><div class="total"><span>跳过</span><b>$skipped</b></div></div>
 <section class="skip-breakdown"><h2>跳过分类</h2><p class="hint">按跳过原因归类；即使代码调用了 skip，也可能是环境或测试前提不足。这些用例均不计入通过。</p>
 ${skip_groups}</section>

@@ -18,7 +18,7 @@ npm run build
 npm run preview
 ```
 
-The production build is written to `dist/` and uses `/report/control/` as its base path. The `tester-web` static artifact contains those built files and the wallet SDK. Nginx serves them from `/opt/deploy/static/tester-web/current`; only same-origin API routes go to the Tester service.
+The production build is written to `dist/` and uses `/` as its base path. The `tester-web` static artifact contains those built files and the wallet SDK. Nginx serves them from `/opt/deploy/static/tester-web/current`; only same-origin API routes go to the Tester service.
 
 ## Pages
 

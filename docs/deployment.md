@@ -27,7 +27,7 @@ tester-web-v<major>.<minor>.<patch>-<source-commit-7>.tar.gz
 通过受控发布入口生成制品：
 
 ```bash
-cd /root/code/deployer/operator/upgrade
+cd /root/code/deployer/operator/package
 ./compile_packages.sh --publish
 ```
 
@@ -58,15 +58,15 @@ Upgrade --> Host : static current 链接切换
 @enduml
 ```
 
-### 从旧合包版本迁移
+### 从旧合包版本或带路径前缀的版本迁移
 
 旧 service 制品曾同时托管页面；新 service 只提供 API。迁移时先在 Deployer 的 `operator/upgrade/static-units.conf` 中启用以下行（最后一列替换成实际 HTTPS 入口），使标准升级器能发现静态单元：
 
 ```text
-tester tester-web tester-web https://<tester-domain>/report/control
+tester tester-web tester-web https://<tester-domain>/
 ```
 
-然后进入维护窗口，先安装本仓库的 Nginx static/API 分离配置并平滑重载，再运行 Deployer 的标准 `upgrade.sh`。这一步切换到尚未安装的 `current` 静态目录后，控制台会短暂返回 404，直到升级器部署 `tester-web` 并通过 `/report/control/index.html` 探活。升级失败时，按已备份的 Nginx 配置和 service 制品回滚。升级完成后核对两个制品版本，并额外验证页面、钱包 SDK 与 API；控制服务自身健康检查只验证 service。
+迁移时删除旧的根路径重定向和控制台代理块，将本仓库 Nginx 片段加入实际 HTTPS server；保留独立的 `/report/` 报告配置。然后进入维护窗口，校验并平滑重载 Nginx，再运行 Deployer 的标准 `upgrade.sh`。这一步切换到尚未安装的 `current` 静态目录后，控制台会短暂不可用，直到升级器部署 `tester-web` 并通过 `/index.html` 探活。升级失败时，按已备份的 Nginx 配置和 service 制品回滚。控制台地址为 `https://tester.tidukongjian.com/`，API 为 `/api/`，静态探活为 `/index.html`，报告继续位于 `/report/`。旧前端构建包含旧路径，必须重新构建并发布 `tester-web`；后端 Cookie 路径同时更新到 `/`，因此两个制品都需要升级，升级后重新钱包登录。`TESTER_CONTROL_ORIGIN` 仍为 `https://tester.tidukongjian.com`，无需因路径迁移改变。升级完成后核对两个制品版本，并额外验证页面、钱包 SDK 与 API；控制服务自身健康检查只验证 service。
 
 ## 3. 目标环境准备
 
@@ -119,7 +119,7 @@ scripts/test.sh --suite smoke --format json
 
 如果使用 systemd 管理控制服务，单元只调用安装包内的 `scripts/starter.sh`；不要把产品服务塞进 Tester 的 systemd 单元。
 
-Nginx 必须包含项目提供的 [`scripts/nginx-control-location.conf`](../scripts/nginx-control-location.conf)：根路径 `/` 重定向到 `/report/control/`，静态页面从 `/opt/deploy/static/tester-web/current` 提供，只有 `/report/control/api/` 代理到 `127.0.0.1:18082`。钱包登录请求不受报告 Cookie 或 Basic Auth 额外拦截，`client_max_body_size` 至少为 `1m`。修改后执行：
+Nginx 必须包含项目提供的 [`scripts/nginx-control-location.conf`](../scripts/nginx-control-location.conf)：站点根路径 `/` 直接提供控制台，静态页面从 `/opt/deploy/static/tester-web/current` 提供，只有 `/api/` 代理到 `127.0.0.1:18082`。钱包登录请求不受报告 Cookie 或 Basic Auth 额外拦截，`client_max_body_size` 至少为 `1m`。修改后执行：
 
 ```bash
 nginx -t
@@ -139,8 +139,8 @@ participant "Node Identity" as Identity
 database "Tester SQLite" as DB
 User -> Browser : 打开 /
 Browser -> Nginx : GET /
-Nginx --> Browser : 302 /report/control/
-Browser -> Nginx : GET 控制台资源
+Nginx --> Browser : 200 控制台 HTML
+Browser -> Nginx : GET /assets/ 和 /web3-bs.js
 Nginx -> Control : 仅代理 API
 Browser -> Control : 创建登录 session
 Browser -> Wallet : 请求钱包身份签名
@@ -161,11 +161,11 @@ Control --> Browser : Secure session cookie 或待审批
 
 ```bash
 curl -I https://<tester-domain>/
-curl -i https://<tester-domain>/report/control/api/auth/status
-curl -I https://<tester-domain>/report/control/web3-bs.js
+curl -i https://<tester-domain>/api/auth/status
+curl -I https://<tester-domain>/web3-bs.js
 ```
 
-预期结果：根路径 `302` 到 `/report/control/`；匿名认证状态 `401`；Wallet SDK 返回 `200`。登录后再确认控制台能读取 `/api/status`、`/api/cases` 和 `/api/architecture`，管理员能看到成员授权入口。
+预期结果：根路径直接返回 `200` 控制台页面；匿名认证状态 `401`；Wallet SDK 返回 `200`。登录后再确认控制台能读取 `/api/status`、`/api/cases` 和 `/api/architecture`，管理员能看到成员授权入口。
 
 E2E 环境按项目依赖图和测试机架构手册逐项确认。Tester 自身 `health-check.sh --level all` 只证明 Tester runner 和控制服务可用，不代表所有产品服务、中间件或跨项目依赖已启动。
 
@@ -194,9 +194,9 @@ cd <deployer-checkout>/operator/upgrade
 
 ### 根路径显示 Welcome to nginx
 
-HTTPS server 没有 `/` 重定向，命中了默认站点。将 `scripts/nginx-control-location.conf` 的根路径 location 合并到实际监听 443 的 Nginx 配置，执行 `nginx -t` 并平滑重载真正的 master。
+HTTPS server 没有指向 Tester 静态目录，命中了默认站点。将 `scripts/nginx-control-location.conf` 的根路径 location 合并到实际监听 443 的 Nginx 配置，执行 `nginx -t` 并平滑重载真正的 master。
 
-### `/report/control/` 返回 403
+### `/` 返回 403
 
 检查是否仍有报告 Cookie 门禁或 Basic Auth 规则覆盖控制 location。钱包登录由 Tester 控制服务负责，控制 location 不应复用报告访问 Cookie。
 
