@@ -6,7 +6,6 @@ from __future__ import annotations
 from datetime import date, datetime, time as clock_time, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-import mimetypes
 import os
 from pathlib import Path
 import re
@@ -394,6 +393,39 @@ def latest_summary(project: str) -> dict | None:
         return None
 
 
+def load_report_history(limit: int = 30) -> list[dict]:
+    """Read only published summary fields and construct safe public report links."""
+    entries = []
+    sources = [(FULL, PUBLIC / "runs")]
+    sources.extend((project, PUBLIC / "projects" / project / "runs") for project in PROJECTS)
+    fields = ("run", "started_at", "finished_at", "status", "tests", "passed", "failed", "skipped")
+    for project, runs_dir in sources:
+        if not runs_dir.is_dir():
+            continue
+        try:
+            run_dirs = sorted((path for path in runs_dir.iterdir() if path.is_dir() and not path.is_symlink()),
+                              key=lambda path: path.name, reverse=True)[:limit]
+        except OSError:
+            continue
+        for run_dir in run_dirs:
+            summary_path = run_dir / "summary.json"
+            try:
+                summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            run = summary.get("run")
+            if (not isinstance(run, str) or run != run_dir.name
+                    or not re.fullmatch(r"[A-Za-z0-9_+.-]{1,80}", run)):
+                continue
+            record = {key: summary[key] for key in fields if key in summary}
+            record["project"] = project
+            record["report"] = (f"/report/runs/{run}/index.html" if project == FULL
+                                else f"/report/projects/{project}/runs/{run}/index.html")
+            entries.append(record)
+    entries.sort(key=lambda item: item.get("finished_at", ""), reverse=True)
+    return entries[:limit]
+
+
 def cooldown_until(project: str) -> float | None:
     """Router shares one localhost critical-rate-limit bucket across test runs."""
     if project != "router":
@@ -550,7 +582,41 @@ def daily_scheduler(schedule: tuple[clock_time, ZoneInfo]) -> None:
         print(f"Tester daily full run queued: {item['id']} for {target.isoformat()}", flush=True)
 
 
-WEB_DIST = REPO / "web/dist"
+def overview_payload() -> dict:
+    """Use published counts and an allowlist: never expose private runner paths."""
+    fields = {"id", "project", "source", "started_at", "finished_at", "result", "report"}
+    def public_record(item):
+        return {key: value for key, value in (item or {}).items() if key in fields}
+
+    full = latest_summary(FULL) or {}
+    counts = full.get("summary", full)
+    summary = {key: counts.get(key) for key in ("passed", "failed", "skipped")}
+    summary["total"] = counts.get("total", counts.get("tests"))
+    with MUTEX:
+        recent = [public_record(item) for item in STATE["recent"][:30]]
+        pending = {item["project"] for item in STATE["pending"]}
+        active = (STATE["active"] or {}).get("project")
+        projects = {}
+        for name in PROJECTS:
+            last = next((item for item in recent if item.get("project") == name), None)
+            published = latest_summary(name) or {}
+            projects[name] = {
+                "status": (last or {}).get("result", published.get("status", "pending")),
+                "busy": name == active or name in pending,
+                "last": last,
+            }
+    metadata_path = REPO / "release.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
+    return {
+        "service": {"status": "pass", "version": metadata.get("version", "development")},
+        "full": {
+            "busy": active == FULL or FULL in pending,
+            "last": {key: full[key] for key in ("run", "status", "finished_at", "started_at") if key in full},
+            "summary": summary,
+        },
+        "projects": projects,
+        "history": load_report_history(),
+    }
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -609,36 +675,15 @@ class Handler(BaseHTTPRequestHandler):
                                   "artifact_mode": ARTIFACT_MODE, "pid": os.getpid(),
                                   "service_pid": int(os.environ.get("TESTER_SERVICE_PID", os.getpid()))})
             return
-        if path == "/":
-            self.reply(200, (WEB_DIST / "index.html").read_bytes(), "text/html; charset=utf-8")
-            return
-        if path == "/cases":
-            self.reply(200, (WEB_DIST / "cases.html").read_bytes(), "text/html; charset=utf-8")
-            return
-        if path == "/architecture":
-            self.reply(200, (WEB_DIST / "architecture.html").read_bytes(), "text/html; charset=utf-8")
-            return
         if path == "/api/architecture":
             topology = json.loads((REPO / "docs/project-dependency-map.json").read_text(encoding="utf-8"))
             self.json_reply(200, topology)
             return
-        if path.startswith("/assets/"):
-            asset_name = path.removeprefix("/assets/")
-            if not re.fullmatch(r"[A-Za-z0-9_.-]+\.(?:css|js)", asset_name):
-                self.json_reply(404, {"error": "Not found"})
+        if path == "/api/overview":
+            if not self.current_session():
+                self.json_reply(401, {"error": "需要钱包身份登录"})
                 return
-            asset = (WEB_DIST / "assets" / asset_name).resolve()
-            if not asset.is_relative_to((WEB_DIST / "assets").resolve()) or not asset.is_file():
-                self.json_reply(404, {"error": "Not found"})
-                return
-            self.reply(200, asset.read_bytes(), mimetypes.guess_type(asset.name)[0] or "application/octet-stream")
-            return
-        if path == "/web3-bs.js":
-            sdk = REPO / "web/node_modules/@yeying-community/web3-bs/dist/web3-bs.umd.js"
-            try:
-                self.reply(200, sdk.read_bytes(), "application/javascript; charset=utf-8")
-            except OSError:
-                self.json_reply(503, {"error": "Wallet login component is unavailable"})
+            self.json_reply(200, overview_payload())
             return
         if path == "/api/auth/status":
             current = self.current_session()

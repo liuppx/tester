@@ -19,7 +19,7 @@ DEFAULT_NPM_REGISTRY = "https://registry.npmmirror.com"
 DEFAULT_PLAYWRIGHT_DOWNLOAD_HOST = "https://npmmirror.com/mirrors/playwright"
 FILES = ("package.json", ".nvmrc", ".env.template",
          "LICENSE", "README.md", "playwright.config.ts", "playwright.safe.config.ts", "tsconfig.json")
-DIRS = ("products", "shared", "scripts", "config", "docs", "web")
+DIRS = ("products", "shared", "scripts", "config", "docs")
 
 def run(args, **kwargs):
     return subprocess.run(args, check=True, **kwargs)
@@ -89,6 +89,26 @@ def sha(path):
             h.update(chunk)
     return h.hexdigest()
 
+
+def release_manifest(source, service_version, web_version, service_package,
+                     service_root, web_package, web_root):
+    return {
+        "schema_version": 1,
+        "repository": "tester",
+        "source_commit": source,
+        "artifacts": [
+            {"unit_id": "tester-service", "type": "service", "version": service_version,
+             "package": service_package.name, "sha256": sha(service_package),
+             "package_root": service_root,
+             "service_target": {"module": "tester", "path": "/opt/deploy/tester"}},
+            {"unit_id": "tester-web", "type": "static", "version": web_version,
+             "package": web_package.name, "sha256": sha(web_package),
+             "package_root": web_root,
+             "static_targets": [{"site_id": "tester-web", "path": "/opt/deploy/static/tester-web",
+                                 "health_check_path": "/index.html"}]},
+        ],
+    }
+
 def publishable(relative):
     parts = relative.parts
     return not any(p in {".git", "__pycache__", ".cache", ".bin", ".links"} or p.startswith(".project") for p in parts) and not (
@@ -113,16 +133,19 @@ def build(args):
     # Read per-unit overrides from the selected release, never from dirty working files.
     override = subprocess.run(["git", "-C", str(ROOT), "show", ref + ":scripts/artifact-versions.conf"],
                               capture_output=True, text=True)
-    unit_version = args.version
+    versions = {"tester-service": args.version, "tester-web": args.version}
     if override.returncode == 0:
         for line in override.stdout.splitlines():
             line = line.split("#", 1)[0].strip()
             if line:
                 unit, version = line.split()
-                if unit != "tester-service" or not re.fullmatch(SEMVER, version):
+                if unit not in ("tester-service", "tester-web") or not re.fullmatch(SEMVER, version):
                     raise ValueError("invalid Tester artifact version override")
-                unit_version = version
-    package_root = f"tester-service-v{unit_version}-{source[:7]}"
+                versions[unit] = version
+    unit_version = versions["tester-service"]
+    web_version = versions["tester-web"]
+    service_root = f"tester-service-v{unit_version}-{source[:7]}"
+    web_root = f"tester-web-v{web_version}-{source[:7]}"
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="tester-package-") as temporary:
         temp = Path(temporary)
@@ -153,7 +176,7 @@ def build(args):
         env.pop("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", None)
         run(browser_install_command(), cwd=checkout, env=env)
         copy_browser_bundle(cache, browsers, required_browser_directories(checkout))
-        staged = temp / package_root
+        staged = temp / service_root
         staged.mkdir()
         for name in FILES:
             shutil.copy2(checkout / name, staged / name)
@@ -176,27 +199,33 @@ def build(args):
                     raise ValueError("non-portable dependency link")
                 path.unlink()
                 shutil.copy2(resolved, path)
-        archive_path = temp / (package_root + ".tar.gz")
-        def filtered(info):
-            relative = Path(info.name).relative_to(package_root)
-            if not publishable(relative):
-                return None
-            info.uid = info.gid = 0
-            info.uname = info.gname = ""
-            return info
-        with tarfile.open(archive_path, "w:gz", dereference=True) as tar:
-            tar.add(staged, arcname=package_root, filter=filtered)
-        manifest = {
-            "schema_version": 1, "repository": "tester", "source_commit": source,
-            "artifacts": [{"unit_id": "tester-service", "type": "service", "version": unit_version,
-                           "package": archive_path.name, "sha256": sha(archive_path),
-                           "package_root": package_root,
-                           "service_target": {"module": "tester", "path": "/opt/deploy/tester"}}],
-        }
+        web_staged = temp / web_root
+        shutil.copytree(checkout / "web/dist", web_staged)
+        (web_staged / "release.json").write_text(json.dumps({
+            "unit_id": "tester-web", "version": web_version, "source_commit": source,
+        }, indent=2) + "\n")
+
+        def archive_directory(directory, root_name):
+            archive_path = temp / (root_name + ".tar.gz")
+            def filtered(info):
+                relative = Path(info.name).relative_to(root_name)
+                if not publishable(relative):
+                    return None
+                info.uid = info.gid = 0
+                info.uname = info.gname = ""
+                return info
+            with tarfile.open(archive_path, "w:gz", dereference=True) as tar:
+                tar.add(directory, arcname=root_name, filter=filtered)
+            return archive_path
+
+        archive_path = archive_directory(staged, service_root)
+        web_archive_path = archive_directory(web_staged, web_root)
+        manifest = release_manifest(source, unit_version, web_version, archive_path,
+                                   service_root, web_archive_path, web_root)
         manifest_path = temp / "release-manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
         # Never replace existing artifact bytes; reserve output names before writing.
-        for path in (archive_path, manifest_path):
+        for path in (archive_path, web_archive_path, manifest_path):
             with (output / path.name).open("xb") as destination, path.open("rb") as source_file:
                 shutil.copyfileobj(source_file, destination)
 

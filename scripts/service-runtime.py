@@ -399,18 +399,13 @@ def checks(args, env):
                 raise AssertionError(f"anonymous access to protected endpoint was accepted: {path}")
         topology = get_json(env, "/api/architecture", timeout)
         assert isinstance(topology.get("nodes"), list) and isinstance(topology.get("edges"), list)
-        page = Request(endpoint(env, "/"))
-        with urlopen(page, timeout=timeout) as response:
-            html = response.read().decode("utf-8")
-        scripts = re.findall(r'<script[^>]+src="/report/control/(assets/[^\"]+\.js)"', html)
-        assert scripts, "built control page does not reference a control script"
-        sources = []
-        for script in scripts:
-            asset = Request(endpoint(env, "/" + script))
-            with urlopen(asset, timeout=timeout) as response:
-                assert response.headers.get_content_type() in ("text/javascript", "application/javascript")
-                sources.append(response.read())
-        assert any(b"loginWithWalletIdentity" in source for source in sources)
+        overview = Request(endpoint(env, "/api/overview"))
+        try:
+            urlopen(overview, timeout=timeout).close()
+        except HTTPError as error:
+            assert error.code == 401
+        else:
+            raise AssertionError("anonymous overview access was accepted")
 
     def auth(timeout):
         request = Request(endpoint(env, "/api/run"), method="POST", data=b'{"scope":"full"}',
