@@ -396,8 +396,8 @@ def build_for(project: str, repo: Path, stamps: Path, env: dict[str, str]) -> No
     if stamp.exists():
         return
     commands = {
-        "router": ["go", "build", "-o", "build/router", "./cmd/router"],
-        "warehouse": ["go", "build", "-o", "bin/warehouse", "./cmd/warehouse"],
+        "router": ["go", "build", "-buildvcs=false", "-o", "build/router", "./cmd/router"],
+        "warehouse": ["go", "build", "-buildvcs=false", "-o", "bin/warehouse", "./cmd/warehouse"],
         "node": ["npm", "run", "build"],
     }
     command = commands.get(project)

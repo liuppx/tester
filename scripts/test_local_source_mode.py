@@ -63,6 +63,11 @@ class LocalSourceModeTests(unittest.TestCase):
                 manager.ensure_npm_dependencies("node", repo, repo, Path(folder) / "runtime", {}, Path(folder) / "logs")
             self.assertEqual(run.call_args.kwargs["env"]["NPM_CONFIG_LEGACY_PEER_DEPS"], "true")
 
+    def test_go_build_disables_worktree_vcs_stamp_only(self):
+        source = (ROOT / "scripts/local-source-services.py").read_text()
+        self.assertIn('"router": ["go", "build", "-buildvcs=false"', source)
+        self.assertIn('"warehouse": ["go", "build", "-buildvcs=false"', source)
+
     def test_local_config_copy_changes_only_requested_keys(self):
         manager = load_manager()
         with tempfile.TemporaryDirectory() as folder:
