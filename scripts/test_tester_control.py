@@ -223,6 +223,23 @@ class TesterControlTests(unittest.TestCase):
         self.assertEqual(control.STATE["recent"][0]["report"],
                          "/report/projects/node/runs/2026-10-17_10-00-00+0800/index.html")
 
+    def test_local_source_mode_runs_incremental_main_project_from_full_runner(self):
+        control = self.module
+        control.ARTIFACT_MODE = True
+        control.LOCAL_SOURCE_MODE = True
+        control.PROJECTS["node"] = {"repo": "/tmp/node", "enabled": False}
+        item = control.enqueue("node", "manual", mode="deploy")
+        self.assertEqual(item["mode"], "deploy")
+        item["source"] = "main"
+        item["target_sha"] = "a" * 40
+        summary = {"request_id": item["id"], "run": "2026-10-17_10-00-00+0800", "status": "passed", "target_sha": "a" * 40}
+        with patch.object(control, "cooldown_until", return_value=None), \
+             patch.object(control, "git_sha", return_value="a" * 40), \
+             patch.object(control, "latest_summary", return_value=summary), \
+             patch.object(control.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as run:
+            self.assertTrue(control.execute(item))
+        self.assertEqual(run.call_args.args[0], [str(control.FULL_RUNNER), "node"])
+
     def test_full_run_uses_existing_runner_and_records_report(self):
         control = self.module
         item = control.enqueue(control.FULL, "manual")

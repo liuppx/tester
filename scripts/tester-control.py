@@ -47,6 +47,7 @@ RETRY_SECONDS = int(os.environ.get("TESTER_PROJECT_RETRY_SECONDS", "300"))
 ROUTER_COOLDOWN_SECONDS = int(os.environ.get("TESTER_ROUTER_COOLDOWN_SECONDS", "1260"))
 MUTEX = threading.RLock()
 ARTIFACT_MODE = os.environ.get("TESTER_ARTIFACT_MODE") == "1"
+LOCAL_SOURCE_MODE = os.environ.get("TESTER_LOCAL_SOURCE_MODE", "false").lower() in ("1", "true", "yes")
 ALLOW_ARTIFACT_SOURCE_DEPLOY = os.environ.get("TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY", "false").lower() in ("1", "true", "yes")
 WATCH_UPSTREAM_MAIN = os.environ.get("TESTER_WATCH_UPSTREAM_MAIN", "1").lower() not in ("0", "false", "no")
 
@@ -303,11 +304,11 @@ def enqueue(project: str, source: str, target_sha: str | None = None,
         mode = "test"
     elif project not in PROJECTS:
         raise ValueError(f"Unknown project: {project}")
-    if ARTIFACT_MODE and mode == "deploy" and not ALLOW_ARTIFACT_SOURCE_DEPLOY:
+    if ARTIFACT_MODE and mode == "deploy" and not (ALLOW_ARTIFACT_SOURCE_DEPLOY or LOCAL_SOURCE_MODE):
         raise ValueError("Artifact mode does not deploy product source checkouts")
     if mode not in ("test", "deploy"):
         raise ValueError("Unknown test mode")
-    if project != FULL and mode == "deploy" and not PROJECTS[project].get("enabled", False):
+    if project != FULL and mode == "deploy" and not LOCAL_SOURCE_MODE and not PROJECTS[project].get("enabled", False):
         raise ValueError(f"Deployment adapter is not enabled for {project}")
     # An active run has already selected its commit. A newer main commit must
     # remain in the queue rather than rewriting the running request's SHA.
@@ -477,7 +478,7 @@ def execute(item: dict) -> bool:
                 metadata = REPO / "release.json"
                 if metadata.exists():
                     environment["TESTER_SOURCE_SHA"] = json.loads(metadata.read_text())["source_commit"]
-                if project != FULL and mode == "deploy":
+                if project != FULL and mode == "deploy" and not LOCAL_SOURCE_MODE:
                     # The Tester artifact is released by Deployer, while the
                     # packaged control service still watches approved product
                     # mains and updates their isolated test deployments.

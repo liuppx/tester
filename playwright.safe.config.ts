@@ -10,7 +10,7 @@ process.env.GALLIUM_DRIVER = 'llvmpipe';
 type ScheduledProject = NonNullable<PlaywrightTestConfig['projects']>[number];
 
 const projects = (base.projects ?? [])
-  .filter((project: ScheduledProject) => project.name !== 'knowledge')
+  .filter((project: ScheduledProject) => process.env.TESTER_LOCAL_SOURCE_MODE === '1' || project.name !== 'knowledge')
   .map((project: ScheduledProject) => {
     const launchOptions = project.use?.launchOptions ?? {};
     const existingArgs = launchOptions.args ?? [];
