@@ -25,7 +25,7 @@ T --> P : stop processes started by this run
 @enduml
 ```
 
-启动器只使用每个项目自己的开发入口和健康端口。PostgreSQL、Redis、MySQL、Mailpit 等共享中间件必须已经启动；启动器不会执行 `down -v`、重置数据库或覆盖项目配置。Router 每次运行使用独立 PostgreSQL 数据库，停止测试时自动删除；它不会连接共享的 Router 业务数据库。每个源仓库先抓取 `origin/main`，然后在运行目录下创建 detached worktree，避免修改 `/root/code` 中的分支和未提交文件。npm、Go、Python/uv 和 Maven 下载默认使用国内镜像；可由服务进程环境变量覆盖。产品仓库缺失、远端 `main` 不可达、依赖中间件未就绪或端口被未知进程占用时，运行会在启动阶段失败。
+启动器只使用每个项目自己的开发入口和健康端口。PostgreSQL、Redis、MySQL、Mailpit 等共享中间件必须已经启动；启动器不会执行 `down -v`、重置数据库或覆盖项目配置。Router 每次运行使用独立 PostgreSQL 数据库，停止测试时自动删除；它不会连接共享的 Router 业务数据库。源码服务默认最多等待 5 分钟开放本地端口，覆盖首次启动和数据库迁移时间；可设置 `TESTER_LOCAL_SERVICE_START_TIMEOUT` 调整。每个源仓库先抓取 `origin/main`，然后在运行目录下创建 detached worktree，避免修改 `/root/code` 中的分支和未提交文件。npm、Go、Python/uv 和 Maven 下载默认使用国内镜像；可由服务进程环境变量覆盖。产品仓库缺失、远端 `main` 不可达、依赖中间件未就绪或端口被未知进程占用时，运行会在启动阶段失败。
 
 源码服务默认使用产品开发端口加固定偏移量，避免与当前测试环境中的旧服务冲突；实际端口会写入本次运行的私有环境文件。可通过 `TESTER_LOCAL_PORT_OFFSET` 调整偏移量，不能把服务地址改成公网地址。
 

@@ -68,6 +68,10 @@ class LocalSourceModeTests(unittest.TestCase):
         self.assertIn('"router": ["go", "build", "-buildvcs=false"', source)
         self.assertIn('"warehouse": ["go", "build", "-buildvcs=false"', source)
 
+    def test_service_start_wait_has_migration_headroom(self):
+        source = (ROOT / "scripts/local-source-services.py").read_text()
+        self.assertIn('TESTER_LOCAL_SERVICE_START_TIMEOUT", "300"', source)
+
     def test_local_config_copy_changes_only_requested_keys(self):
         manager = load_manager()
         with tempfile.TemporaryDirectory() as folder:

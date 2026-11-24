@@ -411,16 +411,17 @@ def build_for(project: str, repo: Path, stamps: Path, env: dict[str, str]) -> No
     stamp.write_text("built\n", encoding="utf-8")
 
 
-def wait_port(url: str, timeout: float = 60) -> None:
+def wait_port(url: str, timeout: float | None = None) -> None:
     parsed = urlparse(url)
     if parsed.hostname not in LOOPBACK_HOSTS or not parsed.port:
         return
-    deadline = time.time() + timeout
+    wait_seconds = timeout or int(os.environ.get("TESTER_LOCAL_SERVICE_START_TIMEOUT", "300"))
+    deadline = time.time() + wait_seconds
     while time.time() < deadline:
         if tcp_ready(parsed.hostname, parsed.port):
             return
         time.sleep(1)
-    raise RuntimeError(f"service did not open {parsed.hostname}:{parsed.port} within {int(timeout)}s")
+    raise RuntimeError(f"service did not open {parsed.hostname}:{parsed.port} within {int(wait_seconds)}s")
 
 
 def start(args: argparse.Namespace) -> int:
