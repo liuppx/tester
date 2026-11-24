@@ -36,6 +36,8 @@ SQLite 状态通过 `scripts/config_backup.sh` 使用 SQLite 在线备份接口�
 5. artifact mode 若要自动跟进产品 `main`，runtime 中应设置 `TESTER_WATCH_UPSTREAM_MAIN=true` 和 `TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY=true`，并只启用已有隔离部署适配器的项目。关闭部署许可时仍可在控制页手动测试当前部署环境。Tester 自身制品升级不由这个 watcher 执行。
 6. artifact mode 要运行每日全量任务时，在 runtime 配置中设置 `TESTER_DAILY_RUN_ENABLED` 为 `true`，并指定 `TESTER_DAILY_RUN_TIME`、`TESTER_DAILY_RUN_TIMEZONE`。之后通过 `starter.sh restart` 让新配置生效。删除旧 cron 条目，避免重复触发。
 
+需要让产品服务直接来自 `/root/code` 的社区 `main` 时，设置 `TESTER_LOCAL_SOURCE_MODE=1`、`TESTER_PRODUCT_SOURCE_ROOT` 和受保护的 `TESTER_ENV_FILE`，详见[本地源码测试模式](local-source-mode.md)。本地源码模式会在测试结束后停止本次启动的服务；共享中间件仍由独立运维流程管理。
+
 Nginx 从独立静态目录提供根路径 `/` 的控制台，仅将 `/api/` 同源代理到只监听本机的控制服务；Tester 的钱包身份会话保护控制页面中的状态和操作 API。部署后检查匿名访问 `/api/status` 返回 `401`，登录后可读取状态；未授权 DID 登录返回 `403`，名单为空时不允许任何登录。
 
 Tester 前端是独立的 Vite 多页面项目，依赖、脚本和锁文件都在 `web/`。发布时生成独立 `tester-web` static 制品，安装到 `/opt/deploy/static/tester-web/current`；service 制品不包含 `web/`。Nginx 从 static current 提供 `/` 页面、`/assets/*` 和 `/web3-bs.js`，只将 `/api/` 代理到本机控制服务。验证时确认页面资源走 static 目录，API 登录路径没有额外 Cookie 门禁或 HTTP Basic Auth 挑战。

@@ -79,6 +79,21 @@ def copy_browser_bundle(cache, destination, directory_names):
 def browser_install_command():
     return ["node", "node_modules/@playwright/test/cli.js", "install", "chromium", "--no-shell"]
 
+
+def make_release_links_portable(staged):
+    """Replace internal dependency symlinks with self-contained release files."""
+    staged = staged.resolve()
+    for path in list(staged.rglob("*")):
+        if not path.is_symlink():
+            continue
+        resolved = path.resolve(strict=True)
+        if not resolved.is_relative_to(staged) or not resolved.is_file():
+            raise ValueError("non-portable dependency link")
+        path.unlink()
+        shutil.copy2(resolved, path)
+        if ".bin" in path.relative_to(staged).parts:
+            path.chmod(path.stat().st_mode | 0o111)
+
 def git(*args):
     return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
 
@@ -111,7 +126,7 @@ def release_manifest(source, service_version, web_version, service_package,
 
 def publishable(relative):
     parts = relative.parts
-    return not any(p in {".git", "__pycache__", ".cache", ".bin", ".links"} or p.startswith(".project") for p in parts) and not (
+    return not any(p in {".git", "__pycache__", ".cache", ".links"} or p.startswith(".project") for p in parts) and not (
         relative.name.endswith((".pyc", ".log")) or
         (relative.name.startswith(".env") and relative.name != ".env.template")
     )
@@ -188,17 +203,7 @@ def build(args):
             "node": node_version, "npm": npm_version,
         }, indent=2) + "\n")
         # Resolve links only when they stay in this release, preventing external build paths.
-        for path in list(staged.rglob("*")):
-            if path.is_symlink():
-                relative = path.relative_to(staged)
-                if ".bin" in relative.parts:
-                    path.unlink()
-                    continue
-                resolved = path.resolve(strict=True)
-                if not resolved.is_relative_to(staged) or not resolved.is_file():
-                    raise ValueError("non-portable dependency link")
-                path.unlink()
-                shutil.copy2(resolved, path)
+        make_release_links_portable(staged)
         web_staged = temp / web_root
         shutil.copytree(checkout / "web/dist", web_staged)
         (web_staged / "release.json").write_text(json.dumps({

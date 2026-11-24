@@ -49,6 +49,7 @@ class PackageContractTests(unittest.TestCase):
         build = module("package-release")
         for name in ("scripts/__pycache__/x.pyc", "scripts/.env.local", ".project/task.json", "x.log"):
             self.assertFalse(build.publishable(Path(name)))
+        self.assertTrue(build.publishable(Path("node_modules/.bin/tsx")))
         for name in ("config/runtime.json.template", "config/backup.conf.template",
                      ".env.template", "products/router/tests/smoke.spec.ts"):
             self.assertTrue(build.publishable(Path(name)))
@@ -116,6 +117,21 @@ class PackageContractTests(unittest.TestCase):
         self.assertEqual(build.browser_install_command(), [
             "node", "node_modules/@playwright/test/cli.js", "install", "chromium", "--no-shell"
         ])
+
+    def test_internal_bin_links_are_copied_as_executable_files(self):
+        build = module("package-release")
+        with tempfile.TemporaryDirectory() as folder:
+            staged = Path(folder) / "release"
+            target = staged / "node_modules/tsx/dist/cli.mjs"
+            target.parent.mkdir(parents=True)
+            target.write_text("#!/usr/bin/env node\n")
+            link = staged / "node_modules/.bin/tsx"
+            link.parent.mkdir(parents=True)
+            link.symlink_to("../tsx/dist/cli.mjs")
+            build.make_release_links_portable(staged)
+            self.assertTrue(link.is_file())
+            self.assertFalse(link.is_symlink())
+            self.assertTrue(link.stat().st_mode & 0o111)
 
     def test_package_build_defines_domestic_defaults(self):
         build = module("package-release")

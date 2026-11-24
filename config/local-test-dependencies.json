@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "source_root": "/root/code",
+  "full_run_projects": [
+    "books",
+    "chat",
+    "marketplace",
+    "knowledge",
+    "node",
+    "orchestrator",
+    "project",
+    "router",
+    "social",
+    "wallet",
+    "warehouse"
+  ],
+  "projects": {
+    "books": {
+      "repositories": ["books"],
+      "services": []
+    },
+    "marketplace": {
+      "repositories": ["marketplace"],
+      "services": []
+    },
+    "wallet": {
+      "repositories": ["wallet", "node", "router", "warehouse"],
+      "services": ["postgresql", "redis", "mailpit", "node-api", "node-web", "router-api", "router-web", "warehouse-api", "warehouse-webdav", "warehouse-admin", "warehouse-web"]
+    },
+    "node": {
+      "repositories": ["node"],
+      "services": ["postgresql", "redis", "mailpit", "node-api", "node-web"]
+    },
+    "router": {
+      "repositories": ["router", "node"],
+      "services": ["postgresql", "redis", "mailpit", "node-api", "router-api", "router-web"]
+    },
+    "warehouse": {
+      "repositories": ["warehouse"],
+      "services": ["postgresql", "warehouse-api", "warehouse-webdav", "warehouse-admin", "warehouse-web"]
+    },
+    "chat": {
+      "repositories": ["chat", "router", "warehouse"],
+      "services": ["postgresql", "redis", "chat-web", "router-api", "warehouse-webdav"]
+    },
+    "social": {
+      "repositories": ["social"],
+      "services": ["mysql", "redis", "social-platform", "social-server", "social-rtc", "social-identity", "social-web"]
+    },
+    "project": {
+      "repositories": ["project", "warehouse"],
+      "services": ["mysql", "redis", "postgresql", "project-api", "warehouse-api"]
+    },
+    "orchestrator": {
+      "repositories": ["orchestrator", "router", "warehouse"],
+      "services": ["postgresql", "orchestrator-api", "orchestrator-web", "router-api", "warehouse-api"]
+    },
+    "knowledge": {
+      "repositories": ["knowledge"],
+      "services": ["knowledge-api", "knowledge-web"]
+    }
+  },
+  "repositories": [
+    "books",
+    "chat",
+    "knowledge",
+    "marketplace",
+    "node",
+    "orchestrator",
+    "project",
+    "router",
+    "social",
+    "wallet",
+    "warehouse"
+  ],
+  "services": {
+    "postgresql": {"port": 5432, "kind": "middleware"},
+    "redis": {"port": 6379, "kind": "middleware"},
+    "mysql": {"port": 3306, "kind": "middleware"},
+    "mailpit": {"port": 1025, "kind": "middleware"},
+    "node-api": {"url_key": "NODE_API_URL", "default_port": 8100},
+    "node-web": {"url_key": "NODE_BASE_URL", "default_port": 8991},
+    "router-api": {"url_key": "ROUTER_BASE_URL", "default_port": 3011},
+    "router-web": {"url_key": "ROUTER_WEB_URL", "default_port": 5181},
+    "warehouse-api": {"url_key": "WAREHOUSE_WEBDAV_URL", "default_port": 6065},
+    "warehouse-webdav": {"url_key": "WAREHOUSE_WEBDAV_URL", "default_port": 6065},
+    "warehouse-admin": {"url_key": "WAREHOUSE_ADMIN_URL", "default_port": 6066},
+    "warehouse-web": {"url_key": "WAREHOUSE_BASE_URL", "default_port": 5173},
+    "chat-web": {"url_key": "CHAT_BASE_URL", "default_port": 3020},
+    "social-platform": {"url_key": "SOCIAL_BASE_URL", "default_port": 8888},
+    "social-server": {"port": 8878, "kind": "product-service"},
+    "social-rtc": {"port": 8890, "kind": "product-service"},
+    "social-identity": {"url_key": "SOCIAL_IDENTITY_URL", "default_port": 8901},
+    "social-web": {"url_key": "SOCIAL_WEB_URL", "default_port": 8082},
+    "project-api": {"url_key": "PROJECT_BASE_URL", "default_port": 2222},
+    "orchestrator-api": {"url_key": "ORCHESTRATOR_API_URL", "default_port": 3900},
+    "orchestrator-web": {"url_key": "ORCHESTRATOR_BASE_URL", "default_port": 5174},
+    "knowledge-api": {"url_key": "KNOWLEDGE_API_URL", "default_port": 8000},
+    "knowledge-web": {"url_key": "KNOWLEDGE_BASE_URL", "default_port": 5173}
+  }
+}

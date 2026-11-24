@@ -15,6 +15,8 @@ Tester 是 Playwright 测试控制器和报告服务。它负责：
 
 Tester **不会**启动 PostgreSQL、Redis、MySQL、Mailpit 等共享中间件，也不会启动所有产品 API、网页或后台服务。E2E 用例默认连接已经运行的服务；全量脚本在开跑前只对 Warehouse 和 Node 网页做一次预热请求，失败时记日志并继续执行。
 
+需要直接按社区源码运行时，使用[本地源码测试模式](local-source-mode.md)。该模式先把每个依赖仓库 materialize 为 `origin/main` 的 detached worktree，再按项目依赖启动产品服务；它不会覆盖 `/root/code` 的本地改动，也不会自动重置共享数据库。制品模式和本地源码模式必须分别记录测试结果。
+
 Tester 自身制品由 Deployer 按标准服务包流程升级。Tester 的产品 watcher 与 Deployer 的 Tester 版本升级是两条独立链路。
 
 ## 2. 运行组件
@@ -35,7 +37,7 @@ GPU 机当前的 Tester 组件如下：
 - [playwright.config.ts](../playwright.config.ts) 定义 11 个产品 Playwright 项目。
 - [playwright.safe.config.ts](../playwright.safe.config.ts) 从全量集合排除 Knowledge，GPU 机的安全全量运行因此包含另外 10 个项目。
 - [tester-control.py](../scripts/tester-control.py) 轮询、入队和分派测试。
-- [run-full-on-test-machine.sh](../scripts/run-full-on-test-machine.sh) 运行当前包的全部安全项目或指定项目；不启动产品服务。
+- [run-full-on-test-machine.sh](../scripts/run-full-on-test-machine.sh) 默认连接已运行服务；启用[本地源码测试模式](local-source-mode.md)后按依赖启动源码服务并在运行结束时回收。
 - [deploy-and-test-project.sh](../scripts/deploy-and-test-project.sh) 对受支持的单个项目执行更新适配和定向测试。
 - [global-setup.ts](../scripts/global-setup.ts) 预热 Warehouse/Node URL；连接失败只记日志，不阻止测试。
 
