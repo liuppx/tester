@@ -352,6 +352,11 @@ def ensure_npm_dependencies(project: str, repo: Path, package_dir: Path, runtime
     command = ["npm", "ci", "--no-audit", "--no-fund"] if lock.is_file() else ["npm", "install", "--no-audit", "--no-fund", "--package-lock=false"]
     process_env = dict(env)
     process_env.setdefault("NPM_CONFIG_REGISTRY", "https://registry.npmmirror.com")
+    if not lock.is_file():
+        # Some older source manifests expose peer graphs that npm 10 cannot
+        # resolve strictly; use npm's documented compatibility mode only when
+        # there is no committed lockfile to define an exact peer tree.
+        process_env.setdefault("NPM_CONFIG_LEGACY_PEER_DEPS", "true")
     log_path = logs / f"npm-{project}-{package_dir.name}.log"
     logs.mkdir(parents=True, exist_ok=True, mode=0o700)
     with log_path.open("w", encoding="utf-8") as stream:

@@ -53,6 +53,16 @@ class LocalSourceModeTests(unittest.TestCase):
             self.assertIn("pypi.tuna.tsinghua.edu.cn", env["UV_INDEX_URL"])
             self.assertIn("aliyun-public", Path(env["MAVEN_ARGS"].split(" ", 1)[1]).read_text())
 
+    def test_unlocked_npm_dependencies_use_legacy_peer_resolution(self):
+        manager = load_manager()
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Path(folder) / "node"
+            repo.mkdir()
+            (repo / "package.json").write_text('{"name":"node-test"}\n')
+            with unittest.mock.patch.object(manager.subprocess, "run") as run:
+                manager.ensure_npm_dependencies("node", repo, repo, Path(folder) / "runtime", {}, Path(folder) / "logs")
+            self.assertEqual(run.call_args.kwargs["env"]["NPM_CONFIG_LEGACY_PEER_DEPS"], "true")
+
     def test_local_config_copy_changes_only_requested_keys(self):
         manager = load_manager()
         with tempfile.TemporaryDirectory() as folder:
