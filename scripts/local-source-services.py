@@ -22,7 +22,7 @@ import socket
 import subprocess
 import sys
 import time
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from local_test_readiness import DEFAULT_CONFIG, LOOPBACK_HOSTS, read_env, select_projects
 
@@ -88,6 +88,61 @@ def replace_loopback_ports(source: Path, target: Path, ports: dict[str, int]) ->
     target.chmod(0o600)
 
 
+def yaml_scalar(path: Path, section: str, key: str) -> str:
+    active = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if re.match(rf"^{re.escape(section)}:\s*$", line):
+            active = True
+            continue
+        if active and re.match(r"^\S[^:]*:\s*", line):
+            break
+        if active and re.match(rf"^\s+{re.escape(key)}:\s*", line):
+            value = line.split(":", 1)[1].strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+            return value
+    raise RuntimeError(f"required local config value is missing: {section}.{key}")
+
+
+def dsn_with_database(dsn: str, database: str) -> str:
+    parsed = urlparse(dsn)
+    if parsed.scheme not in {"postgres", "postgresql"} or not parsed.hostname or not parsed.username:
+        raise RuntimeError("Router local-source mode requires a PostgreSQL sql_dsn")
+    if not re.fullmatch(r"tester_router_e2e_[a-f0-9]{8}", database):
+        raise RuntimeError("invalid isolated Router database name")
+    return urlunparse(parsed._replace(path="/" + database))
+
+
+def create_router_test_database(source_config: Path, database: str) -> None:
+    dsn = yaml_scalar(source_config, "database", "sql_dsn")
+    owner = urlparse(dsn).username
+    if not owner or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", owner):
+        raise RuntimeError("Router database owner is not a safe PostgreSQL role name")
+    sql = f'CREATE DATABASE "{database}" OWNER "{owner}"'
+    result = subprocess.run(
+        ["docker", "exec", "postgres", "sh", "-c", 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -c "$1"', "sh", sql],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    if result.returncode:
+        raise RuntimeError("could not create isolated Router E2E database; check the PostgreSQL owner role and permissions")
+
+
+def drop_router_test_database(database: str) -> None:
+    if not re.fullmatch(r"tester_router_e2e_[a-f0-9]{8}", database):
+        return
+    sql = f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE)'
+    subprocess.run(
+        ["docker", "exec", "postgres", "sh", "-c", 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -c "$1"', "sh", sql],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=30,
+    )
+
+
 def endpoint_port(value: str | None, key: str) -> int:
     if not value:
         port = DEFAULT_PORTS[key]
@@ -107,7 +162,7 @@ def git(repo: Path, *args: str) -> str | None:
     return result.stdout.strip() if result.returncode == 0 else None
 
 
-def source_checkout(project: str, source_root: Path, worktree_root: Path, sha: str, ports: dict[str, int]) -> Path:
+def source_checkout(project: str, source_root: Path, worktree_root: Path, sha: str, ports: dict[str, int], database_names: dict[str, str]) -> Path:
     """Materialize one already-resolved origin/main commit in a managed worktree."""
     original = source_root / project
     if not original.is_dir() or git(original, "rev-parse", "--git-dir") is None:
@@ -120,13 +175,13 @@ def source_checkout(project: str, source_root: Path, worktree_root: Path, sha: s
         if git(worktree, "rev-parse", "HEAD") != sha:
             raise RuntimeError(f"managed source directory has the wrong commit: {worktree}")
         reset_environmental_files(project, worktree)
-        overlay_runtime_configuration(project, original, worktree, ports)
+        overlay_runtime_configuration(project, original, worktree, ports, database_names)
         return worktree
     worktree.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     subprocess.run(["git", "-C", str(original), "worktree", "add", "--detach", str(worktree), sha], check=True)
     marker.write_text(sha + "\n", encoding="utf-8")
     marker.chmod(0o600)
-    overlay_runtime_configuration(project, original, worktree, ports)
+    overlay_runtime_configuration(project, original, worktree, ports, database_names)
     return worktree
 
 
@@ -142,7 +197,7 @@ def reset_environmental_files(project: str, worktree: Path) -> None:
         subprocess.run(["git", "-C", str(worktree), "checkout", "--", *tracked], check=True)
 
 
-def overlay_runtime_configuration(project: str, original: Path, worktree: Path, ports: dict[str, int]) -> None:
+def overlay_runtime_configuration(project: str, original: Path, worktree: Path, ports: dict[str, int], database_names: dict[str, str]) -> None:
     # Runtime configuration is ignored by Git and stays in the original checkout.
     config_files = {
         "node": ("run/secrets.enc.json", "run/.secrets-password"),
@@ -177,7 +232,11 @@ def overlay_runtime_configuration(project: str, original: Path, worktree: Path, 
                 raise RuntimeError("Node source server bind signature changed; refusing an unisolated local run")
             server_source.write_text(updated, encoding="utf-8")
     if project == "router" and (original / "config.yaml").is_file():
-        private_yaml_copy(original / "config.yaml", worktree / "config.yaml", {"server": {"address": "127.0.0.1", "port": ports["ROUTER_BASE_URL"]}})
+        updates = {"server": {"address": "127.0.0.1", "port": ports["ROUTER_BASE_URL"]}}
+        if database_names.get("router"):
+            dsn = yaml_scalar(original / "config.yaml", "database", "sql_dsn")
+            updates["database"] = {"sql_dsn": dsn_with_database(dsn, database_names["router"])}
+        private_yaml_copy(original / "config.yaml", worktree / "config.yaml", updates)
         replace_loopback_ports(worktree / "config.yaml", worktree / "config.yaml", ports)
     if project == "warehouse" and (original / "config.yaml").is_file():
         private_yaml_copy(original / "config.yaml", worktree / "config.yaml", {
@@ -363,6 +422,8 @@ def start(args: argparse.Namespace) -> int:
     projects = select_projects(config, args.project)
     base = read_env(args.env_file)
     ports = {key: endpoint_port(base.get(key), key) for key in DEFAULT_PORTS}
+    services = list(dict.fromkeys(service for name in projects for service in config["projects"][name]["services"]))
+    database_names = {"router": f"tester_router_e2e_{secrets.token_hex(4)}"} if "router-api" in services else {}
     source_root = args.source_root
     worktree_root = args.runtime / "worktrees"
     source_projects = sorted({repo for name in projects for repo in config["projects"][name]["repositories"]})
@@ -382,7 +443,7 @@ def start(args: argparse.Namespace) -> int:
             raise RuntimeError(f"could not resolve origin/main for {project}")
         fetched[project] = sha
     for project in source_projects:
-        sources[project] = source_checkout(project, source_root, worktree_root, fetched[project], ports)
+        sources[project] = source_checkout(project, source_root, worktree_root, fetched[project], ports, database_names)
         shas[project] = fetched[project]
 
     overrides = {key: f"http://127.0.0.1:{value}" for key, value in ports.items()}
@@ -398,7 +459,6 @@ def start(args: argparse.Namespace) -> int:
     logs = args.runtime / "logs"
     logs.mkdir(parents=True, exist_ok=True, mode=0o700)
     stamps = args.runtime / "build-stamps"
-    services = list(dict.fromkeys(service for name in projects for service in config["projects"][name]["services"]))
     order = {name: index for index, name in enumerate((
         "postgresql", "redis", "mysql", "mailpit",
         "node-api", "node-web", "router-api", "router-web",
@@ -432,7 +492,11 @@ def start(args: argparse.Namespace) -> int:
     configure_maven_mirror(args.runtime, env)
     for project, repo in sources.items():
         prepare_dependencies(project, repo, services, args.runtime, env, logs)
+    local_databases: list[dict[str, str]] = []
     try:
+        if database_names.get("router"):
+            create_router_test_database(sources["router"] / "config.yaml", database_names["router"])
+            local_databases.append({"engine": "postgres", "name": database_names["router"]})
         for name in services:
             if name in middleware_names:
                 continue
@@ -474,8 +538,11 @@ def start(args: argparse.Namespace) -> int:
     except Exception:
         for item in reversed(started):
             stop_item(item)
+        for database in reversed(local_databases):
+            if database["engine"] == "postgres":
+                drop_router_test_database(database["name"])
         raise
-    args.state.write_text(json.dumps({"started": started, "env": overrides, "projects": projects}, indent=2) + "\n", encoding="utf-8")
+    args.state.write_text(json.dumps({"started": started, "env": overrides, "projects": projects, "local_databases": local_databases}, indent=2) + "\n", encoding="utf-8")
     source_commits = {project: sha for project, sha in shas.items()}
     manifest = {
         "projects": projects,
@@ -500,6 +567,9 @@ def stop(args: argparse.Namespace) -> int:
     state = json.loads(args.state.read_text(encoding="utf-8"))
     for item in reversed(state.get("started", [])):
         stop_item(item)
+    for database in reversed(state.get("local_databases", [])):
+        if database.get("engine") == "postgres":
+            drop_router_test_database(database.get("name", ""))
     args.state.unlink(missing_ok=True)
     args.env_output.unlink(missing_ok=True)
     return 0
