@@ -113,9 +113,9 @@ Project --> Redis
 
 ## 4. GPU 测试机当前状态
 
-截至 2026-11-24，Tester 服务、系统 `nginx.service` 和 Router API 处于运行状态；PostgreSQL、Redis、MySQL、Mailpit、Manticore 也已由 `/opt/deploy` 下的 Compose 项目启动并通过健康/端口检查。MySQL 使用既有 `/data/mysql` 持久数据；切勿把 `/root/code/deployer/middleware/mysql/data` 覆盖到该数据目录。Node、Warehouse、Chat、Social、Project、Orchestrator 的产品服务尚未启动，Orchestrator 源仓库也仍缺失，因此完整全量 E2E 仍不能开始。
+截至 2026-11-24，Tester 服务、系统 `nginx.service` 和 Router API 处于运行状态；PostgreSQL、Redis、MySQL、Mailpit、Manticore、PlantUML 也已由 `/opt/deploy` 下的 Compose 项目启动，数据库/容器健康检查通过。MySQL 使用既有 `/data/mysql` 持久数据；切勿把 `/root/code/deployer/middleware/mysql/data` 覆盖到该数据目录。Project 库有 218 条迁移记录，Social 的 Flyway 有 5 条成功记录；两边应用数据库和用户都已创建。产品服务尚未启动，因此完整全量 E2E 仍不能开始。
 
-MinIO、OnlyOffice、PlantUML 的 Compose 目录已复制到 `/opt/deploy`，但容器尚未成功启动：MinIO 的指定镜像标签无法从当前镜像源解析，PlantUML 拉取超时，OnlyOffice 拉取遇到镜像层校验错误。容器 Nginx 未启动；公网 Tester 站点继续由系统 `nginx.service` 提供。
+Orchestrator 仓库现已位于 `/root/code/orchestrator`，处于社区 `main` 且工作区干净；backend `.env` 尚未配置。MinIO 对当前 Tester E2E 依赖图是可选组件，不纳入默认启动集合。PlantUML 与 OnlyOffice 已由 `/opt/deploy` Compose 配置启动并通过 HTTP/health 检查。Docker daemon 已 reload 新配置的镜像源。容器 Nginx 未启动；公网 Tester 站点继续由系统 `nginx.service` 提供。
 
 当前配置文件中的主要 URL：
 
@@ -126,13 +126,13 @@ MinIO、OnlyOffice、PlantUML 的 Compose 目录已复制到 `/opt/deploy`，但
 | `ROUTER_BASE_URL`                                                | `http://localhost:3011`     | API `/api/v1/public/status` 返回 200；根路径返回 404。补 `ROUTER_WEB_URL=http://127.0.0.1:5181` 并启动 Router Web，不能把 API 的 3011 当网页      |
 | `CHAT_BASE_URL`                                                  | `http://127.0.0.1:3020`     | Chat 服务未启动                                                                                                                                   |
 | `SOCIAL_BASE_URL` / `SOCIAL_WEB_URL` / `SOCIAL_IDENTITY_URL`     | `:8888` / `:8082` / `:8901` | 对应服务均未启动                                                                                                                                  |
-| `PROJECT_BASE_URL`                                               | `http://localhost:2222`     | Project 服务未启动；MySQL 已启动，但 Project schema、账号和迁移仍需验证                                                                           |
-| `ORCHESTRATOR_BASE_URL` / `ORCHESTRATOR_API_URL`                 | 未配置                      | 当前 `.env` 中存在旧的 `AGENT_BASE_URL` / `AGENT_API_URL`，Tester 用例读取的是 `ORCHESTRATOR_*`；而且 GPU 机 `/root/code/orchestrator` 仓库不存在 |
+| `PROJECT_BASE_URL`                                               | `http://localhost:2222`     | Project 服务未启动；数据库、应用用户及 218 条迁移记录已存在                                                         |
+| `ORCHESTRATOR_BASE_URL` / `ORCHESTRATOR_API_URL`                 | 未配置                      | `/root/code/orchestrator` main checkout 已准备好；backend `.env` 尚未配置，Tester `.env` 仍需 `ORCHESTRATOR_*`      |
 | `MARKETPLACE_REPO_PATH` / `BOOKS_REPO_PATH` / `WALLET_REPO_PATH` | `/root/code/...`            | 仓库目录存在；这部分本地文件用例可独立运行                                                                                                        |
 
 上述本机 URL 即使服务未启动也仍是非空值，因此很多用例不会因“未配置”而跳过，而会以连接拒绝失败。`localhost` 在 Linux 上可能先解析到 `::1`；测试机本地服务建议统一写 `127.0.0.1`。
 
-当前自动更新项目清单与 Tester 项目定义也不完全一致：配置启用了 `agent`，但 Playwright 没有 `agent` 项目，`deploy-and-test-project.sh` 也不支持 `agent`；Playwright 有 `orchestrator` 项目，但自动更新清单没有该项目且机器上缺少仓库。自动更新适配器目前只支持 `router`、`chat`、`books`、`marketplace`、`wallet`。应将 `agent` 设为 disabled/移除；Orchestrator 保持 disabled，直到仓库、环境和适配器都准备好。
+当前自动更新项目清单与 Tester 项目定义也不完全一致：配置曾启用 `agent`，但 Playwright 没有 `agent` 项目，`deploy-and-test-project.sh` 也不支持 `agent`；`orchestrator` 仓库现已存在，但没有旧的单项目部署适配器，backend `.env` 也尚未配置。旧部署适配器目前只支持 `router`、`chat`、`books`、`marketplace`、`wallet`。本地源码模式可读取 Orchestrator main，但完整全量运行前仍须补齐其运行配置和依赖；`agent` 应保持 disabled/移除。
 
 `enabled` 只影响 watcher 是否跟踪项目 main；它不会从全量测试中排除该项目。每日全量调度当前也关闭，runtime 没有 `TESTER_DAILY_RUN_ENABLED=true`。最新全量报告仍是 2026-11-21：789 项中 196 通过、405 失败、188 跳过；失败样例包含 Warehouse 连接 `localhost:6065` 被拒。环境修好前，这份全量报告主要反映依赖未就绪，不能作为产品质量结论。
 
@@ -219,9 +219,11 @@ cd /opt/deploy/redis && docker compose up -d
 cd /opt/deploy/mysql && docker compose up -d
 cd /opt/deploy/manticore && docker compose up -d
 cd /opt/deploy/mailpit && docker compose up -d
+cd /opt/deploy/plantuml && docker compose up -d
+cd /opt/deploy/onlyoffice && docker compose up -d
 ```
 
-当前上述五项已运行。首次启动或迁移 MySQL 时只使用 `/opt/deploy/mysql` 配置和 `/data/mysql` 持久数据目录；源码仓库中的 MySQL data 是另一份数据库，禁止覆盖或与其互换。PostgreSQL/Redis/MySQL 容器健康仍不代表对应业务库、用户、迁移和应用凭据可用。MinIO、OnlyOffice、PlantUML 是按产品用例启用的可选依赖，当前镜像拉取未完成；容器 Nginx 按单实例要求不启动。
+当前上述服务均已运行。首次启动或迁移 MySQL 时只使用 `/opt/deploy/mysql` 配置和 `/data/mysql` 持久数据目录；源码仓库中的 MySQL data 是另一份数据库，禁止覆盖或与其互换。PlantUML 和 OnlyOffice 绑定本机端口。PostgreSQL/Redis/MySQL 容器健康仍不代表业务配置正确；本次核验到 Project 有 218 条迁移记录，Social Flyway 有 5 条成功记录。MinIO 不在 Tester 当前全量依赖闭包中，不需启动。容器 Nginx 按单实例要求不启动。
 
 ### 6.2 产品服务
 

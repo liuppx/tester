@@ -73,11 +73,11 @@ python3 scripts/local-source-services.py stop router
 | Warehouse | Warehouse API/WebDAV/S3 与 Web | PostgreSQL；对象存储按配置决定 |
 | Chat | Chat、Router、Warehouse | Router/Warehouse 依赖的中间件；实时模型用例还需要 Router BYOK 配置 |
 | Social | Social platform/server/RTC/identity 与 Web | MySQL、Redis |
-| Project | Project 与 Warehouse | MySQL、Redis；Office/PlantUML 按用例决定（当前这些附加容器未就绪） |
+| Project | Project 与 Warehouse | MySQL、Redis；Office/PlantUML 按用例决定（当前两者均已启动） |
 | Knowledge | Knowledge API 与 Web | 依产品配置决定 |
-| Orchestrator | Orchestrator backend 与 Web，并连接 Router/Warehouse | PostgreSQL 按产品配置决定；GPU `/root/code` 缺 Orchestrator 仓库 |
+| Orchestrator | Orchestrator backend 与 Web，并连接 Router/Warehouse | PostgreSQL 按产品配置决定；GPU 仓库已准备好，backend `.env` 尚未配置 |
 
-本地源码模式下的全量运行会对全部 11 个 Tester 项目依赖闭包取并集，并按“中间件就绪 → Node/Router/Warehouse → Chat/Social/Project/Knowledge/Orchestrator → Web”顺序启动。普通制品模式仍保留安全全量配置排除 Knowledge 的既有规则。当前 GPU 测试机缺少 Orchestrator 源仓库时，本地全量会明确阻塞；可以先运行已准备好的单项目，不能把缺少项目的结果当作全量质量门禁。
+本地源码模式下的全量运行会对全部 11 个 Tester 项目依赖闭包取并集，并按“中间件就绪 → Node/Router/Warehouse → Chat/Social/Project/Knowledge/Orchestrator → Web”顺序启动。普通制品模式仍保留安全全量配置排除 Knowledge 的既有规则。当前 Orchestrator 还缺 backend `.env`；Project 有 218 条迁移记录，启动时会自动应用新迁移。Social Flyway 有 5 条成功迁移记录，源码服务启动时还需确认开发 profile 与已有数据库配置一致。
 
 ## 运行目录与日志
 
