@@ -1,4 +1,5 @@
 import { request as playwrightRequest, type APIResponse } from '@playwright/test';
+import { randomBytes } from 'node:crypto';
 
 export interface BasicAuth {
   type: 'basic';
@@ -14,9 +15,21 @@ export interface BearerAuth {
 export type Auth = BasicAuth | BearerAuth;
 
 export async function apiContext(baseURL: string, extraHeaders: Record<string, string> = {}) {
+  const headers = { ...extraHeaders };
+  const hostname = new URL(baseURL).hostname;
+  if (
+    process.env.TEST_ENV === 'local' &&
+    (hostname === '127.0.0.1' || hostname === 'localhost') &&
+    !headers['X-Forwarded-For']
+  ) {
+    // Local Router limits are keyed by client IP. Give each isolated API
+    // context its own TEST-NET client so a large suite does not throttle later
+    // tests on the shared loopback address.
+    headers['X-Forwarded-For'] = `198.51.100.${1 + (randomBytes(1).readUInt8(0) % 254)}`;
+  }
   return playwrightRequest.newContext({
     baseURL,
-    extraHTTPHeaders: extraHeaders,
+    extraHTTPHeaders: headers,
     ignoreHTTPSErrors: true,
   });
 }

@@ -53,6 +53,25 @@ class LocalSourceModeTests(unittest.TestCase):
             self.assertIn("pypi.tuna.tsinghua.edu.cn", env["UV_INDEX_URL"])
             self.assertIn("aliyun-public", Path(env["MAVEN_ARGS"].split(" ", 1)[1]).read_text())
 
+    def test_unlocked_npm_dependencies_use_legacy_peer_resolution(self):
+        manager = load_manager()
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Path(folder) / "node"
+            repo.mkdir()
+            (repo / "package.json").write_text('{"name":"node-test"}\n')
+            with unittest.mock.patch.object(manager.subprocess, "run") as run:
+                manager.ensure_npm_dependencies("node", repo, repo, Path(folder) / "runtime", {}, Path(folder) / "logs")
+            self.assertEqual(run.call_args.kwargs["env"]["NPM_CONFIG_LEGACY_PEER_DEPS"], "true")
+
+    def test_go_build_disables_worktree_vcs_stamp_only(self):
+        source = (ROOT / "scripts/local-source-services.py").read_text()
+        self.assertIn('"router": ["go", "build", "-buildvcs=false"', source)
+        self.assertIn('"warehouse": ["go", "build", "-buildvcs=false"', source)
+
+    def test_service_start_wait_has_migration_headroom(self):
+        source = (ROOT / "scripts/local-source-services.py").read_text()
+        self.assertIn('TESTER_LOCAL_SERVICE_START_TIMEOUT", "300"', source)
+
     def test_local_config_copy_changes_only_requested_keys(self):
         manager = load_manager()
         with tempfile.TemporaryDirectory() as folder:
@@ -93,7 +112,7 @@ class LocalSourceModeTests(unittest.TestCase):
             (original / "source.txt").write_text("local change stays here\n")
 
             ports = dict(manager.DEFAULT_PORTS)
-            worktree = manager.source_checkout("node", source_root, root / "managed", head, ports)
+            worktree = manager.source_checkout("node", source_root, root / "managed", head, ports, {})
             sha = head
 
             self.assertEqual((worktree / "source.txt").read_text(), "main source\n")
@@ -101,6 +120,38 @@ class LocalSourceModeTests(unittest.TestCase):
             self.assertFalse((worktree / "config.js").is_symlink())
             self.assertIn(str(original / "config.js"), (worktree / "config.js").read_text())
             self.assertEqual(manager.git(worktree, "rev-parse", "HEAD"), sha)
+
+    def test_router_e2e_dsn_rewrites_database_without_exposing_credentials(self):
+        manager = load_manager()
+        source = "postgres://router_app:keep-secret@127.0.0.1:5432/router?sslmode=disable"
+        result = manager.dsn_with_database(source, "tester_router_e2e_a1b2c3d4")
+        self.assertEqual(result, "postgres://router_app:keep-secret@127.0.0.1:5432/tester_router_e2e_a1b2c3d4?sslmode=disable")
+        self.assertNotIn("keep-secret", manager.dsn_with_database(source, "tester_router_e2e_a1b2c3d4").split("@")[-1])
+        with self.assertRaisesRegex(RuntimeError, "invalid isolated"):
+            manager.dsn_with_database(source, "router")
+
+    def test_router_private_config_points_to_the_ephemeral_database(self):
+        manager = load_manager()
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = root / "source.yaml"
+            target = root / "runtime/config.yaml"
+            source.write_text(
+                'server:\n  address: "0.0.0.0"\n  port: 3011\n'
+                'database:\n  sql_dsn: "postgres://router_app:keep-secret@127.0.0.1:5432/router?sslmode=disable"\n'
+            )
+            manager.private_yaml_copy(source, target, {
+                "server": {"address": "127.0.0.1", "port": 13011},
+                "database": {"sql_dsn": manager.dsn_with_database(
+                    manager.yaml_scalar(source, "database", "sql_dsn"),
+                    "tester_router_e2e_a1b2c3d4",
+                )},
+            })
+            result = target.read_text()
+            self.assertIn("tester_router_e2e_a1b2c3d4", result)
+            self.assertIn("keep-secret", result)
+            self.assertNotIn("127.0.0.1:5432/router?", result)
+            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
 
 
 if __name__ == "__main__":

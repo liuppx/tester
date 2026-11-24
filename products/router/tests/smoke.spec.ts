@@ -16,8 +16,7 @@ test(localizedTitle("【服务健康与公共信息 / API】 路由器根 URL �
 test(localizedTitle("【管理后台 UI 与登录导航 / UI】 路由器管理UI页面呈现一些内容", "router admin UI page renders some content"), async ({ page }) => {
   test.skip(!baseURLFor('router'), 'ROUTER_BASE_URL not configured');
   await page.goto('/');
-  const body = await page.locator('body').innerText();
-  expect(body.length).toBeGreaterThan(0);
+  await expect(page.getByRole('heading', { name: 'Router' })).toBeVisible({ timeout: 15_000 });
 });
 
 test(localizedTitle("【服务健康与公共信息 / UI】 当服务中断时优雅地跳过所有路由器测试", "gracefully skip all router tests when service is down"), async ({ request }) => {

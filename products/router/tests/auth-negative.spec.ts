@@ -16,6 +16,7 @@
  * overwrite + one-time cases are ordered inside a `serial` block to avoid a
  * parallel challenge clobbering the nonce mid-test.
  */
+import { randomBytes } from 'node:crypto';
 import { localizedTitle } from '../../../shared/title';
 import { test, expect, baseURLFor, envFor } from '../fixtures';
 import { apiContext } from '../../../shared/api';
@@ -257,16 +258,14 @@ test(localizedTitle("【钱包自定义 SIWE 鉴权 / API】 EIP-55：地址上�
 // / 20 min per client IP, in-memory fallback when Redis is off), BUT
 // `rateLimitFactory` short-circuits to a no-op when `DebugEnabled` (typical for
 // a local dev build) or the threshold is 0. Probed live: 500 rapid challenge
-// calls all returned 200 → the limiter is a no-op here. Because the limit is
-// per-IP, tripping a *live* limiter would poison every other auth test for 20
-// minutes, so we fire only a small burst just past the 20-request threshold: if
-// the server starts rejecting (429) we assert the protection; otherwise we skip
-// with the live-detected reason rather than fake a limit this build doesn't
-// enforce.
+// calls all returned 200 → the limiter is a no-op here. The limit is per-IP,
+// so this test uses a fresh TEST-NET address through X-Forwarded-For. That keeps
+// a real limiter assertion from blocking later tests that use the runner's IP.
 test(localizedTitle("【钱包自定义 SIWE 鉴权 / API】 RT-API-015 auth 端点受 CriticalRateLimit 限流", "auth endpoints are protected by CriticalRateLimit (RT-API-015)"), async () => {
   skipIfNoService();
   const baseURL = baseURLFor('router')!;
-  const ctx = await apiContext(baseURL);
+  const testIp = `198.51.100.${1 + (randomBytes(1).readUInt8(0) % 254)}`;
+  const ctx = await apiContext(baseURL, { 'X-Forwarded-For': testIp });
   try {
     const addr = '0x' + '3'.repeat(40);
     // 30 > the 20/20min CriticalRateLimit threshold: enough to trip an active
