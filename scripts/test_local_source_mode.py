@@ -43,6 +43,16 @@ class LocalSourceModeTests(unittest.TestCase):
         result = subprocess.run(["bash", "-n", str(ROOT / "scripts/run-full-on-test-machine.sh")], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_local_manager_uses_domestic_package_mirrors(self):
+        manager = load_manager()
+        with tempfile.TemporaryDirectory() as folder:
+            env = manager.service_env({})
+            manager.configure_maven_mirror(Path(folder), env)
+            self.assertEqual(env["NPM_CONFIG_REGISTRY"], "https://registry.npmmirror.com")
+            self.assertEqual(env["GOPROXY"], "https://goproxy.cn,direct")
+            self.assertIn("pypi.tuna.tsinghua.edu.cn", env["UV_INDEX_URL"])
+            self.assertIn("aliyun-public", Path(env["MAVEN_ARGS"].split(" ", 1)[1]).read_text())
+
     def test_public_local_source_docs_do_not_contain_ip_addresses(self):
         for path in (ROOT / "docs/local-source-mode.md", ROOT / "config/local-test-dependencies.json"):
             self.assertIsNone(re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", path.read_text()), path)

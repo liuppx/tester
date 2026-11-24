@@ -218,7 +218,25 @@ def service_env(overrides: dict[str, str], extra: dict[str, str] | None = None) 
         env.update(extra)
     env.setdefault("PATH", "/opt/node-v24/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin")
     env.setdefault("NPM_CONFIG_REGISTRY", "https://registry.npmmirror.com")
+    env.setdefault("GOPROXY", "https://goproxy.cn,direct")
+    env.setdefault("UV_INDEX_URL", "https://pypi.tuna.tsinghua.edu.cn/simple")
+    env.setdefault("PIP_INDEX_URL", "https://pypi.tuna.tsinghua.edu.cn/simple")
     return env
+
+
+def configure_maven_mirror(runtime: Path, env: dict[str, str]) -> None:
+    settings = runtime / "configs/maven-settings.xml"
+    settings.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    settings.write_text(
+        "<settings xmlns=\"http://maven.apache.org/SETTINGS/1.2.0\">"
+        "<mirrors><mirror><id>aliyun-public</id><mirrorOf>*</mirrorOf>"
+        "<name>Aliyun Maven mirror</name>"
+        "<url>https://maven.aliyun.com/repository/public</url>"
+        "</mirror></mirrors></settings>\n",
+        encoding="utf-8",
+    )
+    settings.chmod(0o600)
+    env.setdefault("MAVEN_ARGS", f"--settings {settings}")
 
 
 def command_for(name: str, sources: dict[str, Path], ports: dict[str, int]) -> tuple[Path, list[str], dict[str, str]] | None:
@@ -406,6 +424,7 @@ def start(args: argparse.Namespace) -> int:
     started: list[dict] = []
     started_groups: set[str] = set()
     env = service_env(overrides)
+    configure_maven_mirror(args.runtime, env)
     for project, repo in sources.items():
         prepare_dependencies(project, repo, services, args.runtime, env, logs)
     try:
@@ -486,7 +505,7 @@ def stop_item(item: dict) -> None:
     command = item.get("command", [])
     if command and command[0] == "scripts/starter.sh":
         subprocess.run(["scripts/starter.sh", "stop"], cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-    elif cwd.name == "social" and (cwd / "cmd").is_file():
+    elif command and command[0] == "./cmd":
         subprocess.run(["./cmd", "local-stop"], cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
     else:
         try:
@@ -494,20 +513,18 @@ def stop_item(item: dict) -> None:
         except (ProcessLookupError, PermissionError):
             pass
         deadline = time.time() + 10
-        port = process_port(item)
-        while port > 0 and time.time() < deadline and tcp_ready("127.0.0.1", port):
+        while time.time() < deadline:
+            try:
+                os.kill(item["pid"], 0)
+            except ProcessLookupError:
+                break
+            except PermissionError:
+                pass
             time.sleep(0.2)
         try:
             os.killpg(item["pid"], signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
             pass
-
-
-def process_port(item: dict) -> int:
-    for argument in item.get("command", []):
-        if isinstance(argument, str) and argument.isdigit():
-            return int(argument)
-    return -1
 
 
 def main() -> int:
