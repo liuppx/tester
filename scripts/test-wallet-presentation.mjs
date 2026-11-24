@@ -77,6 +77,16 @@ try {
   const valid = await verify(presentation)
   assert.equal(valid.status, 0, valid.stderr)
   assert.deepEqual(JSON.parse(valid.stdout), { did })
+  const refreshedDocument = structuredClone(document)
+  refreshedDocument.proof.created = new Date(Date.now() + 1000).toISOString()
+  const { proof: ignoredDocumentProof, ...unsignedRefreshedDocument } = refreshedDocument
+  refreshedDocument.proof.proofValue = b64(sign(null, Buffer.from(canonical(unsignedRefreshedDocument)), identityKeys.privateKey))
+  const represented = { ...structuredClone(presentation), identityDocument: refreshedDocument }
+  const { proof: ignoredProof, ...unsignedRepresentation } = represented
+  represented.proof.proofValue = b64(sign(null, Buffer.from(canonical(unsignedRepresentation)), identityKeys.privateKey))
+  const refreshedProofResult = await verify(represented)
+  assert.equal(refreshedProofResult.status, 0, refreshedProofResult.stderr)
+  assert.deepEqual(JSON.parse(refreshedProofResult.stdout), { did })
   assert.notEqual((await verify(presentation, unsigned.audience, 'wrong-challenge')).status, 0)
   const forged = structuredClone(presentation)
   forged.proof.proofValue = b64(Buffer.alloc(64))

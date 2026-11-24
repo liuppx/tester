@@ -118,7 +118,11 @@ try {
   if (!Number.isFinite(issued) || !Number.isFinite(expires) || issued > now + 60000 || expires <= now - 60000) fail('presentation expired')
   const document = presentation.identityDocument
   if (!document || document.version !== 1 || document.id !== presentation.holder || !Number.isInteger(document.revision) || document.revision < 1) fail('identity document is invalid')
-  if (trustedDocument && canonical(document) !== canonical(trustedDocument)) fail('identity document does not match pinned DID')
+  if (trustedDocument) {
+    const { proof: ignoredCurrentProof, ...currentDocument } = document
+    const { proof: ignoredTrustedProof, ...pinnedDocument } = trustedDocument
+    if (canonical(currentDocument) !== canonical(pinnedDocument)) fail('identity document does not match pinned DID')
+  }
   const docProof = document.proof
   if (!docProof || docProof.type !== 'YeyingIdentityDocumentProofV1' || !['manage', 'assertionMethod'].includes(docProof.purpose)) fail('identity document proof is invalid')
   const docPurpose = docProof.purpose === 'assertionMethod' ? 'assertion' : docProof.purpose
