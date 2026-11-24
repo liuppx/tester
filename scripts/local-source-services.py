@@ -56,18 +56,23 @@ def tcp_ready(host: str, port: int, timeout: float = 1.0) -> bool:
 def private_yaml_copy(source: Path, target: Path, updates: dict[str, dict[str, str | int]]) -> None:
     """Change selected config keys while preserving all other private settings."""
     lines = source.read_text(encoding="utf-8").splitlines()
-    section = ""
-    for index, line in enumerate(lines):
-        match = re.match(r"^(\S[^:]*):\s*(?:#.*)?$", line)
-        if match:
-            section = match.group(1)
-        if section not in updates:
-            continue
-        for key, value in updates[section].items():
-            if re.match(rf"^\s+{re.escape(key)}:\s*", line):
-                indent = line[:len(line) - len(line.lstrip())]
-                encoded = json.dumps(value) if isinstance(value, str) else str(value)
-                lines[index] = f"{indent}{key}: {encoded}"
+    for section, values in updates.items():
+        header = next((index for index, line in enumerate(lines) if re.match(rf"^{re.escape(section)}:\s*(?:#.*)?$", line)), None)
+        if header is None:
+            raise RuntimeError(f"required local config section is missing: {section}")
+        end = next((index for index in range(header + 1, len(lines)) if re.match(r"^\S[^:]*:\s*(?:#.*)?$", lines[index])), len(lines))
+        insertion = []
+        for key, value in values.items():
+            match_at = next((index for index in range(header + 1, end) if re.match(rf"^\s+{re.escape(key)}:\s*", lines[index])), None)
+            indent = "  "
+            encoded = json.dumps(value) if isinstance(value, str) else str(value)
+            rendered = f"{indent}{key}: {encoded}"
+            if match_at is None:
+                insertion.append(rendered)
+            else:
+                indent = lines[match_at][:len(lines[match_at]) - len(lines[match_at].lstrip())]
+                lines[match_at] = f"{indent}{key}: {encoded}"
+        lines[header + 1:header + 1] = insertion
     target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     target.write_text("\n".join(lines) + "\n", encoding="utf-8")
     target.chmod(0o600)

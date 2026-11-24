@@ -53,6 +53,20 @@ class LocalSourceModeTests(unittest.TestCase):
             self.assertIn("pypi.tuna.tsinghua.edu.cn", env["UV_INDEX_URL"])
             self.assertIn("aliyun-public", Path(env["MAVEN_ARGS"].split(" ", 1)[1]).read_text())
 
+    def test_local_config_copy_changes_only_requested_keys(self):
+        manager = load_manager()
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            source = root / "source.yaml"
+            target = root / "runtime/config.yaml"
+            source.write_text("server:\n  address: \\\"0.0.0.0\\\"\ndatabase:\n  password: keep-this-secret\n")
+            manager.private_yaml_copy(source, target, {"server": {"address": "127.0.0.1", "port": 16065}})
+            result = target.read_text()
+            self.assertIn('address: "127.0.0.1"', result)
+            self.assertIn("port: 16065", result)
+            self.assertIn("password: keep-this-secret", result)
+            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+
     def test_public_local_source_docs_do_not_contain_ip_addresses(self):
         for path in (ROOT / "docs/local-source-mode.md", ROOT / "config/local-test-dependencies.json"):
             self.assertIsNone(re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", path.read_text()), path)

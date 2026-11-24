@@ -113,7 +113,9 @@ Project --> Redis
 
 ## 4. GPU 测试机当前状态
 
-截至 2026-11-23，Tester 自身服务、报告服务和 Router API 服务处于运行状态；PostgreSQL、Redis、Mailpit、Manticore 等共享容器也在运行。MySQL 没有监听，Node、Warehouse、Chat、Social、Project、Orchestrator 的应用端口未监听。因此现状不能支撑全量 E2E。
+截至 2026-11-24，Tester 服务、系统 `nginx.service` 和 Router API 处于运行状态；PostgreSQL、Redis、MySQL、Mailpit、Manticore 也已由 `/opt/deploy` 下的 Compose 项目启动并通过健康/端口检查。MySQL 使用既有 `/data/mysql` 持久数据；切勿把 `/root/code/deployer/middleware/mysql/data` 覆盖到该数据目录。Node、Warehouse、Chat、Social、Project、Orchestrator 的产品服务尚未启动，Orchestrator 源仓库也仍缺失，因此完整全量 E2E 仍不能开始。
+
+MinIO、OnlyOffice、PlantUML 的 Compose 目录已复制到 `/opt/deploy`，但容器尚未成功启动：MinIO 的指定镜像标签无法从当前镜像源解析，PlantUML 拉取超时，OnlyOffice 拉取遇到镜像层校验错误。容器 Nginx 未启动；公网 Tester 站点继续由系统 `nginx.service` 提供。
 
 当前配置文件中的主要 URL：
 
@@ -124,7 +126,7 @@ Project --> Redis
 | `ROUTER_BASE_URL`                                                | `http://localhost:3011`     | API `/api/v1/public/status` 返回 200；根路径返回 404。补 `ROUTER_WEB_URL=http://127.0.0.1:5181` 并启动 Router Web，不能把 API 的 3011 当网页      |
 | `CHAT_BASE_URL`                                                  | `http://127.0.0.1:3020`     | Chat 服务未启动                                                                                                                                   |
 | `SOCIAL_BASE_URL` / `SOCIAL_WEB_URL` / `SOCIAL_IDENTITY_URL`     | `:8888` / `:8082` / `:8901` | 对应服务均未启动                                                                                                                                  |
-| `PROJECT_BASE_URL`                                               | `http://localhost:2222`     | Project 服务未启动；MySQL 也未运行                                                                                                                |
+| `PROJECT_BASE_URL`                                               | `http://localhost:2222`     | Project 服务未启动；MySQL 已启动，但 Project schema、账号和迁移仍需验证                                                                           |
 | `ORCHESTRATOR_BASE_URL` / `ORCHESTRATOR_API_URL`                 | 未配置                      | 当前 `.env` 中存在旧的 `AGENT_BASE_URL` / `AGENT_API_URL`，Tester 用例读取的是 `ORCHESTRATOR_*`；而且 GPU 机 `/root/code/orchestrator` 仓库不存在 |
 | `MARKETPLACE_REPO_PATH` / `BOOKS_REPO_PATH` / `WALLET_REPO_PATH` | `/root/code/...`            | 仓库目录存在；这部分本地文件用例可独立运行                                                                                                        |
 
@@ -212,14 +214,14 @@ PY
 只启动当前项目需要的服务；每个 Compose 命令使用各自的目录和已有 `.env`：
 
 ```bash
-cd /root/code/deployer/middleware/postgresql && docker compose up -d
-cd /root/code/deployer/middleware/redis && docker compose up -d
-cd /root/code/deployer/middleware/mysql && docker compose up -d
-cd /root/code/deployer/middleware/manticore && docker compose up -d
-cd /root/code/deployer/middleware/mailpit && ./start.sh
+cd /opt/deploy/postgresql && docker compose up -d
+cd /opt/deploy/redis && docker compose up -d
+cd /opt/deploy/mysql && docker compose up -d
+cd /opt/deploy/manticore && docker compose up -d
+cd /opt/deploy/mailpit && docker compose up -d
 ```
 
-当前 PostgreSQL、Redis、Manticore、Mailpit 已运行；MySQL 是 Project 和 Social 的缺项。PostgreSQL/Redis 容器健康仍不代表对应业务库、用户、迁移和应用凭据可用。
+当前上述五项已运行。首次启动或迁移 MySQL 时只使用 `/opt/deploy/mysql` 配置和 `/data/mysql` 持久数据目录；源码仓库中的 MySQL data 是另一份数据库，禁止覆盖或与其互换。PostgreSQL/Redis/MySQL 容器健康仍不代表对应业务库、用户、迁移和应用凭据可用。MinIO、OnlyOffice、PlantUML 是按产品用例启用的可选依赖，当前镜像拉取未完成；容器 Nginx 按单实例要求不启动。
 
 ### 6.2 产品服务
 
