@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,6 +36,7 @@ class LocalSourceModeTests(unittest.TestCase):
         self.assertIn("warehouse", manifest["projects"]["chat"]["repositories"])
         self.assertIn("warehouse-api", manifest["projects"]["project"]["services"])
         self.assertIn("node-api", manifest["projects"]["wallet"]["services"])
+        self.assertIn("node-web", manifest["projects"]["router"]["services"])
 
     def test_local_manager_and_readiness_have_help(self):
         for script in ("scripts/local-source-services.py", "scripts/local_test_readiness.py"):
@@ -59,7 +61,7 @@ class LocalSourceModeTests(unittest.TestCase):
             repo = Path(folder) / "node"
             repo.mkdir()
             (repo / "package.json").write_text('{"name":"node-test"}\n')
-            with unittest.mock.patch.object(manager.subprocess, "run") as run:
+            with mock.patch.object(manager.subprocess, "run") as run:
                 manager.ensure_npm_dependencies("node", repo, repo, Path(folder) / "runtime", {}, Path(folder) / "logs")
             self.assertEqual(run.call_args.kwargs["env"]["NPM_CONFIG_LEGACY_PEER_DEPS"], "true")
 
@@ -71,6 +73,50 @@ class LocalSourceModeTests(unittest.TestCase):
     def test_service_start_wait_has_migration_headroom(self):
         source = (ROOT / "scripts/local-source-services.py").read_text()
         self.assertIn('TESTER_LOCAL_SERVICE_START_TIMEOUT", "300"', source)
+
+    def test_node_local_config_rewrites_identity_origins_with_isolated_ports(self):
+        manager = load_manager()
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            original = root / "config.js"
+            generated = root / "worktree/config.js"
+            original.write_text(
+                "module.exports = { app: { port: 8100, corsAllowedOrigins: [] }, "
+                "issuer: { baseUrl: 'http://localhost:8100' }, "
+                "identity: { publicBaseUrl: 'http://localhost:8100', "
+                "webauthn: { origin: 'http://localhost:8991', rpId: 'localhost' } } };\n"
+            )
+            manager.write_node_runtime_config(original, generated, 18100, 18991)
+            result = subprocess.check_output([
+                "node", "-e",
+                "const c=require(process.argv[1]); console.log(JSON.stringify({port:c.app.port, "
+                "issuer:c.issuer.baseUrl, public:c.identity.publicBaseUrl, "
+                "origin:c.identity.webauthn.origin, rpId:c.identity.webauthn.rpId, "
+                "cors:c.app.corsAllowedOrigins}))",
+                str(generated),
+            ], text=True)
+            values = json.loads(result)
+            self.assertEqual(values["port"], 18100)
+            self.assertEqual(values["issuer"], "http://127.0.0.1:18100")
+            self.assertEqual(values["public"], "http://localhost:18991")
+            self.assertEqual(values["origin"], "http://localhost:18991")
+            self.assertEqual(values["rpId"], "localhost")
+            self.assertIn("http://127.0.0.1:18991", values["cors"])
+            self.assertEqual(generated.stat().st_mode & 0o777, 0o600)
+
+    def test_local_router_run_keeps_the_isolated_api_url(self):
+        script = (ROOT / "scripts/run-full-on-test-machine.sh").read_text()
+        self.assertIn('if [[ "$project" == router && "$TESTER_LOCAL_SOURCE_MODE" != 1 ]]; then', script)
+
+    def test_node_endpoint_collision_uses_distinct_local_web_port(self):
+        manager = load_manager()
+        with mock.patch.dict(manager.os.environ, {"TESTER_LOCAL_PORT_OFFSET": "10000"}, clear=False):
+            ports = manager.local_service_ports({
+                "NODE_API_URL": "http://localhost:8100",
+                "NODE_BASE_URL": "http://localhost:8100",
+            })
+            self.assertEqual(ports["NODE_API_URL"], 18100)
+            self.assertEqual(ports["NODE_BASE_URL"], 18991)
 
     def test_local_config_copy_changes_only_requested_keys(self):
         manager = load_manager()

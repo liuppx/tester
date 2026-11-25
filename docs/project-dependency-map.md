@@ -25,6 +25,7 @@ flowchart LR
   subgraph Services[产品服务 / 本地仓库]
     EXT[Wallet MV3 扩展]
     NODEAPI[Node API / Identity]
+    NODEWEB[Node Web / Identity authorization]
     ROUTERAPI[Router API / Web]
     WHAPI[Warehouse API / WebDAV / S3]
     CHATWEB[Chat Web]
@@ -51,6 +52,7 @@ flowchart LR
   WALLET --> EXT
   WALLET -. dApp 测试 .-> NODEAPI & ROUTERAPI & WHAPI
   NODE --> NODEAPI
+  NODE --> NODEWEB
   ROUTER --> ROUTERAPI
   WH --> WHAPI
   CHAT --> CHATWEB
@@ -59,6 +61,7 @@ flowchart LR
   HUB --> HUBWEB
   KNOW --> KNOWAPI
   ROUTERAPI --> NODEAPI
+  ROUTERAPI -. 通行证授权 .-> NODEWEB
   CHATWEB --> ROUTERAPI & WHAPI
   SOCIALWEB --> IDENTITY
   HUBWEB -. 按配置 .-> ROUTERAPI & WHAPI
@@ -87,13 +90,13 @@ flowchart LR
 | Marketplace | Marketplace 技能与 Tool Server 仓库 | 在线站点冒烟时需要 Marketplace Web | 无 |
 | Wallet | Wallet MV3 扩展 | Node、Router、Warehouse dApp 页面，按测试文件而定 | Chromium；对应服务自己的中间件 |
 | Node | Node API 与 Web | Mailpit 支持邮件验证码用例 | PostgreSQL；Redis 可选 |
-| Router | Router API 与 Web | Node 身份凭证；真实邮箱身份流程还需 Mailpit | PostgreSQL；Redis cache 可选 |
+| Router | Router API 与 Web | Node API/JWKS；通行证授权还需 Node Web；真实邮箱身份流程还需 Mailpit | PostgreSQL；Redis cache 可选 |
 | Warehouse | API、WebDAV、S3 与 Web 管理界面 | 可选持久对象存储 | PostgreSQL |
 | Chat | Chat Web 应用 | Router 模型/令牌；Warehouse WebDAV 文件同步 | 依赖服务使用的中间件 |
 | Social | Platform API 与 Web | `web3-identity` | MySQL、Redis |
 | Project | Project API 与 Web | Warehouse 文件、OnlyOffice 文档、PlantUML 图表按用例启用 | MySQL、Redis；Manticore 可选 |
 | Orchestrator | Backend 与 Web | Router 模型目录、Warehouse 资产按配置启用 | 配置 PostgreSQL 时使用 PostgreSQL |
-| Knowledge | 知识检索服务 | 以 Knowledge 产品配置为准 | 安全全量配置当前排除该项目 |
+| Knowledge | 知识检索服务 | 以 Knowledge 产品配置为准 | 制品安全全量排除；本地源码模式包含 |
 
 ## 谁负责启动
 

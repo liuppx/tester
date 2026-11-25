@@ -1,84 +1,113 @@
 # 本地源码测试模式
 
-本模式用于在测试机上直接运行社区产品 `main` 源码，再执行 Tester 的 Playwright 用例。它与已发布制品测试分开：Tester 仍由自己的服务包运行，产品服务由 `/root/code` 下的受管理源码工作树临时启动，测试结束后只停止本次启动的进程。
+本模式以社区产品仓库 `origin/main` 的精确 commit 为被测服务，在 GPU 测试机上创建受管理的 detached worktree、启动产品服务、运行 Playwright，然后回收本轮启动的进程。它用于验证产品源码之间的真实集成；Tester 本身仍由已部署制品提供。
 
-## 工作方式
+本模式与制品模式的结果必须分别标记。制品模式连接既有服务，不会自动启动产品；本地源码模式启动依赖闭包，但需要共享 middleware 和产品运行配置预先就绪。
+
+## 生命周期
 
 ```plantuml
 @startuml
-title Tester 本地源码测试流程
-actor "Tester 控制器" as T
-folder "社区源码 /root/code" as S
-folder "受管理 detached worktree" as W
-component "本地产品服务" as P
-database "已有共享中间件" as M
+title 本地源码 E2E 生命周期
+actor "Tester runner" as T
+folder "/root/code 产品 checkout" as C
+folder "detached worktree @ origin/main SHA" as W
+database "共享 middleware" as M
+component "Node API / Web" as N
+component "Router API / Web" as R
+component "其他被选产品服务" as P
 component "Playwright" as E
-
-T --> S : fetch origin/main
-S --> W : materialize exact SHA
-W --> P : build when required
-M --> P : readiness / existing data
-T --> P : start and health check
-T --> E : run selected project or safe full suite
-E --> P : HTTP / browser / extension
-T --> P : stop processes started by this run
+T -> C : fetch main 并解析 SHA
+C --> W : 创建/复用受管理 worktree
+T -> M : 只检查已配置服务；不启动、不重置
+T -> W : 生成私有运行配置并构建
+W --> N
+W --> R
+W --> P
+T -> E : 注入隔离 URL 与 commit manifest
+E --> N
+E --> R
+E --> P
+T -> P : stop 本轮启动进程
+T -> M : 删除 Router 临时 DB / 恢复本地回调配置
 @enduml
 ```
 
-启动器只使用每个项目自己的开发入口和健康端口。PostgreSQL、Redis、MySQL、Mailpit 等共享中间件必须已经启动；启动器不会执行 `down -v`、重置数据库或覆盖项目配置。Router 每次运行使用独立 PostgreSQL 数据库，停止测试时自动删除；它不会连接共享的 Router 业务数据库。源码服务默认最多等待 5 分钟开放本地端口，覆盖首次启动和数据库迁移时间；可设置 `TESTER_LOCAL_SERVICE_START_TIMEOUT` 调整。每个源仓库先抓取 `origin/main`，然后在运行目录下创建 detached worktree，避免修改 `/root/code` 中的分支和未提交文件。npm、Go、Python/uv 和 Maven 下载默认使用国内镜像；可由服务进程环境变量覆盖。产品仓库缺失、远端 `main` 不可达、依赖中间件未就绪或端口被未知进程占用时，运行会在启动阶段失败。
+运行器会先 fetch 每个依赖仓库，再只在私有运行目录创建 detached worktree；不会切换或清理 `/root/code` 原工作树。启动期间的运行端口、环境覆盖、日志和 source commit manifest 保存在 `TESTER_LOCAL_RUNTIME_DIR`。测试结束后自动停止本轮产品服务。
 
-源码服务默认使用产品开发端口加固定偏移量，避免与当前测试环境中的旧服务冲突；实际端口会写入本次运行的私有环境文件。可通过 `TESTER_LOCAL_PORT_OFFSET` 调整偏移量，不能把服务地址改成公网地址。
+Router 使用命名形如 `tester_router_e2e_<随机后缀>` 的独立 PostgreSQL 数据库，退出时删除，不连接 Router 正式业务库。Node 身份场景使用现有本地 Node 测试库和已配置应用：启动时将该应用的 redirect URI 临时改成隔离 Router 回调地址，停止时恢复原值。若进程被 `SIGKILL` 或主机掉电打断，自动清理可能来不及完成；先检查私有运行状态文件，再用 `local-source-services.py stop` 清理，不要盲目删除数据库或改回调。
 
-## 运行命令
+Node API 与 Web 必须使用不同端口。若历史 `tester.env` 将两者配置为同一地址，当前启动器会保留 Node API 端口，并把 Node Web 放在开发默认端口加 offset 的地址。本地源码 Router 测试的 API 目标来自运行器生成的私有环境，不得固定覆盖到正式 Router 端口。
 
-在 Tester 源码目录执行：
+## 前置条件
+
+- `/root/code` 下的产品仓库是可 fetch 的 Git checkout，且 `origin/main` 可访问。
+- PostgreSQL、Redis、MySQL、Mailpit 等项目依赖 middleware 已按依赖图启动，账号、数据库和 migration 完成。
+- `/data/test-results-private/control/tester.env` 等私有配置有效且权限受限。
+- Node `run/secrets.enc.json` 与解密口令、Router 配置和 Node 身份应用已准备好。
+- 被测浏览器依赖已装好，Node/npm、Go、Python/uv、Maven 和系统浏览器隔离依赖可用。
+- 用 `local_test_readiness.py` 检查选定项目。一个项目预检通过不代表所有项目的依赖都齐备。
+
+Orchestrator backend `.env` 仍是需要按服务规范单独配置的前置条件；不要从其他项目复制秘密。Project/Social 会连接已有数据库并可能执行项目自身 migration；运行前应确认库用途、账号和 migration 状态。启动器不会替它们清空或重建共享库。
+
+## 操作步骤
+
+在 Tester checkout 中先检查依赖：
 
 ```bash
-export TESTER_LOCAL_SOURCE_MODE=1
+cd /root/code/tester
 export TESTER_PRODUCT_SOURCE_ROOT=/root/code
 export TESTER_ENV_FILE=/data/test-results-private/control/tester.env
 
-# 先只检查某个项目所需源码和中间件
 python3 scripts/local_test_readiness.py router \
   --source-root "$TESTER_PRODUCT_SOURCE_ROOT" \
   --env-file "$TESTER_ENV_FILE" \
   --require-services
+```
 
-# 运行一个项目；结束后自动停止本次启动的服务
+运行单项目源码 E2E：
+
+```bash
+export TESTER_LOCAL_SOURCE_MODE=1
 scripts/test-tester-main.sh --project router
+```
 
-# 全部 11 个项目（本地源码模式包含 Knowledge）
+运行本地源码模式安全全量（包含 Knowledge）：
+
+```bash
+export TESTER_LOCAL_SOURCE_MODE=1
 scripts/test-tester-main.sh
 ```
 
-控制服务使用相同的环境变量时，控制页的“单项目测试”和“全量测试”会走本地源码启动器。若只想验证启动计划，可直接执行：
+Tester 控制服务的手动单项目/全量入口使用相同运行配置时也会调用本地源码启动器。输出的 source manifest 应随报告保留，以便知道实际测试了哪些 commit。若服务因配置、数据库或 middleware 未就绪而无法启动，应记为 blocked/preflight failure，不能记成产品用例失败或通过。
+
+## 显式启停与恢复
+
+需要单独观察启动过程时，可直接启动和停止一个项目：
 
 ```bash
 python3 scripts/local-source-services.py start router \
   --source-root /root/code \
+  --runtime /data/test-results-private/control/local-source \
   --env-file /data/test-results-private/control/tester.env
-python3 scripts/local-source-services.py stop router
+
+python3 scripts/local-source-services.py stop router \
+  --source-root /root/code \
+  --runtime /data/test-results-private/control/local-source \
+  --env-file /data/test-results-private/control/tester.env
 ```
 
-如果本地目标端口已被占用，启动器会停止并要求先处理该进程，避免把旧制品的服务误认成源码服务。Project 启动会执行该项目自己的迁移命令，必须显式设置 `TESTER_LOCAL_ALLOW_DB_MIGRATIONS=1`，且确认使用的是可重建测试库。
+发生中断时先找到对应 `state.json`，核实其中记录的 PID、worktree、临时 DB 和 Node redirect 更新，再用同一 runtime/state 参数调用 `stop`。确认隔离端口已关闭、Router E2E 数据库已删除、本地 Node callback 已恢复后再重跑。
 
-## 当前依赖闭包
+## 当前 Router 验证基线
 
-| 测试范围 | 会启动的源码服务 | 预先需要的共享中间件 |
-| --- | --- | --- |
-| Books / Marketplace | 无常驻服务，直接检查仓库 | 无 |
-| Wallet | Node、Router、Warehouse（按具体 dApp 用例使用） | PostgreSQL、Redis、Mailpit（身份流程需要时） |
-| Node | Node API 与 Web | PostgreSQL、Redis、Mailpit |
-| Router | Node、Router API 与 Web | PostgreSQL、Redis、Mailpit |
-| Warehouse | Warehouse API/WebDAV/S3 与 Web | PostgreSQL；对象存储按配置决定 |
-| Chat | Chat、Router、Warehouse | Router/Warehouse 依赖的中间件；实时模型用例还需要 Router BYOK 配置 |
-| Social | Social platform/server/RTC/identity 与 Web | MySQL、Redis |
-| Project | Project 与 Warehouse | MySQL、Redis；Office/PlantUML 按用例决定（当前两者均已启动） |
-| Knowledge | Knowledge API 与 Web | 依产品配置决定 |
-| Orchestrator | Orchestrator backend 与 Web，并连接 Router/Warehouse | PostgreSQL 按产品配置决定；GPU 仓库已准备好，backend `.env` 尚未配置 |
+2026-11-25 使用隔离 Node API/Web、Router API/Web 与 Router E2E 数据库完成源码回归：**109 项中 98 通过、0 失败、11 跳过**。跳过项是测试配置或产品开关相关前置条件。该结果验证 Tester `main` 当前本地源码适配，不表示 GPU 上当时安装的旧 Tester 制品已包含修复；运行结论要同时记录 Tester 版本/commit、产品 source commit、项目计数和跳过原因。
 
-本地源码模式下的全量运行会对全部 11 个 Tester 项目依赖闭包取并集，并按“中间件就绪 → Node/Router/Warehouse → Chat/Social/Project/Knowledge/Orchestrator → Web”顺序启动。普通制品模式仍保留安全全量配置排除 Knowledge 的既有规则。当前 Orchestrator 还缺 backend `.env`；Project 有 218 条迁移记录，启动时会自动应用新迁移。Social Flyway 有 5 条成功迁移记录，源码服务启动时还需确认开发 profile 与已有数据库配置一致。
+## 相关文件
 
-## 运行目录与日志
-
-默认运行目录是 `/data/test-results-private/control/local-source`，其中保存源 worktree、构建标记、进程日志和本次状态文件。该目录属于私有运行状态，不发布到报告站点。若需要迁移到其他测试机，可设置 `TESTER_LOCAL_RUNTIME_DIR`，并确保运行用户对目录有读写权限。
+- `config/local-test-dependencies.json`：项目到仓库和服务的依赖闭包。
+- `scripts/local_test_readiness.py`：源码、配置和 middleware 预检。
+- `scripts/local-source-services.py`：detached worktree、运行配置、服务启停和清理。
+- `scripts/run-full-on-test-machine.sh`：单项目/全量 runner 与结果发布。
+- `scripts/test_local_source_mode.py`：依赖闭包、配置隔离和启停规则测试。
+- [测试环境现状](test-machine-architecture.md)：GPU 主机实际状态；[依赖关系](project-dependency-map.md)：逻辑关系图。

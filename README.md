@@ -2,9 +2,11 @@
 
 End-to-end Playwright + Chromium test suite for the YeYing community products.
 
-Implemented cases and the backlog of cases still to write are tracked in
-[`docs/test-cases/`](docs/test-cases/) — a QA-authored, per-product enumeration
-of the E2E cases each product should have (see its `README.md` for progress).
+The per-product E2E scope is tracked in [`docs/test-cases/`](docs/test-cases/).
+Those documents describe expected coverage; they do not represent the latest
+runtime results. See [`docs/README.md`](docs/README.md) for the documentation
+map and [`docs/test-machine-architecture.md`](docs/test-machine-architecture.md)
+for the latest verified test-machine state.
 
 ## What this repo covers
 
@@ -133,10 +135,12 @@ pass against any HTTP server.
 
 ## Bring-up recipes
 
-The Tester harness does not start product services or shared middleware. The
-GPU test-machine architecture, current configuration, dependency order, and
-verified bring-up commands are maintained in
+Artifact-mode E2E connects to prestarted product services and does not start
+shared middleware. The GPU test-machine architecture, current configuration,
+dependency order, and verified bring-up commands are maintained in
 [`docs/test-machine-architecture.md`](docs/test-machine-architecture.md).
+Local-source mode can start a selected product dependency closure after
+preflight; see [`docs/local-source-mode.md`](docs/local-source-mode.md).
 
 ## Conventions
 

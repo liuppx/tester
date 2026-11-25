@@ -1,13 +1,15 @@
 # Tester 部署手册
 
-> 文档状态：In Review
-> 适用环境：社区测试环境
+> 文档状态：维护中
+> 适用环境：采用 Deployer 标准制品升级的 Tester 环境
 > 维护对象：Tester 控制服务、测试运行器和控制台前端
 > 打包规范：`books/yeying/specification/PACKAGING.md`
 > 部署规范：`books/yeying/specification/DEPLOYMENT.md`
 > 升级规范：`books/yeying/specification/UPGRADING.md`
 
 本手册只说明如何部署已经生成的 Tester 安装包。打包输入、制品命名、manifest、SHA-256 和不可变制品规则以社区打包规范为准；本项目不从源码目录直接作为正式部署对象。
+
+GPU 测试机本次核对的运行状态见[测试环境现状](test-machine-architecture.md)，避免在部署手册维护一份很快过期的服务清单。当前 GPU service 为 `0.1.20`、静态 Web 为 `0.1.19`；两者独立发布，升级/排障时分别核对 manifest 与 source commit。
 
 ## 1. 部署对象
 
@@ -103,7 +105,7 @@ stat -c '%a %n' /data/test-results-private/control/consolidated-projects.json
 
 GPU 测试机的配置快照由 `scripts/config_backup.sh` 生成。按本手册回滚时，优先使用现有受保护快照并保留该机 runtime 指向，不要用仓库模板覆盖已配置的生产/测试值。
 
-Tester 授权数据库是服务私有 SQLite 文件，启动时自动执行 `scripts/migrations/` 中未执行的迁移。它不需要另行启动 PostgreSQL；配置数据库路径由 `TESTER_PRIVATE_REPORT_DIR` 下的控制目录决定。
+Tester 授权数据库是服务私有 SQLite 文件，启动时自动执行 `scripts/migrations/` 中未执行的迁移。它不需要另行启动 PostgreSQL；路径由 `TESTER_AUTH_DATABASE` 指定，否则为 `${TESTER_PRIVATE_REPORT_DIR}/control/tester-auth.sqlite3`。GPU 当前 service 使用 `/data/test-results-private/control/tester-auth.sqlite3`。以 systemd 实际环境和数据库文件为准，不要按仓库默认值猜测线上路径。
 
 ## 5. 部署和启动
 
@@ -179,7 +181,7 @@ E2E 环境按项目依赖图和测试机架构手册逐项确认。Tester 自身
 
 备份包含 runtime、项目配置、环境变量引用的受保护配置、Tester SQLite 授权数据库、systemd unit/drop-in 和 Nginx 配置；不包含测试结果、运行日志和公开报告。远端上传只有在专用 WebDAV 目标已经验证后才能启用。
 
-Tester 当前 migration 是本地 SQLite 授权表迁移，由控制服务启动时唯一执行。迁移失败时服务必须保持失败，不得继续接收登录或测试操作；先保留旧版本和备份，再按升级规范安全重试或执行经评审的 forward-fix。没有数据库 migration 时不得把进程存活当成部署成功。
+Tester 当前 migration 是本地 SQLite 授权表迁移，由控制服务启动时执行。迁移失败时服务必须保持失败，不得继续接收登录或测试操作；先保留旧版本和备份，再按升级规范安全重试或执行经评审的 forward-fix。健康检查通过仅证明 Tester 自身检查项通过，不能证明产品 E2E 依赖齐备。
 
 回滚使用 Deployer 的标准升级流程选回上一个完整制品版本；保留旧版本目录和相应配置快照。不要手工替换稳定链接绕过 starter 和健康检查。执行入口为部署环境中 Deployer 的 `operator/upgrade/upgrade.sh`：
 
@@ -218,13 +220,7 @@ HTTPS server 没有指向 Tester 静态目录，命中了默认站点。将 `scr
 - [测试机架构与服务启动](test-machine-architecture.md)
 - [项目与 E2E 依赖图](project-dependency-map.md)
 - [测试报告和调度](test-machine-report.md)
+- [全部文档入口](README.md)
 - 社区打包规范：`books/yeying/specification/PACKAGING.md`
 - 社区部署规范：`books/yeying/specification/DEPLOYMENT.md`
 - 社区升级规范：`books/yeying/specification/UPGRADING.md`
-
-## 10. AI 协作记录
-
-- 使用大模型起草：是。
-- 使用范围：整理现有 Tester 配置、部署步骤、常见问题和 PlantUML 草图。
-- 依据：社区 `PACKAGING.md`、`DEPLOYMENT.md`、Tester 当前 package scripts、配置模板、Nginx 片段和测试机架构文档。
-- 人工复核状态：待维护者确认目标机差异、备份恢复步骤和发布节点的实际制品库配置。

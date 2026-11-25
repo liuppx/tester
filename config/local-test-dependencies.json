@@ -33,7 +33,7 @@
     },
     "router": {
       "repositories": ["router", "node"],
-      "services": ["postgresql", "redis", "mailpit", "node-api", "router-api", "router-web"]
+      "services": ["postgresql", "redis", "mailpit", "node-api", "node-web", "router-api", "router-web"]
     },
     "warehouse": {
       "repositories": ["warehouse"],

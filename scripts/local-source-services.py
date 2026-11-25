@@ -144,6 +144,51 @@ def drop_router_test_database(database: str) -> None:
     )
 
 
+def sql_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def update_node_identity_redirect(app_id: str, callback_url: str) -> dict[str, str]:
+    """Temporarily register the isolated Router callback in the local Node DB."""
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", app_id):
+        raise RuntimeError("Node identity app id is not a UUID")
+    if not re.fullmatch(r"http://127\.0\.0\.1:[0-9]{2,5}/api/v1/public/oauth/identity/callback", callback_url):
+        raise RuntimeError("local Router identity callback must target loopback")
+    database = os.environ.get("TESTER_LOCAL_NODE_DATABASE", "node_local_test")
+    if not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", database):
+        raise RuntimeError("invalid local Node database name")
+    where = f"uid = {sql_quote(app_id)}"
+    query = f"SELECT COALESCE(redirect_uris, '') FROM node.applications WHERE {where}"
+    result = subprocess.run(
+        ["docker", "exec", "postgres", "sh", "-c", 'psql -U "$POSTGRES_USER" -d "$1" -At -v ON_ERROR_STOP=1 -c "$2"', "sh", database, query],
+        capture_output=True, text=True, check=False, timeout=30,
+    )
+    if result.returncode or not result.stdout.strip():
+        raise RuntimeError("configured Node identity application is missing from the local database")
+    previous = result.stdout.rstrip("\n")
+    update = f"UPDATE node.applications SET redirect_uris = {sql_quote(callback_url)} WHERE {where}"
+    result = subprocess.run(
+        ["docker", "exec", "postgres", "sh", "-c", 'psql -U "$POSTGRES_USER" -d "$1" -v ON_ERROR_STOP=1 -c "$2"', "sh", database, update],
+        capture_output=True, text=True, check=False, timeout=30,
+    )
+    if result.returncode:
+        raise RuntimeError("could not register the isolated Router identity callback")
+    return {"database": database, "app_id": app_id, "previous": previous, "callback": callback_url}
+
+
+def restore_node_identity_redirect(update: dict[str, str]) -> None:
+    database = update.get("database", "")
+    app_id = update.get("app_id", "")
+    previous = update.get("previous", "")
+    if not re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", database) or not re.fullmatch(r"[0-9a-fA-F-]{36}", app_id):
+        return
+    query = f"UPDATE node.applications SET redirect_uris = {sql_quote(previous)} WHERE uid = {sql_quote(app_id)}"
+    subprocess.run(
+        ["docker", "exec", "postgres", "sh", "-c", 'psql -U "$POSTGRES_USER" -d "$1" -v ON_ERROR_STOP=1 -c "$2"', "sh", database, query],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False, timeout=30,
+    )
+
+
 def endpoint_port(value: str | None, key: str) -> int:
     if not value:
         port = DEFAULT_PORTS[key]
@@ -156,6 +201,15 @@ def endpoint_port(value: str | None, key: str) -> int:
     if offset < 0 or port + offset > 65535:
         raise RuntimeError("TESTER_LOCAL_PORT_OFFSET produces an invalid port")
     return port + offset
+
+
+def local_service_ports(base: dict[str, str]) -> dict[str, int]:
+    ports = {key: endpoint_port(base.get(key), key) for key in DEFAULT_PORTS}
+    if ports["NODE_BASE_URL"] == ports["NODE_API_URL"]:
+        # Older tester.env files used the API port for both Node endpoints.
+        # Keep local source services distinct and retain the API value.
+        ports["NODE_BASE_URL"] = DEFAULT_PORTS["NODE_BASE_URL"] + int(os.environ.get("TESTER_LOCAL_PORT_OFFSET", "10000"))
+    return ports
 
 
 def git(repo: Path, *args: str) -> str | None:
@@ -184,6 +238,26 @@ def source_checkout(project: str, source_root: Path, worktree_root: Path, sha: s
     marker.chmod(0o600)
     overlay_runtime_configuration(project, original, worktree, ports, database_names)
     return worktree
+
+
+def write_node_runtime_config(original_config: Path, worktree_config: Path, api_port: int, web_port: int) -> None:
+    """Keep Node issuer identity and browser authorization URLs on local ports."""
+    worktree_config.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    api_origin = f"http://127.0.0.1:{api_port}"
+    web_origin = f"http://localhost:{web_port}"
+    origins = [web_origin, f"http://127.0.0.1:{web_port}"]
+    worktree_config.write_text(
+        "const source = require(" + json.dumps(str(original_config)) + ");\n"
+        "const origins = " + json.dumps(origins) + ";\n"
+        "module.exports = { ...source, "
+        "app: { ...source.app, port: " + str(api_port) + ", "
+        "corsAllowedOrigins: [...new Set([...(source.app?.corsAllowedOrigins || []), ...origins])] }, "
+        "issuer: { ...source.issuer, baseUrl: " + json.dumps(api_origin) + " }, "
+        "identity: { ...source.identity, publicBaseUrl: " + json.dumps(web_origin) + ", "
+        "webauthn: { ...source.identity?.webauthn, origin: " + json.dumps(web_origin) + " } } };\n",
+        encoding="utf-8",
+    )
+    worktree_config.chmod(0o600)
 
 
 def reset_environmental_files(project: str, worktree: Path) -> None:
@@ -217,13 +291,9 @@ def overlay_runtime_configuration(project: str, original: Path, worktree: Path, 
             else:
                 target.symlink_to(source)
     if project == "node" and (original / "config.js").is_file():
-        (worktree / "config.js").write_text(
-            "const source = require(" + json.dumps(str(original / "config.js")) + ");\n"
-            "const origins = [" + json.dumps(f"http://localhost:{ports['NODE_BASE_URL']}") + ", " + json.dumps(f"http://127.0.0.1:{ports['NODE_BASE_URL']}") + "];\n"
-            "module.exports = { ...source, app: { ...source.app, port: " + str(ports["NODE_API_URL"]) + ", corsAllowedOrigins: [...new Set([...(source.app?.corsAllowedOrigins || []), ...origins])] } };\n",
-            encoding="utf-8",
+        write_node_runtime_config(
+            original / "config.js", worktree / "config.js", ports["NODE_API_URL"], ports["NODE_BASE_URL"]
         )
-        (worktree / "config.js").chmod(0o600)
     if project == "node":
         server_source = worktree / "src/server.ts"
         if server_source.is_file():
@@ -428,7 +498,7 @@ def start(args: argparse.Namespace) -> int:
     config = json.loads(args.config.read_text(encoding="utf-8"))
     projects = select_projects(config, args.project)
     base = read_env(args.env_file)
-    ports = {key: endpoint_port(base.get(key), key) for key in DEFAULT_PORTS}
+    ports = local_service_ports(base)
     services = list(dict.fromkeys(service for name in projects for service in config["projects"][name]["services"]))
     database_names = {"router": f"tester_router_e2e_{secrets.token_hex(4)}"} if "router-api" in services else {}
     source_root = args.source_root
@@ -500,6 +570,7 @@ def start(args: argparse.Namespace) -> int:
     for project, repo in sources.items():
         prepare_dependencies(project, repo, services, args.runtime, env, logs)
     local_databases: list[dict[str, str]] = []
+    node_redirect_updates: list[dict[str, str]] = []
     try:
         if database_names.get("router"):
             create_router_test_database(sources["router"] / "config.yaml", database_names["router"])
@@ -528,6 +599,10 @@ def start(args: argparse.Namespace) -> int:
             started_groups.add(group)
             if url_key:
                 wait_port(overrides[url_key])
+            if name == "node-api" and "router" in sources:
+                callback_url = yaml_scalar(sources["router"] / "config.yaml", "identity", "callback_url")
+                app_id = yaml_scalar(sources["router"] / "config.yaml", "identity", "app_id")
+                node_redirect_updates.append(update_node_identity_redirect(app_id, callback_url))
         for name in services:
             if name in middleware_names:
                 continue
@@ -548,8 +623,10 @@ def start(args: argparse.Namespace) -> int:
         for database in reversed(local_databases):
             if database["engine"] == "postgres":
                 drop_router_test_database(database["name"])
+        for update in reversed(node_redirect_updates):
+            restore_node_identity_redirect(update)
         raise
-    args.state.write_text(json.dumps({"started": started, "env": overrides, "projects": projects, "local_databases": local_databases}, indent=2) + "\n", encoding="utf-8")
+    args.state.write_text(json.dumps({"started": started, "env": overrides, "projects": projects, "local_databases": local_databases, "node_redirect_updates": node_redirect_updates}, indent=2) + "\n", encoding="utf-8")
     source_commits = {project: sha for project, sha in shas.items()}
     manifest = {
         "projects": projects,
@@ -574,6 +651,8 @@ def stop(args: argparse.Namespace) -> int:
     state = json.loads(args.state.read_text(encoding="utf-8"))
     for item in reversed(state.get("started", [])):
         stop_item(item)
+    for update in reversed(state.get("node_redirect_updates", [])):
+        restore_node_identity_redirect(update)
     for database in reversed(state.get("local_databases", [])):
         if database.get("engine") == "postgres":
             drop_router_test_database(database.get("name", ""))

@@ -54,6 +54,15 @@ class TesterControlTests(unittest.TestCase):
         self.assertEqual(first["id"], second["id"])
         self.assertEqual(len(control.STATE["pending"]), 1)
 
+    def test_manual_request_reuses_an_active_task_for_the_same_scope(self):
+        control = self.module
+        first = control.enqueue("router", "manual", mode="test")
+        control.STATE["pending"].clear()
+        control.STATE["active"] = first
+        repeated = control.enqueue("router", "manual", mode="test")
+        self.assertEqual(repeated["id"], first["id"])
+        self.assertEqual(control.STATE["pending"], [])
+
     def test_daily_schedule_queues_the_full_suite_once_per_day(self):
         control = self.module
         schedule = control.daily_schedule({
@@ -99,6 +108,7 @@ class TesterControlTests(unittest.TestCase):
         page = (Path(__file__).parent.parent / "web/index.html").read_text()
         self.assertIn('id="scope"', page)
         self.assertIn('id="run"', page)
+        self.assertIn('id="rerun"', page)
         self.assertNotIn('id="mode"', page)
         self.assertNotIn('id="projects"', page)
 
@@ -402,7 +412,8 @@ class TesterControlTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 401)
         with urlopen(base + "/api/architecture", timeout=2) as response:
             topology = json.load(response)
-        self.assertEqual(len(topology["nodes"]), 33)
+        self.assertEqual(len(topology["nodes"]), 34)
+        self.assertIn("svc-node-web", {node["id"] for node in topology["nodes"]})
 
         with patch.object(control, "verify_wallet_presentation", return_value=admin_did) as verify:
             session_request = Request(base + "/api/auth/identity/login/session", data=b"{}", method="POST", headers=origin)
@@ -488,6 +499,7 @@ class TesterControlTests(unittest.TestCase):
             with urlopen(status_request, timeout=2) as response:
                 status = json.load(response)
             self.assertIn("router", status["projects"])
+            self.assertEqual(status["queue"]["parallelism"], 1)
             cases_request = Request(base + "/api/cases", headers={"Cookie": cookie})
             with urlopen(cases_request, timeout=2) as response:
                 mindmap = json.load(response)
@@ -517,6 +529,10 @@ class TesterControlTests(unittest.TestCase):
             with urlopen(status_request, timeout=2) as response:
                 queued_status = json.load(response)
             self.assertEqual(queued_status["projects"]["router"]["busy"], "已排队")
+            queued_task = queued_status["queue"]["pending"][0]
+            self.assertEqual(queued_task["project"], "router")
+            self.assertNotIn("id", queued_task)
+            self.assertNotIn("log", queued_task)
             self.assertNotIn("log", queued_status["projects"]["router"]["last"] or {})
 
             logout = Request(base + "/api/auth/logout", data=b"", method="POST", headers={
