@@ -20,7 +20,7 @@ if (( $# > 1 )); then
     exit 2
 fi
 case "$project" in
-    ''|books|chat|knowledge|marketplace|node|orchestrator|project|router|social|wallet|warehouse) ;;
+    ''|book|chat|knowledge|marketplace|node|orchestrator|project|router|social|wallet|warehouse) ;;
     *) echo "Unknown or disabled Tester project: $project" >&2; exit 2 ;;
 esac
 if [[ "$project" == router && "$TESTER_LOCAL_SOURCE_MODE" != 1 ]]; then
@@ -103,7 +103,7 @@ if (( available_memory < 4294967296 || available_disk < 2147483648 )); then
     if [[ -n "$project" ]]; then exit 75; fi
     exit 0
 fi
-if [[ "$project" != books && "$project" != marketplace ]] && (( stuck_chrome > stuck_chrome_limit )); then
+if [[ "$project" != book && "$project" != marketplace ]] && (( stuck_chrome > stuck_chrome_limit )); then
     write_attempt 'skipped: additional Chromium processes are stuck in D state'
     if [[ -n "$project" ]]; then exit 75; fi
     exit 0

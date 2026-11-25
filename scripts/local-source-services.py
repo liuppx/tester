@@ -525,8 +525,8 @@ def start(args: argparse.Namespace) -> int:
 
     overrides = {key: f"http://127.0.0.1:{value}" for key, value in ports.items()}
     overrides["TEST_ENV"] = "local"
-    if "books" in sources:
-        overrides["BOOKS_REPO_PATH"] = str(sources["books"])
+    if "book" in sources:
+        overrides["BOOK_REPO_PATH"] = str(sources["book"])
     if "marketplace" in sources:
         overrides["MARKETPLACE_REPO_PATH"] = str(sources["marketplace"])
     if "wallet" in sources:

@@ -1,5 +1,5 @@
 /**
- * books — Markdown 基本合法性 (BK-DATA-025, 026, 027, 028).
+ * book — Markdown 基本合法性 (BK-DATA-025, 026, 027, 028).
  */
 import { localizedTitle } from '../../../shared/title';
 import { readFileSync } from 'node:fs';

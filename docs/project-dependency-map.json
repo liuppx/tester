@@ -9,7 +9,7 @@
   ],
   "nodes": [
     {"id": "tester", "layer": "runner", "name": "Tester", "kind": "Playwright + Chromium", "note": "发起浏览器、HTTP 和文件检查；只连接已运行的服务，不负责启动产品或共享中间件。"},
-    {"id": "tc-books", "layer": "suites", "name": "Books", "kind": "数据 / 文档", "note": "从 Books 仓库读取 Markdown 与目录文件，不需要常驻服务。"},
+    {"id": "tc-book", "layer": "suites", "name": "Book", "kind": "数据 / 文档", "note": "从 Book 仓库读取 Markdown 与目录文件，不需要常驻服务。"},
     {"id": "tc-marketplace", "layer": "suites", "name": "Marketplace", "kind": "数据 / schema", "note": "以本地技能和 Tool Server 文件校验为主；在线冒烟需要 Marketplace 站点。"},
     {"id": "tc-wallet", "layer": "suites", "name": "Wallet", "kind": "浏览器扩展 + dApp", "note": "扩展用例运行在 Chromium；各 dApp 集成场景按需连接 Node、Router 或 Warehouse。"},
     {"id": "tc-node", "layer": "suites", "name": "Node", "kind": "API + Web", "note": "身份、凭证、注册、邮件和开发者平台用例。"},
@@ -20,7 +20,7 @@
     {"id": "tc-project", "layer": "suites", "name": "Project", "kind": "API + Web", "note": "项目、任务、权限、消息、文件与管理员流程用例。"},
     {"id": "tc-orchestrator", "layer": "suites", "name": "Orchestrator", "kind": "API + Web", "note": "控制台、实例生命周期以及与 Router / Warehouse 的集成用例。"},
     {"id": "tc-knowledge", "layer": "suites", "name": "Knowledge", "kind": "知识服务", "note": "有独立用例定义；制品安全全量排除，本地源码模式纳入。"},
-    {"id": "svc-books", "layer": "services", "name": "Books 仓库", "kind": "本地文件", "note": "文档用例直接扫描仓库目录。"},
+    {"id": "svc-book", "layer": "services", "name": "Book 仓库", "kind": "本地文件", "note": "文档用例直接扫描仓库目录。"},
     {"id": "svc-marketplace", "layer": "services", "name": "Marketplace 仓库", "kind": "本地文件", "note": "schema 和索引测试直接读取仓库内容。"},
     {"id": "svc-wallet", "layer": "services", "name": "Wallet 扩展", "kind": "MV3 浏览器扩展", "note": "Tester 加载真实扩展构建；dApp 场景再连接对应产品服务。"},
     {"id": "svc-node", "layer": "services", "name": "Node", "kind": "身份 / 凭证 / API / Web", "note": "钱包身份签发方；生产推荐 PostgreSQL，应用也支持 MySQL；Redis 为可选组件。Router 钱包身份 E2E 会调用此服务。"},
@@ -44,7 +44,7 @@
     {"id": "mw-browser", "layer": "dependencies", "name": "Chromium + MV3", "kind": "浏览器运行环境", "note": "Tester UI、Wallet 扩展与 dApp 浏览器用例的共同运行时。"}
   ],
   "edges": [
-    {"from": "tester", "to": "tc-books", "relation": "运行项目用例"},
+    {"from": "tester", "to": "tc-book", "relation": "运行项目用例"},
     {"from": "tester", "to": "tc-marketplace", "relation": "运行项目用例"},
     {"from": "tester", "to": "tc-wallet", "relation": "运行项目用例"},
     {"from": "tester", "to": "tc-node", "relation": "运行项目用例"},
@@ -55,7 +55,7 @@
     {"from": "tester", "to": "tc-project", "relation": "运行项目用例"},
     {"from": "tester", "to": "tc-orchestrator", "relation": "运行项目用例"},
     {"from": "tester", "to": "tc-knowledge", "relation": "本地源码模式运行", "optional": true},
-    {"from": "tc-books", "to": "svc-books", "relation": "扫描本地文档"},
+    {"from": "tc-book", "to": "svc-book", "relation": "扫描本地文档"},
     {"from": "tc-marketplace", "to": "svc-marketplace", "relation": "检查本地 schema"},
     {"from": "tc-wallet", "to": "svc-wallet", "relation": "加载扩展"},
     {"from": "tc-node", "to": "svc-node", "relation": "目标服务"},

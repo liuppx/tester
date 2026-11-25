@@ -18,7 +18,7 @@ const products = [
   'project',
   'knowledge',
   'marketplace',
-  'books',
+  'book',
   'orchestrator',
   'wallet',
 ] as const;
@@ -30,7 +30,7 @@ const chatOverrides = { navigationTimeout: 60_000, actionTimeout: 15_000 };
 /**
  * Wallet is a Chromium MV3 extension loaded from disk via `--load-extension`.
  * The path is resolved from `WALLET_EXTENSION_PATH` (preferred) or
- * `WALLET_REPO_PATH` (matches marketplace/books convention).
+ * `WALLET_REPO_PATH` (matches marketplace/book convention).
  *
  * MV3 service workers don't fully load in headless Chromium, so wallet tests
  * run headed by default. The `PWHEADLESS=0` env still works for any

@@ -5,7 +5,7 @@
       "enabled": false,
       "reason": "隔离部署适配器尚未迁移到 backend/web 布局；可手动测试当前环境"
     },
-    "books": { "repo": "/root/code/books", "enabled": true },
+    "book": { "repo": "/root/code/book", "enabled": true },
     "chat": { "repo": "/root/code/chat", "enabled": true },
     "marketplace": { "repo": "/root/code/marketplace", "enabled": true },
     "node": {

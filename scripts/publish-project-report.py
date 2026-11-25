@@ -108,7 +108,7 @@ ENVIRONMENT_FRAGMENTS = (
     'configured site-admin login', 'registration mode is a server-side DB setting',
     'admin-configured department', 'users/department/* requires auth',
     'PROJECT_USER and PROJECT_PASS', 'token/admin/audits requires identity',
-    'MARKETPLACE_BASE_URL', 'BOOKS_BASE_URL',
+    'MARKETPLACE_BASE_URL', 'BOOK_BASE_URL', 'BOOKS_BASE_URL',
     'ORCHESTRATOR_BASE_URL', 'ORCHESTRATOR_API_URL',
     'SOCIAL_USER and SOCIAL_PASS', 'Sepolia balance for',
 )

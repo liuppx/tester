@@ -1,7 +1,7 @@
 /**
- * books — 链接完整性 / 死链 (BK-DATA-007, 008, 009, 010, 011, 012, 013).
+ * book — 链接完整性 / 死链 (BK-DATA-007, 008, 009, 010, 011, 012, 013).
  *
- * BK-DATA-009 and BK-DATA-012 catch a REAL pre-existing defect in the books
+ * BK-DATA-009 and BK-DATA-012 catch a REAL pre-existing defect in the book
  * repo (agent/README.md hard-codes an absolute SUMMARY path missing the
  * `opensource/` segment). They are marked test.fixme so the runner stays green
  * while the defect is honestly recorded — do NOT weaken them to pass.
@@ -58,7 +58,7 @@ test(
   () => {
     test.fixme(
       true,
-      'REAL DEFECT in books repo: agent/README.md line 26 links [SUMMARY.md]' +
+      'REAL DEFECT in book repo: agent/README.md line 26 links [SUMMARY.md]' +
         '(/Users/liuxin2/Workspace/books/agent/SUMMARY.md) — an absolute path missing the ' +
         '"opensource/" segment, so it points at a nonexistent file (dead link). Fix: use ' +
         'relative ./SUMMARY.md. Kept as fixme so the suite stays green while recording the defect.',
@@ -131,7 +131,7 @@ test(
   () => {
     test.fixme(
       true,
-      'REAL DEFECT in books repo: repo-wide scan finds exactly one dead link — ' +
+      'REAL DEFECT in book repo: repo-wide scan finds exactly one dead link — ' +
         'agent/README.md -> /Users/liuxin2/Workspace/books/agent/SUMMARY.md (absolute path ' +
         'missing "opensource/"). Same root cause as BK-DATA-009. Kept as fixme so the suite ' +
         'stays green while recording the defect; all other ~1000 internal links resolve.',

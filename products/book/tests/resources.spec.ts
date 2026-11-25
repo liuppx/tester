@@ -1,5 +1,5 @@
 /**
- * books — 资源引用 图片/资产 (BK-DATA-022, 023, 024).
+ * book — 资源引用 图片/资产 (BK-DATA-022, 023, 024).
  *
  * BK-DATA-023 catches a REAL pre-existing finding: an orphan image asset that
  * no markdown references. It is marked test.fixme so the runner stays green
@@ -41,7 +41,7 @@ test(localizedTitle("【资源引用(图片/资产) / DATA】 BK-DATA-022 markdo
 test(localizedTitle("【资源引用(图片/资产) / DATA】 BK-DATA-023 仓库图片/资产无孤儿", "BK-DATA-023 no orphan image assets (every asset is referenced by some markdown)"), () => {
   test.fixme(
     true,
-    'REAL DEFECT in books repo: orphan image asset yeying/2A068D22-0E72-47EB-AEFC-D598509BBFFB.png ' +
+    'REAL DEFECT in book repo: orphan image asset yeying/2A068D22-0E72-47EB-AEFC-D598509BBFFB.png ' +
       'is referenced by no markdown file (0 image references exist repo-wide). Fix: remove the ' +
       'file or add a reference. Kept as fixme so the suite stays green while recording the finding.',
   );

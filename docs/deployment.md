@@ -3,9 +3,9 @@
 > 文档状态：维护中
 > 适用环境：采用 Deployer 标准制品升级的 Tester 环境
 > 维护对象：Tester 控制服务、测试运行器和控制台前端
-> 打包规范：`books/yeying/specification/PACKAGING.md`
-> 部署规范：`books/yeying/specification/DEPLOYMENT.md`
-> 升级规范：`books/yeying/specification/UPGRADING.md`
+> 打包规范：`book/yeying/specification/PACKAGING.md`
+> 部署规范：`book/yeying/specification/DEPLOYMENT.md`
+> 升级规范：`book/yeying/specification/UPGRADING.md`
 
 本手册只说明如何部署已经生成的 Tester 安装包。打包输入、制品命名、manifest、SHA-256 和不可变制品规则以社区打包规范为准；本项目不从源码目录直接作为正式部署对象。
 
@@ -72,7 +72,7 @@ tester tester-web tester-web https://<tester-domain>/
 
 ## 3. 目标环境准备
 
-目标机器必须符合社区 `books/yeying/specification/MACHINE.md` 的目录、权限和磁盘要求，并准备：
+目标机器必须符合社区 `book/yeying/specification/MACHINE.md` 的目录、权限和磁盘要求，并准备：
 
 - Linux x86_64、Python 3.10+、Node.js 24.18+。
 - Bash、coreutils、`flock`、Xvfb、Bubblewrap 以及 Chromium 所需系统库。
@@ -221,6 +221,6 @@ HTTPS server 没有指向 Tester 静态目录，命中了默认站点。将 `scr
 - [项目与 E2E 依赖图](project-dependency-map.md)
 - [测试报告和调度](test-machine-report.md)
 - [全部文档入口](README.md)
-- 社区打包规范：`books/yeying/specification/PACKAGING.md`
-- 社区部署规范：`books/yeying/specification/DEPLOYMENT.md`
-- 社区升级规范：`books/yeying/specification/UPGRADING.md`
+- 社区打包规范：`book/yeying/specification/PACKAGING.md`
+- 社区部署规范：`book/yeying/specification/DEPLOYMENT.md`
+- 社区升级规范：`book/yeying/specification/UPGRADING.md`

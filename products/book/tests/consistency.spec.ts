@@ -1,5 +1,5 @@
 /**
- * books — 多集合索引一致性 (BK-DATA-029, 030, 031).
+ * book — 多集合索引一致性 (BK-DATA-029, 030, 031).
  */
 import { localizedTitle } from '../../../shared/title';
 import { existsSync, readdirSync } from 'node:fs';
@@ -15,13 +15,14 @@ test(
   ),
   () => {
     const overview = readText('yeying/社区文档总览.md');
+    const productRoot = existsSync(abs('yeying/product')) ? 'yeying/product' : 'yeying/夜莺社区/产品';
+    const overviewPrefix = productRoot.replace(/^yeying\//, '');
     const tableFiles = new Set(
       parseLinks(overview)
-        .map((l) => l.url)
-        .filter((u) => /夜莺社区\/产品\/[^/]+\/[^/]+产品说明\.md$/.test(u))
-        .map((u) => u.replace(/^夜莺社区\/产品\//, '')),
+        .map((link) => link.url.split('#')[0])
+        .filter((url) => url.startsWith(`${overviewPrefix}/`) && url.endsWith('产品说明.md'))
+        .map((url) => url.slice(overviewPrefix.length + 1)),
     );
-    const productRoot = 'yeying/夜莺社区/产品';
     const diskFiles = new Set(
       readdirSync(abs(productRoot), { withFileTypes: true })
         .filter((entry) => entry.isDirectory() && !['产品组合', '公共能力'].includes(entry.name))

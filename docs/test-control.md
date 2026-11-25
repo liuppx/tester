@@ -31,7 +31,7 @@ DID 必须已在对应 Node issuer 完成身份注册、钱包绑定、用户名
 
 `/api/status` 返回 `queue.parallelism`、当前任务和等待任务，前端可据此显示队列。公开队列字段只包含项目名、任务模式和时间，不包含内部任务 ID、日志路径或命令行参数。`TESTER_WATCH_UPSTREAM_MAIN` 控制是否轮询仓库；`TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY` 控制 watcher 是否允许调用项目部署适配器。项目清单的 `enabled` 只参与 watcher，不会从 Playwright 全量集合移除项目。
 
-当前已有隔离部署适配器的项目为 Books、Chat、Marketplace、Router、Wallet。其他项目即使配置在 Playwright 中，也不等于 watcher 能更新/部署它们。Tester 自身制品升级由 Deployer 负责，与产品 watcher 分离。
+当前已有隔离部署适配器的项目为 Book、Chat、Marketplace、Router、Wallet。其他项目即使配置在 Playwright 中，也不等于 watcher 能更新/部署它们。Tester 自身制品升级由 Deployer 负责，与产品 watcher 分离。
 
 `TESTER_LOCAL_SOURCE_MODE=1` 时，手动测试调用本地源码启动器，按 `config/local-test-dependencies.json` 启动产品源码 worktree；默认制品模式连接已部署产品。两种模式下报告都应记录运行模式和被测 commit。
 

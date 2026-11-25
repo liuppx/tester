@@ -6,7 +6,7 @@
 
 | 产品 | 用例文档 |
 | --- | --- |
-| Books | [books.md](books.md) |
+| Book | [book.md](book.md) |
 | Chat | [chat.md](chat.md) |
 | Knowledge | [knowledge.md](knowledge.md) |
 | Marketplace | [marketplace.md](marketplace.md) |

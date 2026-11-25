@@ -10,7 +10,7 @@
 flowchart LR
   T[Tester Playwright + Chromium]
   subgraph Suites[Tester 项目]
-    BOOK[Books]
+    BOOK[Book]
     MARKET[Marketplace]
     WALLET[Wallet]
     NODE[Node]
@@ -33,7 +33,7 @@ flowchart LR
     IDENTITY[web3-identity]
     PROJECTWEB[Project API / Web]
     HUBWEB[Orchestrator Backend / Web]
-    REPOS[Books / Marketplace 文件仓库]
+    REPOS[Book / Marketplace 文件仓库]
     KNOWAPI[Knowledge Service]
   end
   subgraph Middleware[共享中间件 / 外部软件]
@@ -86,7 +86,7 @@ flowchart LR
 
 | Tester 项目 | 主要目标 | 测试中可能需要的其他服务 | 常见共享依赖 |
 | --- | --- | --- | --- |
-| Books | Books 文档仓库 | 无 | 无 |
+| Book | Book 文档仓库 | 无 | 无 |
 | Marketplace | Marketplace 技能与 Tool Server 仓库 | 在线站点冒烟时需要 Marketplace Web | 无 |
 | Wallet | Wallet MV3 扩展 | Node、Router、Warehouse dApp 页面，按测试文件而定 | Chromium；对应服务自己的中间件 |
 | Node | Node API 与 Web | Mailpit 支持邮件验证码用例 | PostgreSQL；Redis 可选 |
