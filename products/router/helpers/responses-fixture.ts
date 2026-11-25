@@ -390,7 +390,12 @@ export async function withResponsesFixture(
           'Delete Responses API key',
         );
       }
-      cleanupResponsesSubscription(fixtureRows.userID, fixtureRows.packageID, env);
+      cleanupResponsesSubscription(
+        fixtureRows.userID,
+        fixtureRows.packageID,
+        fixtureRows.groupID,
+        env,
+      );
       if (fixtureRows.packageID) {
         await successful(
           await admin.delete(`/api/v1/admin/package/${fixtureRows.packageID}`),
@@ -415,7 +420,12 @@ export async function withResponsesFixture(
   }
 }
 
-function cleanupResponsesSubscription(userID: string, packageID: string, env: NodeJS.ProcessEnv) {
+function cleanupResponsesSubscription(
+  userID: string,
+  packageID: string,
+  groupID: string,
+  env: NodeJS.ProcessEnv,
+) {
   if (!packageID) return;
   const engine = env['ROUTER_RESPONSES_E2E_DB_ENGINE'];
   const host = env['ROUTER_RESPONSES_E2E_DB_HOST']!;
@@ -426,11 +436,17 @@ function cleanupResponsesSubscription(userID: string, packageID: string, env: No
   if (!/^[a-zA-Z0-9-]+$/.test(userID) || !/^[a-zA-Z0-9-]+$/.test(packageID)) {
     throw new Error('Invalid disposable Responses subscription identity');
   }
-  const query = `UPDATE user_package_subscriptions SET status = 4 WHERE user_id = '${userID}' AND package_id = '${packageID}' AND status = 1`;
+  if (!/^[a-zA-Z0-9-]+$/.test(groupID)) {
+    throw new Error('Invalid disposable Responses group identity');
+  }
   if (engine === 'postgres') {
+    const queries = [
+      `UPDATE users SET "group" = '' WHERE id = '${userID}' AND "group" = '${groupID}'`,
+      `UPDATE user_package_subscriptions SET status = 4 WHERE user_id = '${userID}' AND package_id = '${packageID}' AND status = 1`,
+    ].join('; ');
     execFileSync(
       'psql',
-      ['-X', '-q', '-h', host, '-p', port, '-U', username, '-d', database, '-c', query],
+      ['-X', '-q', '-h', host, '-p', port, '-U', username, '-d', database, '-c', queries],
       {
         env: { ...process.env, PGPASSWORD: password },
         stdio: 'pipe',
@@ -438,6 +454,10 @@ function cleanupResponsesSubscription(userID: string, packageID: string, env: No
     );
     return;
   }
+  const queries = [
+    `UPDATE users SET \`group\` = '' WHERE id = '${userID}' AND \`group\` = '${groupID}'`,
+    `UPDATE user_package_subscriptions SET status = 4 WHERE user_id = '${userID}' AND package_id = '${packageID}' AND status = 1`,
+  ].join('; ');
   execFileSync(
     'mysql',
     [
@@ -451,7 +471,7 @@ function cleanupResponsesSubscription(userID: string, packageID: string, env: No
       username,
       database,
       '-e',
-      query,
+      queries,
     ],
     {
       env: { ...process.env, MYSQL_PWD: password },
