@@ -27,7 +27,9 @@ DID 必须已在对应 Node issuer 完成身份注册、钱包绑定、用户名
 
 ## 队列与源码 watcher
 
-单项目、全量、每日计划和 watcher 触发的任务共用队列及 run lock，避免同时运行多个测试或部署任务。`TESTER_WATCH_UPSTREAM_MAIN` 控制是否轮询仓库；`TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY` 控制 watcher 是否允许调用项目部署适配器。项目清单的 `enabled` 只参与 watcher，不会从 Playwright 全量集合移除项目。
+单项目、全量、每日计划和 watcher 触发的任务共用一个队列和 worker，任务按顺序执行，不会并行运行测试或部署任务。不同测试范围可以分别入队，同一范围且同一模式的重复请求会合并到现有任务。控制台展示当前任务和等待任务。选择有历史记录的范围后，“重跑上次”会重新运行该范围，重新生成报告。
+
+`/api/status` 返回 `queue.parallelism`、当前任务和等待任务，前端可据此显示队列。公开队列字段只包含项目名、任务模式和时间，不包含内部任务 ID、日志路径或命令行参数。`TESTER_WATCH_UPSTREAM_MAIN` 控制是否轮询仓库；`TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY` 控制 watcher 是否允许调用项目部署适配器。项目清单的 `enabled` 只参与 watcher，不会从 Playwright 全量集合移除项目。
 
 当前已有隔离部署适配器的项目为 Books、Chat、Marketplace、Router、Wallet。其他项目即使配置在 Playwright 中，也不等于 watcher 能更新/部署它们。Tester 自身制品升级由 Deployer 负责，与产品 watcher 分离。
 

@@ -1,11 +1,108 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tester 质量控制台</title><link rel="stylesheet" href="./assets/control.css"></head><body><main><header class="top"><div><div class="eyebrow">YEYING COMMUNITY · QUALITY GATE</div><h1>Tester 质量控制台</h1><p class="muted">用一次全量视图，确认环境是否值得信任。</p></div><nav><a href="cases">用例脑图</a><a href="architecture">依赖图</a><a href="/report/">历史报告</a></nav></header>
-<p class="muted">授权后可以查看测试状态，并运行当前已部署环境的端到端用例。</p>
-<article id="login-card"><h2>钱包身份登录</h2><p class="muted">使用已加入 Tester 授权名单的钱包身份继续。</p><button id="login">连接钱包身份</button><p id="login-message" class="danger" role="status"></p></article>
-<section id="console" hidden><article class="identity-bar"><div><strong>当前身份</strong><div id="identity" class="identity muted"></div></div><button id="logout" class="ghost">退出</button></article><section class="overview" aria-label="质量概览"><div><span class="eyebrow">QUALITY OVERVIEW</span><h2>质量概览</h2><p id="quality-summary" class="muted">正在读取最近一次全量测试…</p></div><div class="score-wrap"><span class="muted">用例通过率</span><div id="quality-score" class="score">—</div></div></section>
-<section id="project-grid" class="project-grid" aria-label="项目状态"></section>
-<article id="admin-tools" hidden><button id="users-toggle">成员授权</button><section id="user-panel" hidden><p class="muted">待授权用户完成一次钱包身份登录申请后会列在这里。</p><div id="user-list"></div></section></article>
-<article><div class="row"><label for="scope">测试范围</label><select id="scope"><option value="">请选择</option></select><button id="run" disabled>开始测试</button></div>
-<p id="selected-status" class="muted"></p><p id="message" role="status"></p><a id="latest-report" hidden>查看上次报告 →</a></article><article><h2>历史测试报告</h2><div id="history-list"></div><a href="/report/">查看完整报告站点</a></article></section>
-<script src="./web3-bs.js" vite-ignore></script><script type="module" src="./assets/control.js"></script></main></body></html>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101d29" />
+    <title>Tester 质量控制台</title>
+    <link rel="stylesheet" href="./assets/control.css" />
+  </head>
+  <body>
+    <main>
+      <header class="top">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">T</span>
+          <span>Tester</span>
+        </div>
+        <nav aria-label="主导航">
+          <a href="cases">用例脑图</a>
+          <a href="architecture">依赖关系</a>
+          <a href="/report/">报告中心</a>
+        </nav>
+      </header>
+
+      <section class="page-heading">
+        <div>
+          <p class="eyebrow">YEYING COMMUNITY / QUALITY GATE</p>
+          <h1>质量控制台</h1>
+          <p class="muted">检查最近结果、跟踪运行队列，按需验证社区服务。</p>
+        </div>
+        <div class="session" id="session-bar" hidden>
+          <div><span class="session-label">已登录</span><span id="identity" class="identity"></span></div>
+          <button id="logout" class="button button-quiet">退出</button>
+        </div>
+      </section>
+
+      <article id="login-card" class="login-panel">
+        <div>
+          <h2>使用钱包身份登录</h2>
+          <p class="muted">Tester 仅对已获授权的社区成员开放。</p>
+        </div>
+        <div>
+          <button id="login" class="button button-primary">连接钱包</button>
+          <p id="login-message" class="feedback" role="status" aria-live="polite"></p>
+        </div>
+      </article>
+      <p id="service-error" class="service-error" role="status" aria-live="polite" hidden></p>
+
+      <section id="console" hidden>
+        <section class="quality-panel" aria-label="质量概览">
+          <div class="quality-copy">
+            <p class="eyebrow">最近一次全量测试</p>
+            <h2 id="quality-state">尚无全量结果</h2>
+            <p id="quality-summary" class="muted">运行全量测试后，结果会显示在这里。</p>
+            <a id="quality-report" class="text-link" hidden>查看全量报告</a>
+          </div>
+          <div class="score-block">
+            <span class="muted">通过率</span>
+            <strong id="quality-score">—</strong>
+          </div>
+        </section>
+
+        <section class="workbench" aria-label="测试执行与队列">
+          <article class="run-panel">
+            <div class="section-heading">
+              <div><p class="eyebrow">RUN TESTS</p><h2>运行测试</h2></div>
+              <span id="service-status" class="service-indicator"><i></i>控制服务在线</span>
+            </div>
+            <label for="scope">测试范围</label>
+            <select id="scope"><option value="">请选择项目或全量测试</option></select>
+            <p id="selected-status" class="selection-status" aria-live="polite"></p>
+            <div class="run-actions">
+              <button id="run" class="button button-primary" disabled>运行测试</button>
+              <button id="rerun" class="button button-secondary" disabled hidden>重跑上次</button>
+            </div>
+            <p id="message" class="feedback" role="status" aria-live="polite"></p>
+          </article>
+
+          <article class="queue-panel">
+            <div class="section-heading">
+              <div><p class="eyebrow">TASK QUEUE</p><h2>运行队列</h2></div>
+              <span id="queue-count" class="queue-count">空闲</span>
+            </div>
+            <div id="queue-list" class="queue-list" aria-live="polite"></div>
+            <p class="queue-note">任务按顺序执行，同一测试范围的重复请求会合并。</p>
+          </article>
+        </section>
+
+        <section class="projects-section">
+          <div class="section-heading"><div><p class="eyebrow">PROJECT STATUS</p><h2>项目结果</h2></div></div>
+          <div id="project-grid" class="project-grid" aria-label="项目状态"></div>
+        </section>
+
+        <section class="lower-grid">
+          <article id="admin-tools" class="admin-panel" hidden>
+            <div class="section-heading"><div><p class="eyebrow">ACCESS</p><h2>成员授权</h2></div><button id="users-toggle" class="button button-quiet">管理成员</button></div>
+            <section id="user-panel" hidden><p class="muted">完成钱包身份登录申请的成员会列在这里。</p><div id="user-list"></div></section>
+          </article>
+          <article class="history-panel">
+            <div class="section-heading"><div><p class="eyebrow">RECENT RUNS</p><h2>最近运行</h2></div><a href="/report/" class="text-link">全部报告</a></div>
+            <div id="history-list"></div>
+          </article>
+        </section>
+      </section>
+    </main>
+    <script src="./web3-bs.js" vite-ignore></script>
+    <script type="module" src="./assets/control.js"></script>
+  </body>
+</html>

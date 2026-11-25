@@ -738,7 +738,22 @@ class Handler(BaseHTTPRequestHandler):
             for name, config in PROJECTS.items():
                 values[name] = state_for(name, config)
             full = state_for(FULL)
-        self.json_reply(200, {"full": full, "projects": values})
+            def public_task(item: dict | None) -> dict | None:
+                if not item:
+                    return None
+                return {
+                    "project": item.get("project"),
+                    "mode": item.get("mode", "deploy"),
+                    "queued_at": item.get("queued_at"),
+                    "deferred_until": item.get("deferred_until"),
+                }
+
+            queue = {
+                "parallelism": 1,
+                "active": public_task(STATE["active"]),
+                "pending": [public_task(item) for item in STATE["pending"]],
+            }
+        self.json_reply(200, {"full": full, "projects": values, "queue": queue})
 
     def do_POST(self) -> None:
         path = urlsplit(self.path).path
