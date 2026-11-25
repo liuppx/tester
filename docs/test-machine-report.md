@@ -91,8 +91,11 @@ bash scripts/test-tester-main.sh
 
 ## Published files and links
 
-Serve only `TESTER_REPORT_DIR`. Do not expose the repository `reports/` directory,
-JUnit XML or the private directory.
+Store published report pages under `TESTER_REPORT_DIR`. The Tester control service
+indexes each published `summary.json` in its SQLite `tester_reports` catalog and
+serves report pages and downloads through wallet-authenticated `/api/reports`
+endpoints. Nginx rewrites `/report/` requests to that API. Do not expose the
+repository `reports/` directory, JUnit XML or the private directory directly.
 
 ```text
 index.html                 Latest overview grouped by product

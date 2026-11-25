@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import date, datetime, time as clock_time, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import mimetypes
 import os
 from pathlib import Path
 import re
@@ -395,36 +396,77 @@ def latest_summary(project: str) -> dict | None:
 
 
 def load_report_history(limit: int = 30) -> list[dict]:
-    """Read only published summary fields and construct safe public report links."""
-    entries = []
+    """Index published summaries in SQLite and return safe API-backed links."""
     sources = [(FULL, PUBLIC / "runs")]
     sources.extend((project, PUBLIC / "projects" / project / "runs") for project in PROJECTS)
-    fields = ("run", "started_at", "finished_at", "status", "tests", "passed", "failed", "skipped")
-    for project, runs_dir in sources:
-        if not runs_dir.is_dir():
-            continue
-        try:
-            run_dirs = sorted((path for path in runs_dir.iterdir() if path.is_dir() and not path.is_symlink()),
-                              key=lambda path: path.name, reverse=True)[:limit]
-        except OSError:
-            continue
-        for run_dir in run_dirs:
-            summary_path = run_dir / "summary.json"
+    fields = ("status", "started_at", "finished_at", "tests", "passed", "failed", "skipped")
+    with open_auth_database() as database:
+        for project, runs_dir in sources:
+            if not runs_dir.is_dir():
+                continue
             try:
-                summary = json.loads(summary_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
+                run_dirs = sorted(
+                    (path for path in runs_dir.iterdir() if path.is_dir() and not path.is_symlink()),
+                    key=lambda path: path.name,
+                    reverse=True,
+                )
+            except OSError:
                 continue
-            run = summary.get("run")
-            if (not isinstance(run, str) or run != run_dir.name
-                    or not re.fullmatch(r"[A-Za-z0-9_+.-]{1,80}", run)):
-                continue
-            record = {key: summary[key] for key in fields if key in summary}
-            record["project"] = project
-            record["report"] = (f"/report/runs/{run}/index.html" if project == FULL
-                                else f"/report/projects/{project}/runs/{run}/index.html")
-            entries.append(record)
-    entries.sort(key=lambda item: item.get("finished_at", ""), reverse=True)
-    return entries[:limit]
+            for run_dir in run_dirs:
+                if not re.fullmatch(r"[A-Za-z0-9_+.-]{1,80}", run_dir.name):
+                    continue
+                summary_path = run_dir / "summary.json"
+                try:
+                    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if summary.get("run") != run_dir.name:
+                    continue
+                values = [summary.get(field) for field in fields]
+                database.execute(
+                    """INSERT INTO tester_reports(
+                           project,run,status,started_at,finished_at,tests,passed,failed,skipped,storage_path,indexed_at
+                       ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                       ON CONFLICT(project,run) DO UPDATE SET
+                           status=excluded.status,started_at=excluded.started_at,
+                           finished_at=excluded.finished_at,tests=excluded.tests,
+                           passed=excluded.passed,failed=excluded.failed,skipped=excluded.skipped,
+                           storage_path=excluded.storage_path,indexed_at=excluded.indexed_at""",
+                    (project, run_dir.name, *values, str(run_dir.relative_to(PUBLIC)), now()),
+                )
+        database.commit()
+        rows = database.execute(
+            "SELECT project,run,status,started_at,finished_at,tests,passed,failed,skipped,storage_path "
+            "FROM tester_reports ORDER BY finished_at DESC LIMIT ?", (limit,),
+        ).fetchall()
+
+    entries = []
+    for row in rows:
+        record = dict(row)
+        project, run = record.pop("project"), record.pop("run")
+        storage_path = record.pop("storage_path")
+        record["project"] = project
+        record["run"] = run
+        record["report"] = f"/report/{storage_path}/index.html"
+        entries.append(record)
+    return entries
+
+
+def published_report_file(relative_path: str) -> Path | None:
+    """Resolve a published report file without permitting traversal or symlinks."""
+    if not relative_path or "\\" in relative_path or "\x00" in relative_path:
+        return None
+    parts = relative_path.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        return None
+    candidate = PUBLIC.joinpath(*parts)
+    if candidate.is_symlink() or not candidate.is_file():
+        return None
+    try:
+        candidate.resolve(strict=True).relative_to(PUBLIC.resolve(strict=True))
+    except (OSError, ValueError):
+        return None
+    return candidate
 
 
 def cooldown_until(project: str) -> float | None:
@@ -679,6 +721,32 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/architecture":
             topology = json.loads((REPO / "docs/project-dependency-map.json").read_text(encoding="utf-8"))
             self.json_reply(200, topology)
+            return
+        if path == "/api/reports":
+            if not self.current_session():
+                self.json_reply(401, {"error": "需要钱包身份登录"})
+                return
+            self.json_reply(200, {"reports": load_report_history(limit=200)})
+            return
+        if path.startswith("/api/reports/files/"):
+            if not self.current_session():
+                self.json_reply(401, {"error": "需要钱包身份登录"})
+                return
+            relative_path = path.removeprefix("/api/reports/files/") or "index.html"
+            target = published_report_file(relative_path)
+            if target is None:
+                self.json_reply(404, {"error": "报告文件不存在"})
+                return
+            content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(target.stat().st_size))
+            self.send_header("Cache-Control", "private, no-store")
+            self.send_header("X-Frame-Options", "DENY")
+            self.end_headers()
+            with target.open("rb") as report_file:
+                while chunk := report_file.read(64 * 1024):
+                    self.wfile.write(chunk)
             return
         if path == "/api/overview":
             if not self.current_session():

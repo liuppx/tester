@@ -35,10 +35,10 @@ function loadTestEnv(): { env: TestEnv | null; path: string | null } {
   const explicitPath = process.env.TESTER_ENV_FILE?.trim();
   if (explicitPath) {
     if (requested && !(KNOWN_TEST_ENVS as readonly string[]).includes(requested)) {
-      throw new Error("Invalid TEST_ENV for TESTER_ENV_FILE");
+      throw new Error('Invalid TEST_ENV for TESTER_ENV_FILE');
     }
     const path = resolve(explicitPath);
-    if (!existsSync(path)) throw new Error("TESTER_ENV_FILE does not exist");
+    if (!existsSync(path)) throw new Error('TESTER_ENV_FILE does not exist');
     loadDotenv({ path, quiet: true });
     return { env: (requested as TestEnv) || null, path };
   }
@@ -133,6 +133,36 @@ const EXTRA_KEYS: Record<ProductName, string[]> = {
     'ROUTER_PERSONAL_UPSTREAM_BASE_URL',
     'ROUTER_PERSONAL_UPSTREAM_KEY',
     'ROUTER_PERSONAL_UPSTREAM_MODEL',
+    'ROUTER_GROUP_ROUTE_E2E_ENABLED',
+    'ROUTER_GROUP_ROUTE_E2E_DATABASE_DISPOSABLE',
+    'ROUTER_GROUP_ROUTE_E2E_ALLOWED_ROUTER_URL',
+    'ROUTER_GROUP_ROUTE_E2E_USER_PRIVATE_KEY',
+    'ROUTER_GROUP_ROUTE_E2E_ADMIN_PRIVATE_KEY',
+    'ROUTER_GROUP_ROUTE_E2E_MODEL',
+    'ROUTER_GROUP_ROUTE_E2E_UPSTREAM_MODEL_B',
+    'ROUTER_GROUP_ROUTE_E2E_STUB_PORT',
+    'ROUTER_GROUP_ROUTE_E2E_DB_ENGINE',
+    'ROUTER_GROUP_ROUTE_E2E_DB_HOST',
+    'ROUTER_GROUP_ROUTE_E2E_DB_PORT',
+    'ROUTER_GROUP_ROUTE_E2E_DB_NAME',
+    'ROUTER_GROUP_ROUTE_E2E_DB_USER',
+    'ROUTER_GROUP_ROUTE_E2E_DB_PASSWORD',
+    'ROUTER_RESPONSES_E2E_ENABLED',
+    'ROUTER_RESPONSES_E2E_DATABASE_DISPOSABLE',
+    'ROUTER_RESPONSES_E2E_ALLOWED_ROUTER_URL',
+    'ROUTER_RESPONSES_E2E_DB_ENGINE',
+    'ROUTER_RESPONSES_E2E_DB_HOST',
+    'ROUTER_RESPONSES_E2E_DB_PORT',
+    'ROUTER_RESPONSES_E2E_DB_NAME',
+    'ROUTER_RESPONSES_E2E_DB_USER',
+    'ROUTER_RESPONSES_E2E_DB_PASSWORD',
+    'ROUTER_RESPONSES_E2E_DB_ENGINE',
+    'ROUTER_RESPONSES_E2E_DB_HOST',
+    'ROUTER_RESPONSES_E2E_DB_PORT',
+    'ROUTER_RESPONSES_E2E_DB_NAME',
+    'ROUTER_RESPONSES_E2E_DB_USER',
+    'ROUTER_RESPONSES_E2E_DB_PASSWORD',
+    'ROUTER_RESPONSES_CODEX_BIN',
   ],
   chat: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY'],
   social: [

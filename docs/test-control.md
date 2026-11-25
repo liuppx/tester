@@ -1,6 +1,6 @@
 # 控制服务与钱包身份授权
 
-Tester 控制服务提供 `/api/`、成员授权、项目用例/依赖信息、运行队列和结果状态。产品代码执行由 runner 完成。服务监听回环地址，由 Nginx 同源代理；浏览器页面和 API 均使用 `tester-web` 与控制服务的同一 HTTPS origin。
+Tester 控制服务提供 `/api/`、成员授权、项目用例/依赖信息、运行队列、结果状态和受授权保护的报告访问。产品代码执行由 runner 完成。服务监听回环地址，由 Nginx 同源代理；浏览器页面和 API 均使用 `tester-web` 与控制服务的同一 HTTPS origin。
 
 ## 钱包登录与成员授权
 
@@ -34,6 +34,12 @@ DID 必须已在对应 Node issuer 完成身份注册、钱包绑定、用户名
 当前已有隔离部署适配器的项目为 Books、Chat、Marketplace、Router、Wallet。其他项目即使配置在 Playwright 中，也不等于 watcher 能更新/部署它们。Tester 自身制品升级由 Deployer 负责，与产品 watcher 分离。
 
 `TESTER_LOCAL_SOURCE_MODE=1` 时，手动测试调用本地源码启动器，按 `config/local-test-dependencies.json` 启动产品源码 worktree；默认制品模式连接已部署产品。两种模式下报告都应记录运行模式和被测 commit。
+
+## 报告目录与访问
+
+报告正文和附件继续以静态文件保存在 `TESTER_REPORT_DIR`，SQLite `tester_reports` 表维护项目、运行时间、结果计数和对应文件目录。控制服务启动时自动执行 migration，并在报告列表读取时同步已发布的 `summary.json`。旧报告因此可自动进入目录，无需重新生成。
+
+浏览器使用同源 `/api/reports` 读取报告目录，并通过 `/api/reports/files/<相对路径>` 查看 HTML 和下载报告文件。两个 API 都要求有效钱包会话。Nginx 将 `/report/` 重写到报告文件 API，因此报告中心和单份报告使用同一个 Tester 登录态，不再依赖独立报告 Cookie。服务端只允许读取报告根目录内的普通文件，并拒绝路径穿越和符号链接。
 
 GPU 当前 runtime 中 `TESTER_WATCH_UPSTREAM_MAIN=1`、`TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY=1`；每日运行配置未设置，因此使用默认关闭状态。启动产品 watcher 前必须确认项目有隔离部署适配器并完成单项目 dry-run/回滚验证。
 

@@ -158,7 +158,7 @@ class TesterControlTests(unittest.TestCase):
         self.assertIn("alias /opt/deploy/static/tester-web/current/assets/", config)
         self.assertIn("location / {", config)
         self.assertIn("root /opt/deploy/static/tester-web/current;", config)
-        self.assertNotIn("return 302", config)
+        self.assertIn("rewrite ^/report/(.*)$ /api/reports/files/$1 last;", config)
 
     def test_overview_reads_published_counts_and_redacts_private_state(self):
         control = self.module
@@ -193,6 +193,18 @@ class TesterControlTests(unittest.TestCase):
         self.assertEqual(len(history), 1)
         self.assertEqual(history[0]["report"], "/report/runs/2026-11-23_10-00-00+0800/index.html")
         self.assertNotIn("private_log", history[0])
+
+    def test_report_file_resolution_rejects_traversal_and_symlinks(self):
+        control = self.module
+        public_index = control.PUBLIC / "index.html"
+        public_index.parent.mkdir(parents=True)
+        public_index.write_text("published report", encoding="utf-8")
+        private_file = Path(self.temp.name) / "private.html"
+        private_file.write_text("private", encoding="utf-8")
+        (control.PUBLIC / "private.html").symlink_to(private_file)
+        self.assertEqual(control.published_report_file("index.html"), public_index)
+        self.assertIsNone(control.published_report_file("../private.html"))
+        self.assertIsNone(control.published_report_file("private.html"))
 
     def test_test_only_allows_project_without_deployment_adapter(self):
         control = self.module
@@ -392,7 +404,7 @@ class TesterControlTests(unittest.TestCase):
         control.migrate_auth_database()
         with control.open_auth_database() as database:
             migrations = database.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
-        self.assertEqual([row[0] for row in migrations], [1])
+        self.assertEqual([row[0] for row in migrations], [1, 2])
         admin_did = self.admin_did
         member_did = "did:yeying:wid_" + "b" * 32
         admin_document = {"id": admin_did, "version": 1, "revision": 1, "controllers": [], "proof": {}}
@@ -500,6 +512,18 @@ class TesterControlTests(unittest.TestCase):
                 status = json.load(response)
             self.assertIn("router", status["projects"])
             self.assertEqual(status["queue"]["parallelism"], 1)
+            control.PUBLIC.mkdir(parents=True, exist_ok=True)
+            (control.PUBLIC / "index.html").write_text("<html>report center</html>", encoding="utf-8")
+            report_request = Request(base + "/api/reports/files/", headers={"Cookie": cookie})
+            with urlopen(report_request, timeout=2) as response:
+                self.assertIn("report center", response.read().decode())
+                self.assertIn("text/html", response.headers["Content-Type"])
+            reports_request = Request(base + "/api/reports", headers={"Cookie": cookie})
+            with urlopen(reports_request, timeout=2) as response:
+                self.assertIsInstance(json.load(response)["reports"], list)
+            with self.assertRaises(HTTPError) as error:
+                urlopen(base + "/api/reports/files/", timeout=2)
+            self.assertEqual(error.exception.code, 401)
             cases_request = Request(base + "/api/cases", headers={"Cookie": cookie})
             with urlopen(cases_request, timeout=2) as response:
                 mindmap = json.load(response)
