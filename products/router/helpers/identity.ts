@@ -30,7 +30,7 @@ import type { APIRequestContext, Page } from '@playwright/test';
 import { sendSw } from '../../wallet/helpers/popup';
 
 export function resolveNodeUrl(): string {
-  return (process.env.NODE_BASE_URL?.trim() || 'http://localhost:8100').replace(/\/+$/, '');
+  return (process.env.NODE_API_URL?.trim() || 'http://localhost:8100').replace(/\/+$/, '');
 }
 
 export function resolveMailpitUrl(): string {

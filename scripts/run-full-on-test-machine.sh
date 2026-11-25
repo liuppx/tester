@@ -23,7 +23,7 @@ case "$project" in
     ''|books|chat|knowledge|marketplace|node|orchestrator|project|router|social|wallet|warehouse) ;;
     *) echo "Unknown or disabled Tester project: $project" >&2; exit 2 ;;
 esac
-if [[ "$project" == router ]]; then
+if [[ "$project" == router && "$TESTER_LOCAL_SOURCE_MODE" != 1 ]]; then
     # The local Router listens on IPv4; localhost resolves to ::1 for Node here.
     export ROUTER_BASE_URL=http://127.0.0.1:3011
 fi

@@ -69,7 +69,7 @@ python3 scripts/local-source-services.py stop router
 | Books / Marketplace | 无常驻服务，直接检查仓库 | 无 |
 | Wallet | Node、Router、Warehouse（按具体 dApp 用例使用） | PostgreSQL、Redis、Mailpit（身份流程需要时） |
 | Node | Node API 与 Web | PostgreSQL、Redis、Mailpit |
-| Router | Node、Router API 与 Web | PostgreSQL、Redis、Mailpit |
+| Router | Node API 与 Web、Router API 与 Web | PostgreSQL、Redis、Mailpit |
 | Warehouse | Warehouse API/WebDAV/S3 与 Web | PostgreSQL；对象存储按配置决定 |
 | Chat | Chat、Router、Warehouse | Router/Warehouse 依赖的中间件；实时模型用例还需要 Router BYOK 配置 |
 | Social | Social platform/server/RTC/identity 与 Web | MySQL、Redis |
