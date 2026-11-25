@@ -2,7 +2,7 @@
 
 > 测试人员视角整理的**应有** E2E 用例清单,作为实现依据。
 > 状态说明:✅ 已实现(链接到 spec) / ⬜ 待实现。
-> 端点:UI 5173 · admin/S3 6066 · WebDAV 6065 · 账号 admin/changeme(测试环境 admin/admin123)
+> 端点:UI 5173 · admin/S3 6066 · WebDAV 6065 · 管理员凭据从测试机受保护配置读取
 > 说明:一条逻辑用例可能对应多个 spec;"已实现"以逻辑用例是否被现有 spec 覆盖为准,而非 spec 中的 test 块数量。
 > 最后更新:2026-09-17
 
@@ -75,7 +75,7 @@
 - 优先级:P0
 - 类型:API
 - 状态:✅ 已实现 — products/warehouse/tests/auth.spec.ts
-- 前置条件:存在账号 admin/admin123
+- 前置条件:测试环境已配置专用管理员账号；凭据从受保护配置读取。
 - 步骤:
   1. `POST /api/v1/public/auth/password/login` 提交用户名+密码
 - 预期结果:返回 `{data:{token, address, username, expiresAt}}`,token 可用于后续鉴权
@@ -191,7 +191,7 @@
 - 优先级:P0
 - 类型:API
 - 状态:✅ 已实现 — products/warehouse/tests/webdav.spec.ts;products/warehouse/tests/auth.spec.ts
-- 前置条件:Basic 认证 admin/admin123,WebDAV 前缀 `/dav`
+- 前置条件:使用受保护配置中的专用测试管理员凭据进行 Basic 认证；WebDAV 前缀 `/dav`。
 - 步骤:
   1. 对 `/dav/` 发起 `PROPFIND`,`Depth: 1`
 - 预期结果:返回 207 Multi-Status,含 XML `<multistatus>` 目录列表

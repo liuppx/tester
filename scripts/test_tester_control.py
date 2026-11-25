@@ -402,7 +402,8 @@ class TesterControlTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 401)
         with urlopen(base + "/api/architecture", timeout=2) as response:
             topology = json.load(response)
-        self.assertEqual(len(topology["nodes"]), 33)
+        self.assertEqual(len(topology["nodes"]), 34)
+        self.assertIn("svc-node-web", {node["id"] for node in topology["nodes"]})
 
         with patch.object(control, "verify_wallet_presentation", return_value=admin_did) as verify:
             session_request = Request(base + "/api/auth/identity/login/session", data=b"{}", method="POST", headers=origin)

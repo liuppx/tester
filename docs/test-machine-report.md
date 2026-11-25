@@ -1,17 +1,12 @@
-# Scheduled test-machine reports
+# 测试报告与调度
 
-The report pipeline runs enabled Playwright projects, publishes a redacted
-HTML snapshot grouped by product, and sends a Feishu card with linked counts.
-Original logs and JUnit data remain outside the public report directory.
+报告流水线将 Playwright 结果按项目归档，生成脱敏 HTML、JUnit 摘要和可选飞书通知。原始日志与 JUnit 保存在私有目录，不对公网提供。
+
+GPU 现状（2026-11-25）：Tester 控制服务和 runner 健康检查通过，但全量和 Router 报告最近更新时间仍是 2026-11-21/2026-11-17；runtime 未配置每日运行项，默认为关闭。不能把旧报告视为本日测试结果。完整现状见[测试环境现状](test-machine-architecture.md)。
 
 ## Requirements
 
-Use a Linux host with the repository's Node.js and npm dependencies installed,
-Python 3.10+, GNU `timeout`, `flock`, Xvfb, and Bubblewrap (`bwrap`). Configure
-`.env.local` as described in the main README. The runner uses
-`playwright.safe.config.ts`, one worker, and a browser environment that hides
-GPU device information; this configuration excludes the retired Knowledge
-project. Other product assertions are unchanged by this report pipeline.
+Runner 需要 Linux、Node/npm 依赖、Python 3.10+、GNU `timeout`、`flock`、Xvfb、Bubblewrap (`bwrap`) 和 Chromium 系统库。安装制品模式使用受保护的 `TESTER_ENV_FILE`；本地开发可按 README 配置 `.env.local`。GPU 标准制品安全全量通过 `playwright.safe.config.ts` 排除 Knowledge；本地源码模式包含 Knowledge。shell runner 当前单 worker，直接运行 safe config 时默认两 worker；具体入口和环境模式须随报告记录。
 
 All browser execution goes through `scripts/browser-runtime.sh`, including the
 standard `test.sh --suite integration|e2e|all` entrypoints. On Linux it creates a
@@ -41,8 +36,7 @@ The second check renders and clicks a page, then loads a synthetic MV3 extension
 using the real Wallet launch helper. Existing D-state processes are not cleared
 by this change; the runner's existing stuck-process preflight still applies.
 
-The runner checks available memory, disk space and stuck Chromium processes.
-A nonblocking lock prevents overlap, and execution is limited to 2.5 hours.
+全量 runner 检查可用内存、磁盘空间和 D-state Chromium 进程。非阻塞 run lock 防止并发，单次执行上限 2.5 小时。preflight 因资源或残留进程跳过时应记录为 skipped，不能当成测试通过。
 
 ## Configuration
 
@@ -85,15 +79,15 @@ main commit into its managed worktree. In artifact mode, it runs the published
 Tester package directly. See [test-control.md](test-control.md) for the source
 worktree and protected manual controls.
 
+GPU 当前每日计划未启用（`TESTER_DAILY_RUN_ENABLED` 未设置，默认关闭）。需要启用时先确认全量依赖闭包和人工全量报告通过，再配置受保护 runtime、通过 starter 重启并检查服务日志；不要同时保留旧 cron。
+
 Manual source-mode run with the latest Tester main:
 
 ```bash
 bash scripts/test-tester-main.sh
 ```
 
-Exit `0` means a passed suite or a preflight skip; `last-attempt.txt` distinguishes
-them. Exit `1` can publish a report containing failed tests. Timeout, stale or
-invalid results, and a run with no executed tests retain the previous report.
+退出码 `0` 可能表示套件通过或 preflight skip；必须检查 `last-attempt.txt` 和报告/JUnit。退出码 `1` 可表示报告已发布但用例失败。超时、陈旧/无效结果和零执行用例不会覆盖上次报告。检查报告时间戳，避免把历史结果误读为当前结果。
 
 ## Published files and links
 
