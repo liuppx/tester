@@ -27,6 +27,7 @@ export default defineConfig({
         index: resolve(import.meta.dirname, 'index.html'),
         cases: resolve(import.meta.dirname, 'cases.html'),
         architecture: resolve(import.meta.dirname, 'architecture.html'),
+        report: resolve(import.meta.dirname, 'report.html'),
       },
     },
   },

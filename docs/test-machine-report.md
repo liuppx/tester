@@ -94,7 +94,8 @@ bash scripts/test-tester-main.sh
 Store published report pages under `TESTER_REPORT_DIR`. The Tester control service
 indexes each published `summary.json` in its SQLite `tester_reports` catalog and
 serves report pages and downloads through wallet-authenticated `/api/reports`
-endpoints. Nginx rewrites `/report/` requests to that API. Do not expose the
+endpoints. Nginx serves the report-center page at `/report/` and rewrites nested
+`/report/<path>` requests to the authenticated file API. Do not expose the
 repository `reports/` directory, JUnit XML or the private directory directly.
 
 ```text

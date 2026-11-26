@@ -144,6 +144,8 @@ class PackageContractTests(unittest.TestCase):
         self.assertIn("package.json", build.FILES)
         self.assertNotIn("web", build.DIRS)
         self.assertTrue((ROOT / "web/index.html").is_file())
+        self.assertTrue((ROOT / "web/report.html").is_file())
+        self.assertTrue((ROOT / "web/assets/report.js").is_file())
         self.assertTrue((ROOT / "web/assets/control.js").is_file())
         self.assertTrue((ROOT / "web/package-lock.json").is_file())
         self.assertIn("vite", json.loads((ROOT / "web/package.json").read_text())["devDependencies"])

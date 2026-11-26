@@ -1,0 +1,103 @@
+:root {
+  --control-radius: 7px;
+  --control-border: #526a78;
+  --control-bg: #12212c;
+  --control-hover: #1a303b;
+  --control-ring: #f0c875;
+}
+
+input,
+select,
+button,
+.button {
+  min-height: 42px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  font: inherit;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+input,
+select {
+  padding: 9px 12px;
+  background-color: var(--control-bg);
+  color: var(--ink);
+}
+
+input::placeholder {
+  color: #8ea2ad;
+  opacity: 1;
+}
+
+input:hover,
+select:hover {
+  border-color: #78909c;
+}
+
+button,
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 15px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button-primary {
+  border-color: var(--mint);
+  background: var(--mint);
+  color: #102928;
+}
+
+.button-primary:hover:not(:disabled) {
+  border-color: #a0f0d0;
+  background: #a0f0d0;
+}
+
+.button-secondary {
+  border-color: #607b89;
+  background: transparent;
+  color: var(--ink);
+}
+
+.button-secondary:hover:not(:disabled),
+.button-quiet:hover:not(:disabled) {
+  border-color: var(--mint);
+  background: var(--control-hover);
+  color: var(--mint);
+}
+
+.button-quiet {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
+}
+
+button:disabled,
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+:where(input, select, button, a, [tabindex]):focus-visible {
+  outline: 3px solid var(--control-ring);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  input,
+  select,
+  button,
+  .button {
+    transition: none;
+  }
+}

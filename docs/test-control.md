@@ -39,7 +39,7 @@ DID 必须已在对应 Node issuer 完成身份注册、钱包绑定、用户名
 
 报告正文和附件继续以静态文件保存在 `TESTER_REPORT_DIR`，SQLite `tester_reports` 表维护项目、运行时间、结果计数和对应文件目录。控制服务启动时自动执行 migration，并在报告列表读取时同步已发布的 `summary.json`。旧报告因此可自动进入目录，无需重新生成。
 
-浏览器使用同源 `/api/reports` 读取报告目录，并通过 `/api/reports/files/<相对路径>` 查看 HTML 和下载报告文件。两个 API 都要求有效钱包会话。Nginx 将 `/report/` 重写到报告文件 API，因此报告中心和单份报告使用同一个 Tester 登录态，不再依赖独立报告 Cookie。服务端只允许读取报告根目录内的普通文件，并拒绝路径穿越和符号链接。
+浏览器使用同源 `/api/reports` 读取报告目录，并通过 `/api/reports/files/<相对路径>` 查看 HTML 和下载报告文件。两个 API 都要求有效钱包会话。Nginx 在 `/report/` 提供 `tester-web` 中的报告中心页面，并将具体 `/report/<相对路径>` 转到报告文件 API；报告数据和详情都使用同一个 Tester 登录态，不依赖独立报告 Cookie。服务端只允许读取报告根目录内的普通文件，并拒绝路径穿越和符号链接。
 
 GPU 当前 runtime 中 `TESTER_WATCH_UPSTREAM_MAIN=1`、`TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY=1`；每日运行配置未设置，因此使用默认关闭状态。启动产品 watcher 前必须确认项目有隔离部署适配器并完成单项目 dry-run/回滚验证。
 

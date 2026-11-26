@@ -68,7 +68,7 @@ Upgrade --> Host : static current 链接切换
 tester tester-web tester-web https://<tester-domain>/
 ```
 
-迁移时删除旧的根路径重定向和控制台代理块，将本仓库 Nginx 片段加入实际 HTTPS server。片段会将 `/report/` 重写到需要钱包会话的报告 API，移除旧的独立报告 Cookie 门禁。然后进入维护窗口，校验并平滑重载 Nginx，再运行 Deployer 的标准 `upgrade.sh`。这一步切换到尚未安装的 `current` 静态目录后，控制台会短暂不可用，直到升级器部署 `tester-web` 并通过 `/index.html` 探活。升级失败时，按已备份的 Nginx 配置和 service 制品回滚。控制台地址为 `https://tester.tidukongjian.com/`，API 为 `/api/`，静态探活为 `/index.html`，报告入口为 `/report/`。后端 Cookie 路径为 `/`，升级后重新钱包登录。`TESTER_CONTROL_ORIGIN` 仍为 `https://tester.tidukongjian.com`，无需因路径迁移改变。升级完成后核对两个制品版本，并额外验证页面、钱包 SDK、报告中心和具体历史报告；控制服务自身健康检查只验证 service。
+迁移时删除旧的根路径重定向和控制台代理块，将本仓库 Nginx 片段加入实际 HTTPS server。`/report/` 由 `tester-web` 静态制品提供报告中心页面，具体 `/report/<path>` 报告地址仍由 Nginx 转到钱包会话保护的报告文件 API，移除旧的独立报告 Cookie 门禁。然后进入维护窗口，校验并平滑重载 Nginx，再运行 Deployer 的标准 `upgrade.sh`。这一步切换到尚未安装的 `current` 静态目录后，控制台会短暂不可用，直到升级器部署 `tester-web` 并通过 `/index.html` 探活。升级失败时，按已备份的 Nginx 配置和 service 制品回滚。控制台地址为 `https://tester.tidukongjian.com/`，API 为 `/api/`，静态探活为 `/index.html`，报告入口为 `/report/`。后端 Cookie 路径为 `/`，升级后重新钱包登录。`TESTER_CONTROL_ORIGIN` 仍为 `https://tester.tidukongjian.com`，无需因路径迁移改变。升级完成后核对两个制品版本，并额外验证页面、钱包 SDK、报告中心和具体历史报告；控制服务自身健康检查只验证 service。
 
 ## 3. 目标环境准备
 
