@@ -24,7 +24,6 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 STANDARD_RUNTIME_CONFIG = Path("/opt/deploy/tester/runtime.json")
-LEGACY_RUNTIME_CONFIG = Path("/opt/deploy/tester/config/runtime.json")
 
 class CleanupError(RuntimeError):
     pass
@@ -62,7 +61,7 @@ def environment(config=None, required=True):
         path = Path(configured_path)
     else:
         path = next((candidate for candidate in
-                     (STANDARD_RUNTIME_CONFIG, ROOT / "runtime.json", LEGACY_RUNTIME_CONFIG)
+                     (STANDARD_RUNTIME_CONFIG, ROOT / "runtime.json")
                      if candidate.is_file()), ROOT / "runtime.json")
     if path.is_file():
         raw = json.loads(path.read_text())
