@@ -75,21 +75,30 @@ tester tester-web tester-web https://<tester-domain>/
 目标机器必须符合社区 `book/yeying/specification/MACHINE.md` 的目录、权限和磁盘要求，并准备：
 
 - Linux x86_64、Python 3.10+、Node.js 24.18+。
-- Bash、coreutils、`flock`、Xvfb、Bubblewrap 以及 Chromium 所需系统库。
+- Bash、coreutils、`jq`、`flock`、Xvfb、Bubblewrap 以及 Chromium 所需系统库。
 - `/opt/deploy/tester` 作为稳定入口；版本目录由标准升级器创建。
-- `/data/test-results` 保存公开报告，`/data/test-results-private` 保存控制状态和报告 Nginx 配置。
+- `/data/test-results` 保存公开报告；`/data/test-results-private` 保存私有报告、数据库和运行状态，不存放长期配置文件。
+- `runtime.json`、`projects.json` 和 `tester.env` 由项目升级钩子复制到每个服务版本的 `config/`，稳定入口为 `/opt/deploy/tester/config/`。配置目录权限为 `700`，配置文件权限为 `600`。
 - `/data/tester` 保存 PID、运行锁和临时数据；`/opt/logs` 保存服务日志。
 - 受保护的 runtime、项目配置、测试环境变量和管理员 DID。凭据文件权限为 `600`，私有目录权限为 `700`。
 - 产品 E2E 所需的产品服务和公共中间件。Tester 负责排队、部署适配器和运行用例，不负责自动启动所有产品及中间件。
 
 ## 4. 配置初始化
 
-以安装包中的模板为准维护外置运行配置。不要覆盖部署机已有值；服务启动时，systemd 的 `TESTER_RUNTIME_CONFIG` 指向是实际生效 runtime 的来源。当前测试环境使用私有 runtime 和独立项目清单：
+Tester 的运行配置、项目清单和 E2E 环境文件统一放在 `/opt/deploy/tester/config/`。`/opt/deploy/tester` 是指向当前不可变版本目录的稳定软链接。每次升级由项目 `scripts/upgrade.sh copy-config` 使用 Shell 和 `jq` 将当前配置复制到目标版本，并保留目标版本已存在的文件。首次迁移时，该钩子把旧的 `consolidated-projects.json` 转为标准名 `projects.json`，并将原有 E2E 环境文件保留为标准名 `tester.env`。钩子同时通过 systemd drop-in 将 runtime 入口更新到 `/opt/deploy/tester/config/runtime.json`。配置完成标准迁移后的路径如下：
 
 ```bash
+/opt/deploy/tester/config/runtime.json
+/opt/deploy/tester/config/projects.json
+/opt/deploy/tester/config/tester.env
+```
+
+确认当前链接、systemd runtime 路径和权限：
+
+```bash
+readlink -f /opt/deploy/tester
 systemctl show tester-control.service --property=Environment --value
-stat -c '%a %n' /data/test-results-private/control/runtime-artifact.json
-stat -c '%a %n' /data/test-results-private/control/consolidated-projects.json
+stat -c '%a %n' /opt/deploy/tester/config/runtime.json /opt/deploy/tester/config/projects.json /opt/deploy/tester/config/tester.env
 ```
 
 复制新环境模板时，先确认模板中的绝对路径与 systemd、部署器和持久化目录配置一致，再设置权限；不要把真实身份 DID 或凭据写进公开文档。
@@ -101,9 +110,9 @@ stat -c '%a %n' /data/test-results-private/control/consolidated-projects.json
 - `TESTER_CONTROL_ORIGIN` 与用户访问控制台的 HTTPS origin 完全一致。
 - `TESTER_ADMIN_DID` 是已经完成 Node 身份注册、邮箱验证和钱包绑定的管理员 DID。
 - `TESTER_IDENTITY_ISSUER_URL` 指向受信任的身份发行方。
-- `TESTER_ENV_FILE` 指向 E2E 环境变量文件；其中的 API key、钱包私钥和 Webhook secret 不写入报告。
+- `TESTER_ENV_FILE` 指向 `/opt/deploy/tester/config/tester.env`；其中的 API key、钱包私钥和 Webhook secret 不写入报告。
 
-GPU 测试机的配置快照由 `scripts/config_backup.sh` 生成。按本手册回滚时，优先使用现有受保护快照并保留该机 runtime 指向，不要用仓库模板覆盖已配置的生产/测试值。
+GPU 测试机当前仍在迁移前状态，systemd runtime 和 E2E 配置位于 `/data/test-results-private/control/`。下次部署包含新 `copy-config` 钩子的 Tester service 制品时，项目升级阶段会将配置迁入当前和目标版本目录，更新 runtime 中的稳定配置路径，并保留旧源文件用于回滚。新版本健康检查与配置备份通过后，再清理旧配置副本。不要把 `/data/test-results-private` 中的报告、SQLite 数据库或运行状态移动到部署目录。
 
 Tester 授权数据库是服务私有 SQLite 文件，启动时自动执行 `scripts/migrations/` 中未执行的迁移。它不需要另行启动 PostgreSQL；路径由 `TESTER_AUTH_DATABASE` 指定，否则为 `${TESTER_PRIVATE_REPORT_DIR}/control/tester-auth.sqlite3`。GPU 当前 service 使用 `/data/test-results-private/control/tester-auth.sqlite3`。以 systemd 实际环境和数据库文件为准，不要按仓库默认值猜测线上路径。
 

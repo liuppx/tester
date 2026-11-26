@@ -23,7 +23,7 @@ from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
-STANDARD_RUNTIME_CONFIG = Path("/data/test-results-private/control/runtime-artifact.json")
+STANDARD_RUNTIME_CONFIG = Path("/opt/deploy/tester/config/runtime.json")
 
 class CleanupError(RuntimeError):
     pass

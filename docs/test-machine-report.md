@@ -44,7 +44,7 @@ by this change; the runner's existing stuck-process preflight still applies.
 | --------------------------- | ------------------------------------- | ------------------------------------------------ |
 | `TESTER_NODE_BIN`           | `node` on `PATH`                      | Node.js executable                               |
 | `TESTER_REPORT_DIR`         | `/data/test-results`                  | Public report directory                          |
-| `TESTER_PRIVATE_REPORT_DIR` | `/data/test-results-private`          | Raw results and private configuration            |
+| `TESTER_PRIVATE_REPORT_DIR` | `/data/test-results-private`          | Private reports, databases and runtime state     |
 | `TESTER_LOCK_FILE`          | `/run/lock/yeying-tester-full.lock`   | Run lock; parent must exist and be writable      |
 | `TESTER_STUCK_CHROME_LIMIT` | `0`                                   | Maximum existing D-state Chromium processes      |
 | `TESTER_FEISHU_CONFIG`      | `feishu.env` in the private directory | Optional private notification settings           |
@@ -57,8 +57,8 @@ Notification settings can be environment variables or entries in the private
 file. Environment variables take precedence. Start with the example:
 
 ```bash
-sudo install -d -m 700 /data/test-results-private
-sudo install -m 600 scripts/feishu.env.example /data/test-results-private/feishu.env
+sudo install -d -m 700 /opt/deploy/tester/config
+sudo install -m 600 scripts/feishu.env.example /opt/deploy/tester/config/feishu.env
 ```
 
 Fill in the real webhook and report URL in that private file. Never commit

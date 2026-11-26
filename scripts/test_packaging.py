@@ -17,6 +17,17 @@ def module(name):
     return result
 
 class PackageContractTests(unittest.TestCase):
+    def test_runtime_template_uses_standard_deployment_config_paths(self):
+        runtime = json.loads((ROOT / "config/runtime.json.template").read_text())
+        service = (ROOT / "scripts/tester-control.service").read_text()
+        upgrade = (ROOT / "scripts/upgrade.sh").read_text()
+        self.assertEqual(runtime["TESTER_CONTROL_CONFIG"], "/opt/deploy/tester/config/projects.json")
+        self.assertEqual(runtime["TESTER_ENV_FILE"], "/opt/deploy/tester/config/tester.env")
+        self.assertIn("Environment=TESTER_RUNTIME_CONFIG=/opt/deploy/tester/config/runtime.json", service)
+        self.assertIn("install -m 600", upgrade)
+        self.assertIn("jq --arg projects", upgrade)
+        self.assertNotIn("python", upgrade)
+
     def test_runtime_defaults_to_external_artifact_before_release_local_config(self):
         runtime = module("service-runtime")
         with tempfile.TemporaryDirectory() as folder:
