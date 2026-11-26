@@ -221,47 +221,5 @@ class ServiceContractTests(unittest.TestCase):
             self.assertEqual((current / "projects.json").read_bytes(), (target / "projects.json").read_bytes())
             self.assertEqual((target / "projects.json").stat().st_mode & 0o777, 0o600)
 
-    def test_upgrade_migrates_legacy_tester_env_and_projects_into_new_version(self):
-        with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder)
-            current, target, legacy = [root / name for name in ("old", "new", "legacy")]
-            current_config = current
-            target_config = target
-            current_config.mkdir(parents=True)
-            target_config.mkdir(parents=True)
-            legacy.mkdir()
-
-            projects = legacy / "consolidated-projects.json"
-            projects.write_text('{"projects":{"router":{"enabled":true}}}')
-            env_file = legacy / "tester.env"
-            env_file.write_text("ROUTER_PERSONAL_UPSTREAM_KEY=fixture-secret\n")
-            runtime = legacy / "runtime-artifact.json"
-            runtime.write_text(json.dumps({
-                "TESTER_CONTROL_CONFIG": str(projects),
-                "TESTER_ENV_FILE": str(env_file),
-                "TESTER_PRIVATE_REPORT_DIR": "/data/test-results-private",
-                "TESTER_CONTROL_PORT": "18082",
-            }))
-
-            subprocess.run(
-                ["bash", str(ROOT / "scripts/upgrade.sh"), "copy-config", str(current), str(target)],
-                check=True,
-                env={**os.environ, "TESTER_RUNTIME_CONFIG": str(runtime)},
-            )
-
-            expected_projects = '{"projects":{"router":{"enabled":true}}}'
-            self.assertEqual((current_config / "projects.json").read_text(), expected_projects)
-            self.assertEqual((target_config / "projects.json").read_text(), expected_projects)
-            self.assertEqual((target_config / ".env.local").read_text(), env_file.read_text())
-            self.assertEqual((current_config / ".env.local").stat().st_mode & 0o777, 0o600)
-            self.assertEqual((target_config / ".env.local").stat().st_mode & 0o777, 0o600)
-
-            migrated_runtime = json.loads((target_config / "runtime.json").read_text())
-            self.assertEqual(migrated_runtime["TESTER_CONTROL_CONFIG"], "/opt/deploy/tester/projects.json")
-            self.assertEqual(migrated_runtime["TESTER_ENV_FILE"], "/opt/deploy/tester/.env.local")
-            self.assertEqual(migrated_runtime["TESTER_PRIVATE_REPORT_DIR"], "/data/test-results-private")
-            self.assertEqual(migrated_runtime["TESTER_CONTROL_PORT"], "18082")
-            self.assertEqual((target_config / "runtime.json").stat().st_mode & 0o777, 0o600)
-
 if __name__ == "__main__":
     unittest.main()

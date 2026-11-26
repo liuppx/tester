@@ -86,7 +86,7 @@ tester tester-web tester-web https://<tester-domain>/
 
 ## 4. 配置初始化
 
-Tester 的控制服务配置、项目清单和 E2E 环境文件统一放在 `/opt/deploy/tester` 稳定入口根部。每次升级由项目 `scripts/upgrade.sh copy-config` 使用 Shell 和 `jq` 将当前配置复制到目标版本目录根部，并保留目标版本已存在的文件。首次迁移时，该钩子兼容旧版本目录内 `config/` 布局和旧外部控制目录，把 `consolidated-projects.json` 转为标准名 `projects.json`，并把旧 `tester.env` 迁移为 `.env.local`。钩子同时通过 systemd drop-in 将 runtime 入口更新到 `/opt/deploy/tester/runtime.json`。配置完成标准迁移后的路径如下：
+Tester 的控制服务配置、项目清单和 E2E 环境文件统一放在 `/opt/deploy/tester` 稳定入口根部。每次升级由项目 `scripts/upgrade.sh copy-config` 使用 Shell 和 `jq` 将当前配置复制到目标版本目录根部，并保留目标版本已存在的文件。升级钩子只处理根目录标准配置文件，并将配置复制到目标版本目录根部。钩子同时通过 systemd drop-in 将 runtime 入口更新到 `/opt/deploy/tester/runtime.json`。配置完成标准迁移后的路径如下：
 
 ```bash
 /opt/deploy/tester/runtime.json
@@ -113,7 +113,7 @@ stat -c '%a %n' /opt/deploy/tester/runtime.json /opt/deploy/tester/projects.json
 - `TESTER_IDENTITY_ISSUER_URL` 指向受信任的身份发行方。
 - `TESTER_ENV_FILE` 指向 `/opt/deploy/tester/.env.local`；其中的 API key、钱包私钥和 Webhook secret 不写入报告。
 
-GPU 测试机当前仍在迁移前状态，systemd runtime 和 E2E 配置位于 `/data/test-results-private/control/`。下次部署包含新 `copy-config` 钩子的 Tester service 制品时，项目升级阶段会将配置迁入当前和目标版本目录，更新 runtime 中的稳定配置路径，并保留旧源文件用于回滚。新版本健康检查与配置备份通过后，再清理旧配置副本。不要把 `/data/test-results-private` 中的报告、SQLite 数据库或运行状态移动到部署目录。
+GPU 测试机已完成配置路径迁移。当前配置通过 `/opt/deploy/tester/runtime.json`、`/opt/deploy/tester/projects.json` 和 `/opt/deploy/tester/.env.local` 访问。报告、授权数据库和运行状态继续保留在 `/data`，不要将这些持久化数据移动到部署目录。
 
 Tester 授权数据库是服务私有 SQLite 文件，启动时自动执行 `scripts/migrations/` 中未执行的迁移。它不需要另行启动 PostgreSQL；路径由 `TESTER_AUTH_DATABASE` 指定，否则为 `${TESTER_PRIVATE_REPORT_DIR}/control/tester-auth.sqlite3`。GPU 当前 service 使用 `/data/test-results-private/control/tester-auth.sqlite3`。以 systemd 实际环境和数据库文件为准，不要按仓库默认值猜测线上路径。
 

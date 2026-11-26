@@ -40,8 +40,8 @@ Tester 的 `scripts/config_backup.sh` 创建本地受限归档，包含运行配
 
 是否上传到远端由 Deployer 管理。Deployer 上传任务读取 `/data/tester/backup.conf` 的 `BACKUP_CONF_FLAG`、任务区的模块清单和 WebDAV 配置。GPU 上已生成多个本地归档，但 `/data/tester/backup.conf` 当前关闭上传，Deployer 任务区没有实际模块清单或 WebDAV `.env`，也未发现启用的定时器。因此当前有升级触发的本地备份，没有定期远端上传。
 
-## GPU 旧配置迁移
+## GPU 配置状态
 
-GPU 当前 systemd runtime `/data/test-results-private/control/runtime-artifact.json` 仍引用旧文件 `tester.env` 和 `consolidated-projects.json`。Tester 新升级钩子会将其迁移为 `/opt/deploy/tester/.env.local` 和 `/opt/deploy/tester/projects.json`，并将 runtime 配置迁移到 `/opt/deploy/tester/runtime.json`。迁移会在部署包含该钩子的 Tester service 版本时执行。报告、授权数据库和运行状态继续保留在 `/data`。代码包内的配置模板及依赖图直接位于仓库根目录。
+GPU 已使用根目录标准配置路径 `/opt/deploy/tester/runtime.json`、`/opt/deploy/tester/projects.json` 和 `/opt/deploy/tester/.env.local`。报告、授权数据库和运行状态继续保留在 `/data`。代码包内的配置模板及依赖图直接位于仓库根目录。
 
 敏感运行值、DID、密钥和 WebDAV 凭据不写入本文、仓库模板或测试报告。

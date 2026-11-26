@@ -37,20 +37,14 @@ update_systemd_runtime_path() {
 copy_runtime_config() {
   local current_config="$current"
   local target_config="$target"
-  local legacy_current_config="$current/config"
-  local legacy_target_config="$target/config"
   local runtime_source="${TESTER_RUNTIME_CONFIG:-}"
 
   install -d -m 700 "$current_config" "$target_config"
 
   if [[ -f "$current_config/runtime.json" && ! -L "$current_config/runtime.json" ]]; then
     runtime_source="$current_config/runtime.json"
-  elif [[ -f "$legacy_current_config/runtime.json" && ! -L "$legacy_current_config/runtime.json" ]]; then
-    runtime_source="$legacy_current_config/runtime.json"
   elif [[ -f "$target_config/runtime.json" && ! -L "$target_config/runtime.json" ]]; then
     runtime_source="$target_config/runtime.json"
-  elif [[ -f "$legacy_target_config/runtime.json" && ! -L "$legacy_target_config/runtime.json" ]]; then
-    runtime_source="$legacy_target_config/runtime.json"
   elif [[ -z "$runtime_source" ]]; then
     runtime_source=$(systemctl show tester-control.service --property=Environment --value 2>/dev/null \
       | sed -n 's/.*TESTER_RUNTIME_CONFIG=\([^[:space:]]*\).*/\1/p' | head -n 1)
@@ -74,13 +68,6 @@ copy_runtime_config() {
 
   if [[ -n "$projects_source" ]]; then
     copy_if_missing "$projects_source" "$current_config/projects.json"
-    copy_if_missing "$legacy_current_config/projects.json" "$current_config/projects.json"
-    copy_if_missing "$legacy_current_config/consolidated-projects.json" "$current_config/projects.json"
-    copy_if_missing "$legacy_target_config/projects.json" "$current_config/projects.json"
-    copy_if_missing "$legacy_target_config/consolidated-projects.json" "$current_config/projects.json"
-    if [[ ! -f "$current_config/projects.json" ]]; then
-      copy_if_missing "$current_config/consolidated-projects.json" "$current_config/projects.json"
-    fi
     if [[ ! -f "$current_config/projects.json" ]]; then
       echo "Tester project configuration is missing" >&2
       return 1
@@ -89,11 +76,6 @@ copy_runtime_config() {
 
   if [[ -n "$env_source" ]]; then
     copy_if_missing "$env_source" "$current_config/.env.local"
-    copy_if_missing "$legacy_current_config/.env.local" "$current_config/.env.local"
-    copy_if_missing "$legacy_current_config/tester.env" "$current_config/.env.local"
-    copy_if_missing "$legacy_target_config/.env.local" "$current_config/.env.local"
-    copy_if_missing "$legacy_target_config/tester.env" "$current_config/.env.local"
-    copy_if_missing "$current_config/tester.env" "$current_config/.env.local"
     if [[ ! -f "$current_config/.env.local" ]]; then
       echo "Tester E2E environment file is missing" >&2
       return 1

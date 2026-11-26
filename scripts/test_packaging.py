@@ -29,6 +29,7 @@ class PackageContractTests(unittest.TestCase):
         self.assertIn("install -m 600", upgrade)
         self.assertIn("jq --arg projects", upgrade)
         self.assertNotIn("python", upgrade)
+        self.assertNotIn("/config/", upgrade)
 
     def test_runtime_defaults_to_external_artifact_before_release_local_config(self):
         runtime = module("service-runtime")
