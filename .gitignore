@@ -20,7 +20,6 @@ __pycache__/
 # Environment
 .env
 .env.*
-!.env.template
 
 # Editor / OS
 .DS_Store
@@ -53,9 +52,9 @@ npm-debug.log*
 
 # Release output and deployed credentials
 /output/
-/config/runtime.json
-/config/projects.json
-/config/.env.local
+/runtime.json
+/projects.json
+/.env.local
 /test-results/
 *.sqlite3
 *.sqlite3-shm

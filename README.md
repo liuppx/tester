@@ -20,7 +20,7 @@ for the latest verified test-machine state.
 | project      | 20833 (APP_DEV_PORT) | same                    | login, dashboard sidebar                                    |
 | knowledge    | 5173                 | 8000 FastAPI            | home, search box, /health                                   |
 | marketplace  | none (static)        | none                    | index.json schema and shape                                 |
-| books        | none (docs)          | none                    | SUMMARY.md links                                            |
+| book        | none (docs)          | none                    | SUMMARY.md links                                            |
 | orchestrator | 5174                 | 3900 uvicorn            | wallet login, cookie session, protected console routes      |
 
 ## Layout
@@ -50,7 +50,7 @@ tester/
 ```bash
 npm install --package-lock=false
 npm run browsers:install
-cp .env.template .env.local   # tweak BASE_URL / path values to match your local setup
+cp tester.env.template .env.local   # tweak BASE_URL / path values to match your local setup
 ```
 
 Linux 打包会复用 `~/.cache/yeying/tester/playwright` 中的 Playwright 浏览器
@@ -168,4 +168,4 @@ MIT — see `LICENSE`.
 
 ## Deployment and operations
 
-See [Tester deployment](docs/deployment.md) for the packaged deployment, runtime configuration, Nginx integration, verification and rollback. The community artifact contract is maintained in `books/yeying/specification/PACKAGING.md`.
+See [Tester deployment](docs/deployment.md) for the packaged deployment, runtime configuration, Nginx integration, verification and rollback. The community artifact contract is maintained in `book/yeying/specification/PACKAGING.md`.

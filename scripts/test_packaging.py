@@ -17,6 +17,19 @@ def module(name):
     return result
 
 class PackageContractTests(unittest.TestCase):
+    def test_runtime_template_uses_standard_deployment_config_paths(self):
+        runtime = json.loads((ROOT / "runtime.json.template").read_text())
+        self.assertTrue((ROOT / "tester.env.template").is_file())
+        self.assertTrue((ROOT / "projects.json.template").is_file())
+        service = (ROOT / "scripts/tester-control.service").read_text()
+        upgrade = (ROOT / "scripts/upgrade.sh").read_text()
+        self.assertEqual(runtime["TESTER_CONTROL_CONFIG"], "/opt/deploy/tester/projects.json")
+        self.assertEqual(runtime["TESTER_ENV_FILE"], "/opt/deploy/tester/.env.local")
+        self.assertIn("Environment=TESTER_RUNTIME_CONFIG=/opt/deploy/tester/runtime.json", service)
+        self.assertIn("install -m 600", upgrade)
+        self.assertIn("jq --arg projects", upgrade)
+        self.assertNotIn("python", upgrade)
+
     def test_runtime_defaults_to_external_artifact_before_release_local_config(self):
         runtime = module("service-runtime")
         with tempfile.TemporaryDirectory() as folder:
@@ -50,9 +63,12 @@ class PackageContractTests(unittest.TestCase):
         for name in ("scripts/__pycache__/x.pyc", "scripts/.env.local", ".project/task.json", "x.log"):
             self.assertFalse(build.publishable(Path(name)))
         self.assertTrue(build.publishable(Path("node_modules/.bin/tsx")))
-        for name in ("config/runtime.json.template", "config/backup.conf.template",
-                     ".env.template", "products/router/tests/smoke.spec.ts"):
+        for name in ("runtime.json.template", "tester.env.template", "projects.json.template",
+                     "local-test-dependencies.json",
+                     "products/router/tests/smoke.spec.ts"):
             self.assertTrue(build.publishable(Path(name)))
+        self.assertNotIn("config", build.DIRS)
+        self.assertFalse(build.publishable(Path(".env.template")))
 
     def test_release_manifest_separates_service_and_static_artifacts(self):
         build = module("package-release")
@@ -144,6 +160,8 @@ class PackageContractTests(unittest.TestCase):
         self.assertIn("package.json", build.FILES)
         self.assertNotIn("web", build.DIRS)
         self.assertTrue((ROOT / "web/index.html").is_file())
+        self.assertTrue((ROOT / "web/report.html").is_file())
+        self.assertTrue((ROOT / "web/assets/report.js").is_file())
         self.assertTrue((ROOT / "web/assets/control.js").is_file())
         self.assertTrue((ROOT / "web/package-lock.json").is_file())
         self.assertIn("vite", json.loads((ROOT / "web/package.json").read_text())["devDependencies"])

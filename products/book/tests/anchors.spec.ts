@@ -1,5 +1,5 @@
 /**
- * books — 锚点与交叉引用 (BK-DATA-019, 020, 021).
+ * book — 锚点与交叉引用 (BK-DATA-019, 020, 021).
  */
 import { localizedTitle } from '../../../shared/title';
 import { existsSync, readFileSync } from 'node:fs';

@@ -6,7 +6,7 @@
 
 | 产品 | 用例文档 |
 | --- | --- |
-| Books | [books.md](books.md) |
+| Book | [book.md](book.md) |
 | Chat | [chat.md](chat.md) |
 | Knowledge | [knowledge.md](knowledge.md) |
 | Marketplace | [marketplace.md](marketplace.md) |
@@ -57,6 +57,6 @@
 3. 编写/调整对应 Playwright spec，并让失败信息能指出产品行为或环境前置条件。
 4. 本地运行 `python3 -m unittest scripts.test_tester_control -v`，确认脑图解析器读取新模块和 case 字段。
 5. 在目标运行模式下跑对应项目，保留准确的 pass/fail/skip 和 source commit；更新 case 状态及对应实现路径。
-6. 新增服务或跨产品调用时，同步维护 `config/local-test-dependencies.json`、`docs/project-dependency-map.json` 和[依赖关系文档](../project-dependency-map.md)。
+6. 新增服务或跨产品调用时，同步维护 `local-test-dependencies.json`、`docs/project-dependency-map.json` 和[依赖关系文档](../project-dependency-map.md)。
 
 运行环境和服务当前状态见[测试环境现状](../test-machine-architecture.md)，产品依赖见[依赖关系](../project-dependency-map.md)。这两者不能由用例目录中的历史说明替代。

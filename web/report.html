@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101d29" />
+    <link rel="icon" href="data:," />
+    <title>测试报告 · Tester</title>
+    <link rel="stylesheet" href="/assets/report.css" />
+    <link rel="stylesheet" href="/assets/controls.css" />
+  </head>
+  <body>
+    <main class="report-page">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="返回 Tester 控制台">
+          <span class="brand-mark" aria-hidden="true">T</span>
+          <span>Tester</span>
+        </a>
+        <nav aria-label="主导航">
+          <a href="/">质量控制台</a>
+          <a href="/cases">用例脑图</a>
+          <a href="/architecture">依赖关系</a>
+        </nav>
+      </header>
+
+      <section class="page-intro" aria-labelledby="page-title">
+        <div>
+          <h1 id="page-title">测试报告</h1>
+          <p class="intro-copy">按项目和运行时间查看自动化测试结果。</p>
+        </div>
+      </section>
+
+      <section class="summary-strip" aria-label="报告统计">
+        <div class="summary-item">
+          <span>报告总数</span>
+          <strong id="total-count">—</strong>
+        </div>
+        <div class="summary-item summary-pass">
+          <span>通过</span>
+          <strong id="passed-count">—</strong>
+        </div>
+        <div class="summary-item summary-fail">
+          <span>失败</span>
+          <strong id="failed-count">—</strong>
+        </div>
+        <div class="summary-item summary-other">
+          <span>运行异常</span>
+          <strong id="other-count">—</strong>
+        </div>
+        <p id="updated-at" class="updated-at">正在读取报告</p>
+      </section>
+
+      <section class="report-browser" aria-labelledby="list-title">
+        <div class="list-heading">
+          <div>
+            <h2 id="list-title">运行记录</h2>
+            <p id="result-count" class="muted" aria-live="polite">加载中</p>
+          </div>
+          <button id="reset-filters" class="button button-secondary" type="button" hidden>
+            清除筛选
+          </button>
+        </div>
+
+        <form id="filters" class="filters" role="search">
+          <div class="search-field">
+            <label for="search">搜索报告</label>
+            <input id="search" type="search" placeholder="项目名称或运行时间" autocomplete="off" />
+          </div>
+          <div>
+            <label for="project-filter">项目</label>
+            <select id="project-filter">
+              <option value="">所有项目</option>
+            </select>
+          </div>
+          <div>
+            <label for="status-filter">结果</label>
+            <select id="status-filter">
+              <option value="">所有结果</option>
+              <option value="passed">通过</option>
+              <option value="failed">失败</option>
+              <option value="other">其他</option>
+            </select>
+          </div>
+        </form>
+
+        <div id="page-message" class="page-message" role="status" aria-live="polite" hidden></div>
+        <div id="report-list" class="report-list" aria-live="polite"></div>
+      </section>
+    </main>
+    <script type="module" src="/assets/report.js"></script>
+  </body>
+</html>

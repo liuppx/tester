@@ -86,14 +86,14 @@ ss -ltn
 
 | 配置内容 | 现场位置 | 修改原则 |
 | --- | --- | --- |
-| Tester 控制参数 | `/data/test-results-private/control/runtime-artifact.json` | 备份后只改需要的 `TESTER_*` 项；通过 starter 重启 |
-| 产品 URL 与测试凭据 | `/data/test-results-private/control/tester.env` | 地址须对应真实监听服务；凭据不得进入命令输出、文档或报告 |
-| watcher 项目清单 | `/data/test-results-private/control/consolidated-projects.json` | `enabled` 只控制 main watcher，不控制 Playwright 全量项目范围 |
+| Tester 控制参数 | `/opt/deploy/tester/runtime.json` | 由项目升级钩子复制到每个版本；修改前备份，通过 starter 重启 |
+| 产品 URL 与测试凭据 | `/opt/deploy/tester/.env.local` | 地址须对应真实监听服务；凭据不得进入命令输出、文档或报告 |
+| watcher 项目清单 | `/opt/deploy/tester/projects.json` | `enabled` 只控制 main watcher，不控制 Playwright 全量项目范围 |
 | Tester 报告和私有运行数据 | `/data/test-results` 与 `/data/test-results-private` | 前者可由站点发布；后者禁止被 Nginx 暴露 |
 | Tester 登录与控制数据库 | 私有控制数据目录中的 SQLite | 启动时自动 migration；由 config backup 做一致性备份 |
 | 产品源码 | `/root/code/<repo>` | 以各仓库 `origin/main` 为准；本地源码 runner 用 detached worktree |
 
-更新 `tester.env` 时不要只写入 URL 让 preflight 变绿；先确认服务确实启动、健康检查通过，并核实数据库迁移已应用。Watcher 开启不等于服务已部署。当前 watcher 适配和源码模式依赖范围见 [控制服务](test-control.md) 与[本地源码模式](local-source-mode.md)。
+GPU 当前文件仍位于旧路径 `/data/test-results-private/control/tester.env`，下次标准服务升级会由 Tester 项目钩子迁移到 `/opt/deploy/tester/.env.local`，并切换 systemd runtime 路径。更新 `.env.local` 时不要只写入 URL 让 preflight 变绿；先确认服务确实启动、健康检查通过，并核实数据库迁移已应用。Watcher 开启不等于服务已部署。当前 watcher 适配和源码模式依赖范围见 [控制服务](test-control.md) 与[本地源码模式](local-source-mode.md)。
 
 ## 启动和验证顺序
 
@@ -113,7 +113,7 @@ ss -ltn
 
 服务依赖、启动入口、端口或数据库变化时，同一 PR 应更新：
 
-- `config/local-test-dependencies.json`：本地源码模式的仓库和服务闭包；
+- `local-test-dependencies.json`：本地源码模式的仓库和服务闭包；
 - `scripts/local_test_readiness.py` / `scripts/local-source-services.py`：preflight、配置覆盖和生命周期；
 - `docs/project-dependency-map.json` 与 `docs/project-dependency-map.md`：逻辑依赖图；
 - 本文：GPU 现场状态、测试机差异和验证日期；

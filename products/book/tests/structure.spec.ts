@@ -1,7 +1,7 @@
 /**
- * books — 目录结构与 SUMMARY 解析 (BK-DATA-002, 004, 005, 006).
+ * book — 目录结构与 SUMMARY 解析 (BK-DATA-002, 004, 005, 006).
  *
- * Filesystem-only assertions against the on-disk books repo (BOOKS_REPO_PATH).
+ * Filesystem-only assertions against the on-disk book repo (BOOK_REPO_PATH).
  */
 import { localizedTitle } from '../../../shared/title';
 import { existsSync } from 'node:fs';

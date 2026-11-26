@@ -2,7 +2,7 @@
   "schema_version": 1,
   "source_root": "/root/code",
   "full_run_projects": [
-    "books",
+    "book",
     "chat",
     "marketplace",
     "knowledge",
@@ -15,8 +15,8 @@
     "warehouse"
   ],
   "projects": {
-    "books": {
-      "repositories": ["books"],
+    "book": {
+      "repositories": ["book"],
       "services": []
     },
     "marketplace": {
@@ -61,7 +61,7 @@
     }
   },
   "repositories": [
-    "books",
+    "book",
     "chat",
     "knowledge",
     "marketplace",

@@ -1,5 +1,5 @@
 /**
- * books — 构建配置 (BK-DATA-033, 034).
+ * book — 构建配置 (BK-DATA-033, 034).
  */
 import { localizedTitle } from '../../../shared/title';
 import { existsSync } from 'node:fs';

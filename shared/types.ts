@@ -7,7 +7,7 @@ export type ProductName =
   | 'project'
   | 'knowledge'
   | 'marketplace'
-  | 'books'
+  | 'book'
   | 'orchestrator'
   | 'wallet';
 
@@ -20,7 +20,7 @@ export const PRODUCT_NAMES: readonly ProductName[] = [
   'project',
   'knowledge',
   'marketplace',
-  'books',
+  'book',
   'orchestrator',
   'wallet',
 ] as const;

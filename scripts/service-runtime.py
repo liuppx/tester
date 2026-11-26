@@ -23,7 +23,8 @@ from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
-STANDARD_RUNTIME_CONFIG = Path("/data/test-results-private/control/runtime-artifact.json")
+STANDARD_RUNTIME_CONFIG = Path("/opt/deploy/tester/runtime.json")
+LEGACY_RUNTIME_CONFIG = Path("/opt/deploy/tester/config/runtime.json")
 
 class CleanupError(RuntimeError):
     pass
@@ -61,8 +62,8 @@ def environment(config=None, required=True):
         path = Path(configured_path)
     else:
         path = next((candidate for candidate in
-                     (STANDARD_RUNTIME_CONFIG, ROOT / "config/runtime.json")
-                     if candidate.is_file()), ROOT / "config/runtime.json")
+                     (STANDARD_RUNTIME_CONFIG, ROOT / "runtime.json", LEGACY_RUNTIME_CONFIG)
+                     if candidate.is_file()), ROOT / "runtime.json")
     if path.is_file():
         raw = json.loads(path.read_text())
         if not isinstance(raw, dict) or any(not isinstance(k, str) or (not k.startswith("TESTER_") and k not in ("STOP_TIMEOUT_SECONDS", "FORCE_STOP_TIMEOUT_SECONDS")) or not isinstance(v, str) for k, v in raw.items()):
@@ -70,7 +71,7 @@ def environment(config=None, required=True):
         for key, value in raw.items():
             values.setdefault(key, value)
     elif required or config:
-        raise ValueError("Create config/runtime.json from its template")
+        raise ValueError("Create runtime.json from runtime.json.template")
     values["TESTER_ARTIFACT_MODE"] = "1"
     values["PLAYWRIGHT_BROWSERS_PATH"] = str(ROOT / "browsers")
     values["PYTHONDONTWRITEBYTECODE"] = "1"

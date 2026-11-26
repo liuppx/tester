@@ -1,5 +1,0 @@
-# Local, permission-restricted backups are always created by config_backup.sh.
-# Remote upload is opt-in and requires a dedicated private WebDAV destination.
-BACKUP_CONF_FLAG=False
-BACKUP_CONF_PREFIX=tester-config-
-BACKUP_CONF_SUFFIX=.tar.gz

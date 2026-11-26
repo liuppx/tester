@@ -1,9 +1,9 @@
-# books(文档/书籍仓库)— 端到端测试用例
+# book(文档/书籍仓库)— 端到端测试用例
 
 > 测试人员视角整理的**应有** E2E 用例清单,作为实现依据。
 > 状态说明:✅ 已实现(链接到 spec) / ⬜ 待实现。
-> 端点:文档仓库 · 从磁盘读取 SUMMARY.md(BOOKS_REPO_PATH)
-> 说明:books 是纯文档仓库,测试从磁盘读取 markdown 与 SUMMARY.md;一条逻辑用例可能对应多个 spec,"已实现"以逻辑用例是否被现有 spec 覆盖为准,而非 spec 中的 test 块数量。
+> 端点:文档仓库 · 从磁盘读取 SUMMARY.md(BOOK_REPO_PATH)
+> 说明:book 是纯文档仓库,测试从磁盘读取 markdown 与 SUMMARY.md;一条逻辑用例可能对应多个 spec,"已实现"以逻辑用例是否被现有 spec 覆盖为准,而非 spec 中的 test 块数量。
 > 仓库真实结构:根含三大文档集合 `agent/`(唯一带 SUMMARY.md 的 mdbook/gitbook 风格书,README + 21 章节)、`payment/docs/`(索引驱动,160+ 篇,无 SUMMARY.md)、`yeying/`(社区文档,以 `社区文档总览.md` 为索引,39 篇)。现有 spec 仅 `summary.spec.ts`。
 > 最后更新:2026-09-16
 
@@ -22,18 +22,18 @@
 | 九、可选在线站点冒烟 | 1 | 1 | 0 |
 | **合计** | **35** | **32** | **3** |
 
-> 待实现的 3 条(BK-DATA-009 / BK-DATA-012 / BK-DATA-023)均为**已实现但捕获到 books 仓库真实缺陷**,
+> 待实现的 3 条(BK-DATA-009 / BK-DATA-012 / BK-DATA-023)均为**已实现但捕获到 book 仓库真实缺陷**,
 > 对应 spec 以 `test.fixme` 记录缺陷、保持 runner 绿色;修复源仓库后去掉 fixme 即转正。
 
 ---
 
 ## 一、目录结构与 SUMMARY 解析
 
-### BK-DATA-001 books 仓库存在且至少含一个 markdown 文档
+### BK-DATA-001 book 仓库存在且至少含一个 markdown 文档
 - 优先级:P0
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/summary.spec.ts
-- 前置条件:`BOOKS_REPO_PATH` 指向 books 仓库(默认 `/Users/liuxin2/Workspace/opensource/books`)
+- 状态:✅ 已实现 — products/book/tests/summary.spec.ts
+- 前置条件:`BOOK_REPO_PATH` 指向 book 仓库(默认 `/Users/liuxin2/Workspace/opensource/book`)
 - 步骤:
   1. 断言仓库根路径存在
   2. 递归枚举文件,过滤 `.md` 后缀
@@ -42,7 +42,7 @@
 ### BK-DATA-002 agent/SUMMARY.md 存在、非空且以 Markdown 列表组织目录
 - 优先级:P0
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/structure.spec.ts:11
+- 状态:✅ 已实现 — products/book/tests/structure.spec.ts:11
 - 前置条件:仓库可读
 - 步骤:
   1. 读取 `agent/SUMMARY.md`
@@ -53,7 +53,7 @@
 ### BK-DATA-003 SUMMARY.md 可解析出章节链接
 - 优先级:P0
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/summary.spec.ts
+- 状态:✅ 已实现 — products/book/tests/summary.spec.ts
 - 前置条件:`agent/SUMMARY.md` 存在
 - 步骤:
   1. 读取 `agent/SUMMARY.md`
@@ -63,7 +63,7 @@
 ### BK-DATA-004 SUMMARY 章节编号单调有序
 - 优先级:P1
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/structure.spec.ts:23
+- 状态:✅ 已实现 — products/book/tests/structure.spec.ts:23
 - 前置条件:`agent/SUMMARY.md` 已解析
 - 步骤:
   1. 抽取 `chapters/NN-*.md` 中的数字前缀
@@ -73,7 +73,7 @@
 ### BK-DATA-005 SUMMARY 覆盖三部分骨架标题
 - 优先级:P1
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/structure.spec.ts:40
+- 状态:✅ 已实现 — products/book/tests/structure.spec.ts:40
 - 前置条件:`agent/SUMMARY.md` 已读取
 - 步骤:
   1. 在 SUMMARY 中查找"第一部分""第二部分""第三部分"分节条目
@@ -82,7 +82,7 @@
 ### BK-DATA-006 顶层三大文档集合目录均存在且非空
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/structure.spec.ts:61
+- 状态:✅ 已实现 — products/book/tests/structure.spec.ts:61
 - 前置条件:仓库可读
 - 步骤:
   1. 断言 `agent/`、`payment/docs/`、`yeying/` 目录存在
@@ -96,7 +96,7 @@
 ### BK-DATA-007 SUMMARY.md 每个章节链接目标文件存在(无死链)
 - 优先级:P0
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/links.spec.ts:15
+- 状态:✅ 已实现 — products/book/tests/links.spec.ts:15
 - 前置条件:`agent/SUMMARY.md` 已解析出链接
 - 步骤:
   1. 逐条取出 `./chapters/*.md` 链接
@@ -106,7 +106,7 @@
 ### BK-DATA-008 SUMMARY.md 链接均为仓库内相对路径
 - 优先级:P1
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/links.spec.ts:28
+- 状态:✅ 已实现 — products/book/tests/links.spec.ts:28
 - 前置条件:`agent/SUMMARY.md` 已解析
 - 步骤:
   1. 检查每条链接是否以 `./` 或 `../` 开头的相对路径
@@ -116,7 +116,7 @@
 ### BK-DATA-009 agent/README.md 内 SUMMARY 链接指向的路径存在
 - 优先级:P0
 - 类型:DATA
-- 状态:⬜ 待实现(已实现,`test.fixme` 记录真实缺陷)— products/books/tests/links.spec.ts:40。**真实缺陷**:`agent/README.md` 第 26 行 `[SUMMARY.md](/Users/liuxin2/Workspace/books/agent/SUMMARY.md)` 为机器绝对路径且缺少 `opensource/` 段,指向不存在的文件(死链);修复方向:改为相对路径 `./SUMMARY.md`
+- 状态:⬜ 待实现(已实现,`test.fixme` 记录真实缺陷)— products/book/tests/links.spec.ts:40。**真实缺陷**:`agent/README.md` 第 26 行 `[SUMMARY.md](/Users/liuxin2/Workspace/books/agent/SUMMARY.md)` 为机器绝对路径且缺少 `opensource/` 段,指向不存在的文件(死链);修复方向:改为相对路径 `./SUMMARY.md`
 - 前置条件:`agent/README.md` 可读
 - 步骤:
   1. 抽取 README 末尾 `[SUMMARY.md](…)` 链接目标
@@ -126,7 +126,7 @@
 ### BK-DATA-010 yeying 总览内所有相对链接目标存在
 - 优先级:P1
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/links.spec.ts:57
+- 状态:✅ 已实现 — products/book/tests/links.spec.ts:57
 - 前置条件:`yeying/社区文档总览.md` 可读
 - 步骤:
   1. 抽取总览表与阅读路径中的全部 `](社区/….md)` 链接
@@ -136,7 +136,7 @@
 ### BK-DATA-011 payment 索引文档内链接目标存在
 - 优先级:P1
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/links.spec.ts
+- 状态:✅ 已实现 — products/book/tests/links.spec.ts
 - 前置条件:`payment/docs/README.md`、`payment/docs/series-index.md`、`payment/docs/rails/card/README.md`、`payment/docs/rails/card/跨章索引.md` 可读
 - 步骤:
   1. 抽取各索引文件内的相对链接
@@ -146,7 +146,7 @@
 ### BK-DATA-012 全仓库站内 .md 链接全量死链扫描
 - 优先级:P2
 - 类型:DATA
-- 状态:⬜ 待实现(已实现,`test.fixme` 记录真实缺陷)— products/books/tests/links.spec.ts:94。**真实缺陷**:全仓库死链全量扫描发现唯一死链 `agent/README.md -> /Users/liuxin2/Workspace/books/agent/SUMMARY.md`(与 BK-DATA-009 同因);其余约 1000+ 条内链均有效
+- 状态:⬜ 待实现(已实现,`test.fixme` 记录真实缺陷)— products/book/tests/links.spec.ts:94。**真实缺陷**:全仓库死链全量扫描发现唯一死链 `agent/README.md -> /Users/liuxin2/Workspace/books/agent/SUMMARY.md`(与 BK-DATA-009 同因);其余约 1000+ 条内链均有效
 - 前置条件:仓库可读
 - 步骤:
   1. 遍历所有 `.md`,抽取每条站内 `](相对路径.md[#锚点])` 链接
@@ -156,7 +156,7 @@
 ### BK-DATA-013 外部 http(s) 链接格式合法
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/links.spec.ts:118
+- 状态:✅ 已实现 — products/book/tests/links.spec.ts:118
 - 前置条件:仓库可读
 - 步骤:
   1. 抽取所有 `http://` / `https://` 链接
@@ -170,7 +170,7 @@
 ### BK-DATA-014 agent 章节文件无孤儿(均被 SUMMARY 引用)
 - 优先级:P1
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/chapters.spec.ts:22
+- 状态:✅ 已实现 — products/book/tests/chapters.spec.ts:22
 - 前置条件:`agent/chapters/` 与 `agent/SUMMARY.md` 可读
 - 步骤:
   1. 枚举 `agent/chapters/*.md` 全部文件
@@ -180,7 +180,7 @@
 ### BK-DATA-015 SUMMARY 引用的章节文件都真实存在(反向校验)
 - 优先级:P1
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/chapters.spec.ts:29
+- 状态:✅ 已实现 — products/book/tests/chapters.spec.ts:29
 - 前置条件:SUMMARY 链接与 chapters 目录可读
 - 步骤:
   1. 取 SUMMARY 链接集合
@@ -190,7 +190,7 @@
 ### BK-DATA-016 每个章节文件非空且含标题
 - 优先级:P1
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/chapters.spec.ts:38
+- 状态:✅ 已实现 — products/book/tests/chapters.spec.ts:38
 - 前置条件:`agent/chapters/*.md` 可读
 - 步骤:
   1. 逐个读取章节文件
@@ -200,7 +200,7 @@
 ### BK-DATA-017 章节文件名编号与 SUMMARY 顺序对应
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/chapters.spec.ts:49
+- 状态:✅ 已实现 — products/book/tests/chapters.spec.ts:49
 - 前置条件:SUMMARY 与 chapters 可读
 - 步骤:
   1. 按 SUMMARY 出现顺序取链接文件名前缀编号
@@ -210,8 +210,8 @@
 ### BK-DATA-018 yeying 单产品说明文件齐全且被总览引用
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/chapters.spec.ts:67
-- 前置条件:`yeying/社区/产品/单产品/` 与 `社区文档总览.md` 可读
+- 状态:✅ 已实现 — products/book/tests/chapters.spec.ts:67
+- 前置条件:`yeying/product/`（兼容旧目录 `yeying/夜莺社区/产品/`）与 `yeying/社区文档总览.md` 可读
 - 步骤:
   1. 枚举 `单产品/` 下的 `.md`(9 篇:钱包/节点/模型路由/文件仓库/聊天/项目/知识/智能体/知行图)
   2. 校验每篇都在总览"产品与说明"表中被链接
@@ -224,7 +224,7 @@
 ### BK-DATA-019 跨文件链接的锚点在目标文件内存在
 - 优先级:P1
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/anchors.spec.ts:14
+- 状态:✅ 已实现 — products/book/tests/anchors.spec.ts:14
 - 前置条件:仓库可读
 - 步骤:
   1. 抽取形如 `](path.md#锚点)` 的链接
@@ -235,7 +235,7 @@
 ### BK-DATA-020 同文档内 #锚点 指向存在的标题
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/anchors.spec.ts:36
+- 状态:✅ 已实现 — products/book/tests/anchors.spec.ts:36
 - 前置条件:仓库可读
 - 步骤:
   1. 抽取形如 `](#锚点)` 的本文档内跳转
@@ -245,7 +245,7 @@
 ### BK-DATA-021 标题重复导致的锚点歧义检测
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/anchors.spec.ts:52
+- 状态:✅ 已实现 — products/book/tests/anchors.spec.ts:52
 - 前置条件:仓库可读
 - 步骤:
   1. 对每个文件统计标题 slug
@@ -259,7 +259,7 @@
 ### BK-DATA-022 markdown 图片引用目标文件存在
 - 优先级:P1
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/resources.spec.ts:20
+- 状态:✅ 已实现 — products/book/tests/resources.spec.ts:20
 - 前置条件:仓库可读
 - 步骤:
   1. 抽取所有 `![alt](路径)` 图片引用
@@ -269,7 +269,7 @@
 ### BK-DATA-023 仓库图片/资产无孤儿
 - 优先级:P2
 - 类型:DATA
-- 状态:⬜ 待实现(已实现,`test.fixme` 记录真实缺陷)— products/books/tests/resources.spec.ts:40。**真实缺陷**:`yeying/2A068D22-0E72-47EB-AEFC-D598509BBFFB.png` 未被任何 markdown 引用(全仓库 0 条图片引用)→ 孤儿资产;修复方向:删除该文件或补充引用
+- 状态:⬜ 待实现(已实现,`test.fixme` 记录真实缺陷)— products/book/tests/resources.spec.ts:40。**真实缺陷**:`yeying/2A068D22-0E72-47EB-AEFC-D598509BBFFB.png` 未被任何 markdown 引用(全仓库 0 条图片引用)→ 孤儿资产;修复方向:删除该文件或补充引用
 - 前置条件:仓库可读
 - 步骤:
   1. 枚举仓库内图片资产(png/jpg/svg 等)
@@ -279,7 +279,7 @@
 ### BK-DATA-024 图片替代文本非空
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/resources.spec.ts:62
+- 状态:✅ 已实现 — products/book/tests/resources.spec.ts:62
 - 前置条件:存在图片引用
 - 步骤:
   1. 抽取 `![alt](…)` 的 alt 文本
@@ -292,7 +292,7 @@
 ### BK-DATA-025 所有 markdown 为合法 UTF-8
 - 优先级:P1
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/markdown.spec.ts:13
+- 状态:✅ 已实现 — products/book/tests/markdown.spec.ts:13
 - 前置条件:仓库可读
 - 步骤:
   1. 以 UTF-8 逐个读取所有 `.md`
@@ -302,7 +302,7 @@
 ### BK-DATA-026 markdown 链接语法闭合
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/markdown.spec.ts:27
+- 状态:✅ 已实现 — products/book/tests/markdown.spec.ts:27
 - 前置条件:仓库可读
 - 步骤:
   1. 扫描 `[文本](链接)` 结构
@@ -312,7 +312,7 @@
 ### BK-DATA-027 代码围栏成对闭合
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/markdown.spec.ts:42
+- 状态:✅ 已实现 — products/book/tests/markdown.spec.ts:42
 - 前置条件:仓库可读
 - 步骤:
   1. 统计每个文件的 ``` 围栏数量
@@ -321,7 +321,7 @@
 ### BK-DATA-028 换行风格一致(无 CRLF 混入)
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/markdown.spec.ts:52
+- 状态:✅ 已实现 — products/book/tests/markdown.spec.ts:52
 - 前置条件:仓库可读
 - 步骤:
   1. 检查文件是否含 `\r\n`
@@ -334,8 +334,8 @@
 ### BK-DATA-029 yeying 总览表产品与单产品目录一一对应
 - 优先级:P1
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/consistency.spec.ts:10
-- 前置条件:`yeying/社区文档总览.md` 与 `单产品/` 可读
+- 状态:✅ 已实现 — products/book/tests/consistency.spec.ts:10
+- 前置条件:`yeying/社区文档总览.md` 与 `yeying/product/`（兼容旧目录 `yeying/夜莺社区/产品/`）可读
 - 步骤:
   1. 解析总览"产品与说明"表的 9 行(Wallet/Node/Router/Warehouse/Chat/Project/Knowledge/Agent/ZhixingGraph)
   2. 与磁盘 9 个产品说明文件做双向匹配
@@ -344,7 +344,7 @@
 ### BK-DATA-030 payment 发布导航版本链接齐全
 - 优先级:P1
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/consistency.spec.ts
+- 状态:✅ 已实现 — products/book/tests/consistency.spec.ts
 - 前置条件:`payment/docs/rails/card/` 和 `payment/docs/archive/release-nav/` 可读
 - 步骤:
   1. 在 `payment/docs/rails/card/` 和 `payment/docs/archive/release-nav/` 枚举 `00-发布导航-v*.md`(v1.0 … v2.2,共 13 个版本);历史导航位于 archive,当前 v2.2 位于 card 目录
@@ -354,7 +354,7 @@
 ### BK-DATA-031 payment 章节元信息/跨章索引引用一致
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/consistency.spec.ts
+- 状态:✅ 已实现 — products/book/tests/consistency.spec.ts
 - 前置条件:`payment/docs/rails/card/章节元信息总表.md`、`payment/docs/rails/card/跨章索引.md` 可读
 - 步骤:
   1. 抽取两表引用的章节编号/文件
@@ -364,7 +364,7 @@
 ### BK-DATA-032 README 顶层提及 YeYing 社区
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/summary.spec.ts
+- 状态:✅ 已实现 — products/book/tests/summary.spec.ts
 - 前置条件:根 `README.md` 或产品文档可读
 - 步骤:
   1. 读取候选文档(README.md 等)
@@ -378,7 +378,7 @@
 ### BK-DATA-033 检测构建配置并断言"纯 SUMMARY 目录型仓库"契约
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/build.spec.ts:17
+- 状态:✅ 已实现 — products/book/tests/build.spec.ts:17
 - 前置条件:仓库可读
 - 步骤:
   1. 查找 `book.toml`(mdBook)/`book.json`(GitBook legacy)/`.gitbook.yaml`/`mkdocs.yml`
@@ -387,7 +387,7 @@
 ### BK-DATA-034 存在构建配置时可产出 HTML
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/build.spec.ts:29
+- 状态:✅ 已实现 — products/book/tests/build.spec.ts:29
 - 前置条件:仓库存在受支持的构建配置(如 `book.toml`)
 - 步骤:
   1. 执行对应构建命令(如 `mdbook build`)
@@ -398,11 +398,11 @@
 
 ## 九、可选在线站点冒烟
 
-### BK-DATA-035 (可选)BOOKS_BASE_URL 在线文档站点可达
+### BK-DATA-035 (可选)BOOK_BASE_URL 在线文档站点可达
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/books/tests/summary.spec.ts
-- 前置条件:设置了 `BOOKS_BASE_URL`(未设置则 skip)
+- 状态:✅ 已实现 — products/book/tests/summary.spec.ts
+- 前置条件:设置了 `BOOK_BASE_URL`(未设置则 skip)
 - 步骤:
   1. `GET` 该站点根地址
 - 预期结果:响应状态码 < 500,在线文档站点存活(未配置时用例跳过)

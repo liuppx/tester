@@ -12,7 +12,7 @@ fi
 case "$project" in
     router) deployment=service ;;
     chat) deployment=shadow ;;
-    books|marketplace|wallet) deployment=source ;;
+    book|marketplace|wallet) deployment=source ;;
     *) echo 'Unsupported project or invalid main commit' >&2; exit 2 ;;
 esac
 
@@ -63,7 +63,7 @@ fi
 stuck_chrome=$(ps -eo stat,comm | awk '$1 ~ /^D/ && $2 == "chrome-headless" {n++} END {print n+0}')
 stuck_chrome_limit=${TESTER_STUCK_CHROME_LIMIT:-3}
 if [[ ! "$stuck_chrome_limit" =~ ^[0-9]+$ ]] ||
-   { [[ "$project" != books && "$project" != marketplace ]] && (( stuck_chrome > stuck_chrome_limit )); }; then
+   { [[ "$project" != book && "$project" != marketplace ]] && (( stuck_chrome > stuck_chrome_limit )); }; then
     echo 'Chromium is stuck; deferring source update and project test' >&2
     exit 75
 fi
@@ -88,7 +88,7 @@ fi
 
 if [[ "$deployment" == source ]]; then
     case "$project" in
-        books) export BOOKS_REPO_PATH="$repo" ;;
+        book) export BOOK_REPO_PATH="$repo" ;;
         marketplace) export MARKETPLACE_REPO_PATH="$repo" ;;
         wallet) export WALLET_REPO_PATH="$repo" WALLET_EXTENSION_PATH="$repo" ;;
     esac

@@ -1,16 +1,20 @@
 /**
- * books — shared filesystem helpers for the on-disk documentation repo.
+ * book — shared filesystem helpers for the on-disk documentation repo.
  *
- * books has NO live service: every case is validated against the repo at
- * BOOKS_REPO_PATH (default /Users/liuxin2/Workspace/opensource/books).
+ * book has NO live service: every case is validated against the repo at
+ * BOOK_REPO_PATH (legacy BOOKS_REPO_PATH is also accepted).
  * These helpers mirror the conventions in `summary.spec.ts` (repoPath/readText)
  * and add small markdown-parsing utilities shared by the data specs.
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { resolve, dirname, join } from 'node:path';
+import { resolve, join } from 'node:path';
 
 export function repoPath(): string {
-  return process.env['BOOKS_REPO_PATH']?.trim() || '/Users/liuxin2/Workspace/opensource/books';
+  return (
+    process.env['BOOK_REPO_PATH']?.trim() ||
+    process.env['BOOKS_REPO_PATH']?.trim() ||
+    '/Users/liuxin2/Workspace/opensource/book'
+  );
 }
 
 export function abs(rel: string): string {
@@ -20,7 +24,7 @@ export function abs(rel: string): string {
 export function readText(rel: string): string {
   const file = abs(rel);
   if (!existsSync(file)) {
-    throw new Error(`books file not found at ${file}`);
+    throw new Error(`book file not found at ${file}`);
   }
   return readFileSync(file, 'utf8');
 }
@@ -30,7 +34,7 @@ export function walk(dir: string): string[] {
   let out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     // The reader keeps its installed VitePress dependencies in-tree for local
-    // preview. They are generated third-party documentation, not Books
+    // preview. They are generated third-party documentation, not Book
     // content, and must not participate in repository quality checks.
     if (entry.name === '.git' || entry.name === 'node_modules') continue;
     const p = join(dir, entry.name);

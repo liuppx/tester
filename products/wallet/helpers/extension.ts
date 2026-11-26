@@ -55,7 +55,7 @@ export interface WalletContextOptions {
  *
  *   - `WALLET_EXTENSION_PATH` (preferred; matches the convention used by
  *     Playwright config) wins outright.
- *   - `WALLET_REPO_PATH` (matches marketplace/books) is the fallback.
+ *   - `WALLET_REPO_PATH` (matches marketplace/book) is the fallback.
  *   - Otherwise, throws with a hint.
  */
 export function resolveWalletExtensionPath(): string {

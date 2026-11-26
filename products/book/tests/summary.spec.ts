@@ -1,28 +1,32 @@
 /**
- * books — YeYing community documentation.
+ * book — YeYing community documentation.
  *
  * Env vars consumed:
- *   - BOOKS_BASE_URL (optional; if empty, tests read filesystem)
- *   - BOOKS_REPO_PATH (default: ../books)
+ *   - BOOK_BASE_URL (optional; if empty, tests read filesystem)
+ *   - BOOK_REPO_PATH (default: ../book)
  */
 import { localizedTitle } from '../../../shared/title';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { test, expect, hasEnv } from '../fixtures';
+import { test, expect, baseURLFor } from '../fixtures';
 
 function repoPath(): string {
-  return process.env['BOOKS_REPO_PATH']?.trim() || '/Users/liuxin2/Workspace/opensource/books';
+  return (
+    process.env['BOOK_REPO_PATH']?.trim() ||
+    process.env['BOOKS_REPO_PATH']?.trim() ||
+    '/Users/liuxin2/Workspace/opensource/book'
+  );
 }
 
 function readText(rel: string): string {
   const file = resolve(repoPath(), rel);
   if (!existsSync(file)) {
-    throw new Error(`books file not found at ${file}`);
+    throw new Error(`book file not found at ${file}`);
   }
   return readFileSync(file, 'utf8');
 }
 
-test(localizedTitle("【目录索引与结构校验 / DATA】 Books 仓库存在且至少包含一个文档", "books repo exists and contains at least one document"), () => {
+test(localizedTitle("【目录索引与结构校验 / DATA】 Book 仓库存在且至少包含一个文档", "book repo exists and contains at least one document"), () => {
   expect(existsSync(repoPath())).toBe(true);
   const files = readdirSync(repoPath(), { recursive: true }) as string[];
   const md = files.filter((f) => f.endsWith('.md'));
@@ -52,16 +56,17 @@ test(localizedTitle("【目录索引与结构校验 / DATA】 Agent 文档包含
   try {
     text = readText(summary);
   } catch {
-    test.skip(true, `${summary} not present in books repo`);
+    test.skip(true, `${summary} not present in book repo`);
     return;
   }
   const linkMatches = text.match(/\]\([^)]+\.md\)/g) ?? [];
   expect(linkMatches.length).toBeGreaterThanOrEqual(5);
 });
 
-test(localizedTitle("【可选在线站点冒烟 / API】 （可选）BOOKS_BASE_URL 响应 2xx", "(optional) BOOKS_BASE_URL responds 2xx"), async ({ request }) => {
-  test.skip(!hasEnv('BOOKS_BASE_URL'), 'BOOKS_BASE_URL not set');
-  const baseURL = process.env['BOOKS_BASE_URL']!;
+test(localizedTitle("【可选在线站点冒烟 / API】 （可选）BOOK_BASE_URL 响应 2xx", "(optional) BOOK_BASE_URL responds 2xx"), async ({ request }) => {
+  const baseURL = baseURLFor('book');
+  test.skip(!baseURL, 'BOOK_BASE_URL not set');
+  if (!baseURL) return;
   const res = await request.get(baseURL.replace(/\/$/, ''));
   expect(res.status()).toBeLessThan(500);
 });

@@ -40,8 +40,8 @@
       "enabled": false,
       "reason": "Artifact mode tests the currently deployed environment; source deployment is disabled."
     },
-    "books": {
-      "repo": "/root/code/books",
+    "book": {
+      "repo": "/root/code/book",
       "enabled": false,
       "reason": "Artifact mode tests the currently deployed environment; source deployment is disabled."
     },

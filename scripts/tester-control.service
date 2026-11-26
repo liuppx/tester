@@ -8,7 +8,7 @@ Type=forking
 User=root
 Group=root
 WorkingDirectory=/opt/deploy/tester
-Environment=TESTER_RUNTIME_CONFIG=/data/test-results-private/control/runtime-artifact.json
+Environment=TESTER_RUNTIME_CONFIG=/opt/deploy/tester/runtime.json
 Environment=PYTHONUNBUFFERED=1
 PIDFile=/data/tester/control.pid
 ExecStart=/bin/bash /opt/deploy/tester/scripts/starter.sh start

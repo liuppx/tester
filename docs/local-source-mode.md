@@ -43,7 +43,7 @@ Node API 与 Web 必须使用不同端口。若历史 `tester.env` 将两者配�
 
 - `/root/code` 下的产品仓库是可 fetch 的 Git checkout，且 `origin/main` 可访问。
 - PostgreSQL、Redis、MySQL、Mailpit 等项目依赖 middleware 已按依赖图启动，账号、数据库和 migration 完成。
-- `/data/test-results-private/control/tester.env` 等私有配置有效且权限受限。
+- `/opt/deploy/tester/.env.local` 等私有配置有效且权限受限。
 - Node `run/secrets.enc.json` 与解密口令、Router 配置和 Node 身份应用已准备好。
 - 被测浏览器依赖已装好，Node/npm、Go、Python/uv、Maven 和系统浏览器隔离依赖可用。
 - 用 `local_test_readiness.py` 检查选定项目。一个项目预检通过不代表所有项目的依赖都齐备。
@@ -57,7 +57,7 @@ Orchestrator backend `.env` 仍是需要按服务规范单独配置的前置条�
 ```bash
 cd /root/code/tester
 export TESTER_PRODUCT_SOURCE_ROOT=/root/code
-export TESTER_ENV_FILE=/data/test-results-private/control/tester.env
+export TESTER_ENV_FILE=/opt/deploy/tester/.env.local
 
 python3 scripts/local_test_readiness.py router \
   --source-root "$TESTER_PRODUCT_SOURCE_ROOT" \
@@ -89,12 +89,12 @@ Tester 控制服务的手动单项目/全量入口使用相同运行配置时也
 python3 scripts/local-source-services.py start router \
   --source-root /root/code \
   --runtime /data/test-results-private/control/local-source \
-  --env-file /data/test-results-private/control/tester.env
+  --env-file /opt/deploy/tester/.env.local
 
 python3 scripts/local-source-services.py stop router \
   --source-root /root/code \
   --runtime /data/test-results-private/control/local-source \
-  --env-file /data/test-results-private/control/tester.env
+  --env-file /opt/deploy/tester/.env.local
 ```
 
 发生中断时先找到对应 `state.json`，核实其中记录的 PID、worktree、临时 DB 和 Node redirect 更新，再用同一 runtime/state 参数调用 `stop`。确认隔离端口已关闭、Router E2E 数据库已删除、本地 Node callback 已恢复后再重跑。
@@ -105,7 +105,7 @@ python3 scripts/local-source-services.py stop router \
 
 ## 相关文件
 
-- `config/local-test-dependencies.json`：项目到仓库和服务的依赖闭包。
+- `local-test-dependencies.json`：项目到仓库和服务的依赖闭包。
 - `scripts/local_test_readiness.py`：源码、配置和 middleware 预检。
 - `scripts/local-source-services.py`：detached worktree、运行配置、服务启停和清理。
 - `scripts/run-full-on-test-machine.sh`：单项目/全量 runner 与结果发布。

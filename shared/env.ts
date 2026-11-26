@@ -185,21 +185,25 @@ const EXTRA_KEYS: Record<ProductName, string[]> = {
   project: ['APP_DEV_PORT', 'PROJECT_USER', 'PROJECT_PASS'],
   knowledge: ['KNOWLEDGE_API_URL'],
   marketplace: ['MARKETPLACE_BASE_URL', 'MARKETPLACE_REPO_PATH'],
-  books: ['BOOKS_BASE_URL', 'BOOKS_REPO_PATH'],
+  book: ['BOOK_BASE_URL', 'BOOK_REPO_PATH', 'BOOKS_REPO_PATH', 'BOOKS_BASE_URL'],
   orchestrator: ['ORCHESTRATOR_API_URL'],
   /**
    * Wallet is a Chromium MV3 extension, not a web app — it has no
    * `_BASE_URL`. Instead, specs need the path to the extension's source
    * directory (containing manifest.json + inject.js + …). Prefer
    * `WALLET_EXTENSION_PATH` if set; otherwise fall back to
-   * `WALLET_REPO_PATH` so the convention matches marketplace/books.
+   * `WALLET_REPO_PATH` so the convention matches marketplace/book.
    */
   wallet: ['WALLET_EXTENSION_PATH', 'WALLET_REPO_PATH'],
 };
 
 /** Return the base URL for a product, or undefined if not configured. */
 export function baseURLFor(product: ProductName): string | undefined {
-  return process.env[baseURLKey(product)]?.trim() || undefined;
+  return (
+    process.env[baseURLKey(product)]?.trim() ||
+    (product === 'book' ? process.env['BOOKS_BASE_URL']?.trim() : undefined) ||
+    undefined
+  );
 }
 
 /** Router's web artifact URL, with fallback for legacy single-origin setups. */

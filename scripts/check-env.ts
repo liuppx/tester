@@ -47,17 +47,21 @@ async function checkUrl(url: string, timeoutMs = 5_000): Promise<{ ok: boolean; 
 function resolveTarget(product: ProductName): { url: string | undefined; fsPath?: string } {
   const url = baseURLFor(product);
   if (url) return { url };
-  // marketplace / books fall back to filesystem paths.
+  // marketplace / book fall back to filesystem paths.
   if (product === 'marketplace') {
     return {
       url: undefined,
       fsPath: process.env['MARKETPLACE_REPO_PATH'] ?? readActiveEnvFile('MARKETPLACE_REPO_PATH'),
     };
   }
-  if (product === 'books') {
+  if (product === 'book') {
     return {
       url: undefined,
-      fsPath: process.env['BOOKS_REPO_PATH'] ?? readActiveEnvFile('BOOKS_REPO_PATH'),
+      fsPath:
+        process.env['BOOK_REPO_PATH'] ||
+        process.env['BOOKS_REPO_PATH'] ||
+        readActiveEnvFile('BOOK_REPO_PATH') ||
+        readActiveEnvFile('BOOKS_REPO_PATH'),
     };
   }
   if (product === 'wallet') {

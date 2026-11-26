@@ -1,8 +1,8 @@
 /**
- * books — 章节文件与孤儿检测 (BK-DATA-014, 015, 016, 017, 018).
+ * book — 章节文件与孤儿检测 (BK-DATA-014, 015, 016, 017, 018).
  */
 import { localizedTitle } from '../../../shared/title';
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { basename } from 'node:path';
 import { test, expect } from '../fixtures';
 import { abs, readText, parseLinks } from './helpers';
@@ -95,7 +95,7 @@ test(
     'BK-DATA-018 yeying single-product files are complete and referenced by overview',
   ),
   () => {
-    const dir = 'yeying/夜莺社区/产品';
+    const dir = existsSync(abs('yeying/product')) ? 'yeying/product' : 'yeying/夜莺社区/产品';
     const excluded = new Set(['产品组合', '公共能力']);
     const productDirs = readdirSync(abs(dir), { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && !excluded.has(entry.name))
@@ -110,7 +110,13 @@ test(
         .map((file) => `${productDir}/${file}`),
     );
     expect(productDocs.length).toBe(9);
-    const orphans = productDocs.filter((rel) => !overview.includes(`夜莺社区/产品/${rel}`));
-    expect(orphans).toEqual([]);
+    const overviewPrefix = dir.replace(/^yeying\//, '');
+    const overviewProductDocs = new Set(
+      parseLinks(overview)
+        .map((link) => link.url.split('#')[0])
+        .filter((url) => url.startsWith(`${overviewPrefix}/`) && url.endsWith('产品说明.md'))
+        .map((url) => url.slice(overviewPrefix.length + 1)),
+    );
+    expect(overviewProductDocs).toEqual(new Set(productDocs));
   },
 );

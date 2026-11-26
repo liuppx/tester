@@ -116,9 +116,9 @@ class TesterControlTests(unittest.TestCase):
         projects = self.module.load_test_cases()
         self.assertEqual(len(projects), 11)
         self.assertGreater(sum(project["case_count"] for project in projects), 850)
-        books = next(project for project in projects if project["id"] == "books")
-        self.assertTrue(books["modules"])
-        case = books["modules"][0]["cases"][0]
+        book = next(project for project in projects if project["id"] == "book")
+        self.assertTrue(book["modules"])
+        case = book["modules"][0]["cases"][0]
         self.assertEqual(case["id"], "BK-DATA-001")
         self.assertEqual(case["priority"], "P0")
         self.assertTrue(case["preconditions"])
@@ -156,6 +156,9 @@ class TesterControlTests(unittest.TestCase):
         self.assertIn("location ^~ /api/", config)
         self.assertIn("proxy_pass http://127.0.0.1:18082/api/", config)
         self.assertIn("alias /opt/deploy/static/tester-web/current/assets/", config)
+        self.assertIn("location = /report/", config)
+        self.assertIn("alias /opt/deploy/static/tester-web/current/report.html;", config)
+        self.assertLess(config.index("location = /report/"), config.index("location ^~ /report/"))
         self.assertIn("location / {", config)
         self.assertIn("root /opt/deploy/static/tester-web/current;", config)
         self.assertIn("rewrite ^/report/(.*)$ /api/reports/files/$1 last;", config)
@@ -340,15 +343,15 @@ class TesterControlTests(unittest.TestCase):
         os.utime(attempt, (1000, 1000))
         with patch.object(control.time, "time", return_value=1000):
             self.assertEqual(control.cooldown_until("router"), 2260)
-            self.assertIsNone(control.cooldown_until("books"))
+            self.assertIsNone(control.cooldown_until("book"))
         with patch.object(control.time, "time", return_value=2260):
             self.assertIsNone(control.cooldown_until("router"))
 
     def test_deferred_project_does_not_block_ready_project(self):
         control = self.module
-        control.PROJECTS["books"] = {"repo": "/tmp/books", "enabled": True}
+        control.PROJECTS["book"] = {"repo": "/tmp/book", "enabled": True}
         blocked = control.enqueue("router", "manual")
-        ready = control.enqueue("books", "manual")
+        ready = control.enqueue("book", "manual")
         blocked["retry_at"] = 2000
         with patch.object(control.time, "time", return_value=1000):
             selected = control.take_ready()
