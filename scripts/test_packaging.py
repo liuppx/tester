@@ -19,10 +19,12 @@ def module(name):
 class PackageContractTests(unittest.TestCase):
     def test_runtime_template_uses_standard_deployment_config_paths(self):
         runtime = json.loads((ROOT / "config/runtime.json.template").read_text())
+        self.assertTrue((ROOT / "config/tester.env.template").is_file())
+        self.assertTrue((ROOT / "config/projects.json.template").is_file())
         service = (ROOT / "scripts/tester-control.service").read_text()
         upgrade = (ROOT / "scripts/upgrade.sh").read_text()
         self.assertEqual(runtime["TESTER_CONTROL_CONFIG"], "/opt/deploy/tester/config/projects.json")
-        self.assertEqual(runtime["TESTER_ENV_FILE"], "/opt/deploy/tester/config/tester.env")
+        self.assertEqual(runtime["TESTER_ENV_FILE"], "/opt/deploy/tester/config/.env.local")
         self.assertIn("Environment=TESTER_RUNTIME_CONFIG=/opt/deploy/tester/config/runtime.json", service)
         self.assertIn("install -m 600", upgrade)
         self.assertIn("jq --arg projects", upgrade)
@@ -61,9 +63,10 @@ class PackageContractTests(unittest.TestCase):
         for name in ("scripts/__pycache__/x.pyc", "scripts/.env.local", ".project/task.json", "x.log"):
             self.assertFalse(build.publishable(Path(name)))
         self.assertTrue(build.publishable(Path("node_modules/.bin/tsx")))
-        for name in ("config/runtime.json.template", "config/backup.conf.template",
-                     ".env.template", "products/router/tests/smoke.spec.ts"):
+        for name in ("config/runtime.json.template", "config/tester.env.template",
+                     "products/router/tests/smoke.spec.ts"):
             self.assertTrue(build.publishable(Path(name)))
+        self.assertFalse(build.publishable(Path(".env.template")))
 
     def test_release_manifest_separates_service_and_static_artifacts(self):
         build = module("package-release")

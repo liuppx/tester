@@ -17,7 +17,7 @@ SEMVER = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
 DEFAULT_BROWSER_CACHE = Path.home() / ".cache" / "yeying" / "tester" / "playwright"
 DEFAULT_NPM_REGISTRY = "https://registry.npmmirror.com"
 DEFAULT_PLAYWRIGHT_DOWNLOAD_HOST = "https://npmmirror.com/mirrors/playwright"
-FILES = ("package.json", ".nvmrc", ".env.template",
+FILES = ("package.json", ".nvmrc",
          "LICENSE", "README.md", "playwright.config.ts", "playwright.safe.config.ts", "tsconfig.json")
 DIRS = ("products", "shared", "scripts", "config", "docs")
 
@@ -128,7 +128,7 @@ def publishable(relative):
     parts = relative.parts
     return not any(p in {".git", "__pycache__", ".cache", ".links"} or p.startswith(".project") for p in parts) and not (
         relative.name.endswith((".pyc", ".log")) or
-        (relative.name.startswith(".env") and relative.name != ".env.template")
+        relative.name.startswith(".env")
     )
 
 def build(args):

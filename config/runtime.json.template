@@ -1,6 +1,6 @@
 {
   "TESTER_CONTROL_CONFIG": "/opt/deploy/tester/config/projects.json",
-  "TESTER_ENV_FILE": "/opt/deploy/tester/config/tester.env",
+  "TESTER_ENV_FILE": "/opt/deploy/tester/config/.env.local",
   "TESTER_PRIVATE_REPORT_DIR": "/data/tester/private",
   "TESTER_REPORT_DIR": "/data/test-results",
   "TESTER_RUNTIME_DIR": "/data/tester/runtime",

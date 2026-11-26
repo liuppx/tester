@@ -14,7 +14,7 @@ set_runtime_paths() {
   local file=$1
   local temporary="${file}.tmp.$$"
   jq --arg projects "/opt/deploy/tester/config/projects.json" \
-     --arg env_file "/opt/deploy/tester/config/tester.env" \
+     --arg env_file "/opt/deploy/tester/config/.env.local" \
      'if has("TESTER_CONTROL_CONFIG") then .TESTER_CONTROL_CONFIG = $projects else . end
       | if has("TESTER_ENV_FILE") then .TESTER_ENV_FILE = $env_file else . end' \
      "$file" > "$temporary"
@@ -75,21 +75,21 @@ copy_runtime_config() {
   fi
 
   if [[ -n "$env_source" ]]; then
-    copy_if_missing "$env_source" "$current_config/tester.env"
-    copy_if_missing "$current_config/.env.local" "$current_config/tester.env"
-    if [[ ! -f "$current_config/tester.env" ]]; then
+    copy_if_missing "$env_source" "$current_config/.env.local"
+    copy_if_missing "$current_config/tester.env" "$current_config/.env.local"
+    if [[ ! -f "$current_config/.env.local" ]]; then
       echo "Tester E2E environment file is missing" >&2
       return 1
     fi
   fi
 
   [[ ! -f "$current_config/projects.json" ]] || chmod 600 "$current_config/projects.json"
-  [[ ! -f "$current_config/tester.env" ]] || chmod 600 "$current_config/tester.env"
+  [[ ! -f "$current_config/.env.local" ]] || chmod 600 "$current_config/.env.local"
   set_runtime_paths "$runtime_file"
   chmod 600 "$runtime_file"
 
   copy_if_missing "$current_config/projects.json" "$target_config/projects.json"
-  copy_if_missing "$current_config/tester.env" "$target_config/tester.env"
+  copy_if_missing "$current_config/.env.local" "$target_config/.env.local"
   if [[ ! -e "$target_config/runtime.json" ]]; then
     install -m 600 "$runtime_file" "$target_config/runtime.json"
   else

@@ -252,13 +252,13 @@ class ServiceContractTests(unittest.TestCase):
             expected_projects = '{"projects":{"router":{"enabled":true}}}'
             self.assertEqual((current_config / "projects.json").read_text(), expected_projects)
             self.assertEqual((target_config / "projects.json").read_text(), expected_projects)
-            self.assertEqual((target_config / "tester.env").read_text(), env_file.read_text())
-            self.assertEqual((current_config / "tester.env").stat().st_mode & 0o777, 0o600)
-            self.assertEqual((target_config / "tester.env").stat().st_mode & 0o777, 0o600)
+            self.assertEqual((target_config / ".env.local").read_text(), env_file.read_text())
+            self.assertEqual((current_config / ".env.local").stat().st_mode & 0o777, 0o600)
+            self.assertEqual((target_config / ".env.local").stat().st_mode & 0o777, 0o600)
 
             migrated_runtime = json.loads((target_config / "runtime.json").read_text())
             self.assertEqual(migrated_runtime["TESTER_CONTROL_CONFIG"], "/opt/deploy/tester/config/projects.json")
-            self.assertEqual(migrated_runtime["TESTER_ENV_FILE"], "/opt/deploy/tester/config/tester.env")
+            self.assertEqual(migrated_runtime["TESTER_ENV_FILE"], "/opt/deploy/tester/config/.env.local")
             self.assertEqual(migrated_runtime["TESTER_PRIVATE_REPORT_DIR"], "/data/test-results-private")
             self.assertEqual(migrated_runtime["TESTER_CONTROL_PORT"], "18082")
             self.assertEqual((target_config / "runtime.json").stat().st_mode & 0o777, 0o600)

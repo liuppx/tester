@@ -6,6 +6,7 @@
 > 打包规范：`book/yeying/specification/PACKAGING.md`
 > 部署规范：`book/yeying/specification/DEPLOYMENT.md`
 > 升级规范：`book/yeying/specification/UPGRADING.md`
+> 配置文件说明：[configuration.md](configuration.md)
 
 本手册只说明如何部署已经生成的 Tester 安装包。打包输入、制品命名、manifest、SHA-256 和不可变制品规则以社区打包规范为准；本项目不从源码目录直接作为正式部署对象。
 
@@ -78,19 +79,19 @@ tester tester-web tester-web https://<tester-domain>/
 - Bash、coreutils、`jq`、`flock`、Xvfb、Bubblewrap 以及 Chromium 所需系统库。
 - `/opt/deploy/tester` 作为稳定入口；版本目录由标准升级器创建。
 - `/data/test-results` 保存公开报告；`/data/test-results-private` 保存私有报告、数据库和运行状态，不存放长期配置文件。
-- `runtime.json`、`projects.json` 和 `tester.env` 由项目升级钩子复制到每个服务版本的 `config/`，稳定入口为 `/opt/deploy/tester/config/`。配置目录权限为 `700`，配置文件权限为 `600`。
+- `runtime.json`、`projects.json` 和 `.env.local` 由项目升级钩子复制到每个服务版本的 `config/`，稳定入口为 `/opt/deploy/tester/config/`。配置目录权限为 `700`，配置文件权限为 `600`。
 - `/data/tester` 保存 PID、运行锁和临时数据；`/opt/logs` 保存服务日志。
 - 受保护的 runtime、项目配置、测试环境变量和管理员 DID。凭据文件权限为 `600`，私有目录权限为 `700`。
 - 产品 E2E 所需的产品服务和公共中间件。Tester 负责排队、部署适配器和运行用例，不负责自动启动所有产品及中间件。
 
 ## 4. 配置初始化
 
-Tester 的运行配置、项目清单和 E2E 环境文件统一放在 `/opt/deploy/tester/config/`。`/opt/deploy/tester` 是指向当前不可变版本目录的稳定软链接。每次升级由项目 `scripts/upgrade.sh copy-config` 使用 Shell 和 `jq` 将当前配置复制到目标版本，并保留目标版本已存在的文件。首次迁移时，该钩子把旧的 `consolidated-projects.json` 转为标准名 `projects.json`，并将原有 E2E 环境文件保留为标准名 `tester.env`。钩子同时通过 systemd drop-in 将 runtime 入口更新到 `/opt/deploy/tester/config/runtime.json`。配置完成标准迁移后的路径如下：
+Tester 的控制服务配置、项目清单和 E2E 环境文件统一放在 `/opt/deploy/tester/config/`。`/opt/deploy/tester` 是指向当前不可变版本目录的稳定软链接。每次升级由项目 `scripts/upgrade.sh copy-config` 使用 Shell 和 `jq` 将当前配置复制到目标版本，并保留目标版本已存在的文件。首次迁移时，该钩子把旧的 `consolidated-projects.json` 转为标准名 `projects.json`，并把旧 `tester.env` 迁移为 `.env.local`。钩子同时通过 systemd drop-in 将 runtime 入口更新到 `/opt/deploy/tester/config/runtime.json`。配置完成标准迁移后的路径如下：
 
 ```bash
 /opt/deploy/tester/config/runtime.json
 /opt/deploy/tester/config/projects.json
-/opt/deploy/tester/config/tester.env
+/opt/deploy/tester/config/.env.local
 ```
 
 确认当前链接、systemd runtime 路径和权限：
@@ -98,10 +99,10 @@ Tester 的运行配置、项目清单和 E2E 环境文件统一放在 `/opt/depl
 ```bash
 readlink -f /opt/deploy/tester
 systemctl show tester-control.service --property=Environment --value
-stat -c '%a %n' /opt/deploy/tester/config/runtime.json /opt/deploy/tester/config/projects.json /opt/deploy/tester/config/tester.env
+stat -c '%a %n' /opt/deploy/tester/config/runtime.json /opt/deploy/tester/config/projects.json /opt/deploy/tester/config/.env.local
 ```
 
-复制新环境模板时，先确认模板中的绝对路径与 systemd、部署器和持久化目录配置一致，再设置权限；不要把真实身份 DID 或凭据写进公开文档。
+`config/runtime.json.template` 提供控制服务配置项，`config/tester.env.template` 提供 Playwright 产品 URL 和测试凭据的环境变量名。两者由各自的运行入口读取，内容不重复。本地开发将 E2E 模板复制为仓库根目录 `.env.local`；GPU 测试部署将它复制为 `/opt/deploy/tester/config/.env.local`。Tester service 使用 `TESTER_ENV_FILE` 显式指向部署文件。控制服务模板复制为 `/opt/deploy/tester/config/runtime.json`。升级钩子负责把这些实际配置复制到新版本。不要把真实身份 DID 或凭据写进公开文档。
 
 运行配置至少确认：
 
@@ -110,7 +111,7 @@ stat -c '%a %n' /opt/deploy/tester/config/runtime.json /opt/deploy/tester/config
 - `TESTER_CONTROL_ORIGIN` 与用户访问控制台的 HTTPS origin 完全一致。
 - `TESTER_ADMIN_DID` 是已经完成 Node 身份注册、邮箱验证和钱包绑定的管理员 DID。
 - `TESTER_IDENTITY_ISSUER_URL` 指向受信任的身份发行方。
-- `TESTER_ENV_FILE` 指向 `/opt/deploy/tester/config/tester.env`；其中的 API key、钱包私钥和 Webhook secret 不写入报告。
+- `TESTER_ENV_FILE` 指向 `/opt/deploy/tester/config/.env.local`；其中的 API key、钱包私钥和 Webhook secret 不写入报告。
 
 GPU 测试机当前仍在迁移前状态，systemd runtime 和 E2E 配置位于 `/data/test-results-private/control/`。下次部署包含新 `copy-config` 钩子的 Tester service 制品时，项目升级阶段会将配置迁入当前和目标版本目录，更新 runtime 中的稳定配置路径，并保留旧源文件用于回滚。新版本健康检查与配置备份通过后，再清理旧配置副本。不要把 `/data/test-results-private` 中的报告、SQLite 数据库或运行状态移动到部署目录。
 
@@ -182,13 +183,17 @@ E2E 环境按项目依赖图和测试机架构手册逐项确认。Tester 自身
 
 ## 7. 备份、迁移和回滚
 
-每次升级前执行配置备份：
+Deployer 在每次服务升级成功后调用 Tester 的 `scripts/config_backup.sh`，生成权限受限的本地配置归档，并调用自己的 `operator/backup-config/upload_config_backup.sh` 尝试上传。Tester 负责创建本地归档；是否远端上传由 Deployer 在 `/data/tester/backup.conf` 的 `BACKUP_CONF_FLAG` 决定。不要在 Tester 仓库维护第二份上传开关模板。
+
+需要在升级外手动创建本地备份时执行：
 
 ```bash
 /opt/deploy/tester/scripts/config_backup.sh
 ```
 
-备份包含 runtime、项目配置、环境变量引用的受保护配置、Tester SQLite 授权数据库、systemd unit/drop-in 和 Nginx 配置；不包含测试结果、运行日志和公开报告。远端上传只有在专用 WebDAV 目标已经验证后才能启用。
+本地备份包含 runtime、项目配置、环境变量、Tester SQLite 授权数据库、systemd unit/drop-in 和 Nginx 配置；不包含测试结果、运行日志和公开报告。归档暂存在 `/opt/backup`，备份清单和一致性快照存于配置的本地备份目录。
+
+远端上传由 Deployer 任务区负责，需要部署节点配置 `operator/backup-config/backup.conf` 模块列表、WebDAV `.env`、`/data/tester/backup.conf` 上传策略及受控调度。GPU 当前只在每次 Tester 升级后生成了本地归档；上传策略为关闭状态，Deployer 任务区尚无实际 `backup.conf`、`.env` 或定时器，因此归档没有远端上传。
 
 Tester 当前 migration 是本地 SQLite 授权表迁移，由控制服务启动时执行。迁移失败时服务必须保持失败，不得继续接收登录或测试操作；先保留旧版本和备份，再按升级规范安全重试或执行经评审的 forward-fix。健康检查通过仅证明 Tester 自身检查项通过，不能证明产品 E2E 依赖齐备。
 

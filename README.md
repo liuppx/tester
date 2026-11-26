@@ -50,7 +50,7 @@ tester/
 ```bash
 npm install --package-lock=false
 npm run browsers:install
-cp .env.template .env.local   # tweak BASE_URL / path values to match your local setup
+cp config/tester.env.template .env.local   # tweak BASE_URL / path values to match your local setup
 ```
 
 Linux 打包会复用 `~/.cache/yeying/tester/playwright` 中的 Playwright 浏览器

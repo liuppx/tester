@@ -6,6 +6,7 @@
 | --- | --- |
 | 了解当前 Tester、GPU 环境和依赖是否就绪 | [测试环境现状与架构](test-machine-architecture.md) |
 | 打包、部署、升级、验证或回滚 Tester | [部署手册](deployment.md) |
+| 了解运行配置、环境变量模板、依赖清单与备份归属 | [配置说明](configuration.md) |
 | 使用社区 main 源码启动产品并执行 E2E | [本地源码测试模式](local-source-mode.md) |
 | 理解钱包授权、控制页面、队列和源码 watcher | [控制服务与授权](test-control.md) |
 | 查看报告、计划任务和失败的判读规则 | [报告与调度](test-machine-report.md) |

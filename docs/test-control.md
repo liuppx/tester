@@ -63,6 +63,6 @@ scripts/starter.sh restart
 scripts/health-check.sh --level all --format json
 ```
 
-产品 URL、私钥、API key 和 webhook secret 放在 `/opt/deploy/tester/config/tester.env` 等权限受限配置中。GPU 旧配置迁移完成前，现有值仍从 `/data/test-results-private/control/tester.env` 读取。服务端和产品 watcher 的真实值不要粘贴到公开文档、命令输出、报告或 PR。
+产品 URL、私钥、API key 和 webhook secret 放在 `/opt/deploy/tester/config/.env.local` 等权限受限配置中。GPU 旧配置迁移完成前，现有值仍从 `/data/test-results-private/control/tester.env` 读取。服务端和产品 watcher 的真实值不要粘贴到公开文档、命令输出、报告或 PR。
 
 部署、Nginx、升级、回滚详见[部署手册](deployment.md)；GPU 产品服务和中间件状态详见[测试环境现状](test-machine-architecture.md)；源码服务启动详见[本地源码测试模式](local-source-mode.md)。
