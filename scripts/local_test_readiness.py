@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG = ROOT / "config/local-test-dependencies.json"
+DEFAULT_CONFIG = ROOT / "local-test-dependencies.json"
 LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 

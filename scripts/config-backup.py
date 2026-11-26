@@ -21,6 +21,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 STANDARD_RUNTIME_CONFIGS = (
     Path("/data/test-results-private/control/runtime-artifact.json"),
+    Path("/opt/deploy/tester/runtime.json"),
     Path("/opt/deploy/tester/config/runtime.json"),
 )
 CONFIG_KEYS = {
@@ -86,9 +87,8 @@ def runtime_config_path() -> Path | None:
     """Find the protected runtime file used by a packaged Tester service.
 
     Deployer invokes this script without loading the service's environment. The
-    systemd unit therefore keeps the runtime artifact in the standard external
-    control directory; the package-local config remains the development and
-    first-install fallback.
+    systemd unit therefore points to the protected stable deployment path; the
+    repository-root runtime file remains the development fallback.
     """
     configured = os.environ.get("TESTER_RUNTIME_CONFIG", "")
     if configured:
@@ -99,7 +99,7 @@ def runtime_config_path() -> Path | None:
     configured = systemd_runtime_path()
     if configured is not None:
         return configured
-    for path in (*STANDARD_RUNTIME_CONFIGS, ROOT / "config/runtime.json"):
+    for path in (*STANDARD_RUNTIME_CONFIGS, ROOT / "runtime.json", ROOT / "config/runtime.json"):
         if regular_file(path):
             return path
     return None
@@ -125,7 +125,7 @@ def configured_files() -> list[tuple[str, Path]]:
 
     if not runtime_data:
         for name in ("projects.json", ".env.local"):
-            path = ROOT / "config" / name
+            path = ROOT / name
             if regular_file(path):
                 candidates.append((name.lstrip("."), path))
 

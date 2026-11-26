@@ -210,23 +210,23 @@ class ServiceContractTests(unittest.TestCase):
     def test_upgrade_copies_private_config_without_overwriting_target(self):
         with tempfile.TemporaryDirectory() as folder:
             current, target = [Path(folder) / name for name in ("old", "new")]
-            for root in (current, target):
-                (root / "config").mkdir(parents=True)
-            (current / "config/runtime.json").write_text('{"TESTER_CONTROL_PORT":"1"}')
-            (current / "config/projects.json").write_text('{"projects":{}}')
-            (target / "config/runtime.json").write_text('{"TESTER_CONTROL_PORT":"2"}')
+            current.mkdir()
+            target.mkdir()
+            (current / "runtime.json").write_text('{"TESTER_CONTROL_PORT":"1"}')
+            (current / "projects.json").write_text('{"projects":{}}')
+            (target / "runtime.json").write_text('{"TESTER_CONTROL_PORT":"2"}')
             for _ in range(2):
                 subprocess.run(["bash", str(ROOT / "scripts/upgrade.sh"), "copy-config", str(current), str(target)], check=True)
-            self.assertIn('"2"', (target / "config/runtime.json").read_text())
-            self.assertEqual((current / "config/projects.json").read_bytes(), (target / "config/projects.json").read_bytes())
-            self.assertEqual((target / "config/projects.json").stat().st_mode & 0o777, 0o600)
+            self.assertIn('"2"', (target / "runtime.json").read_text())
+            self.assertEqual((current / "projects.json").read_bytes(), (target / "projects.json").read_bytes())
+            self.assertEqual((target / "projects.json").stat().st_mode & 0o777, 0o600)
 
     def test_upgrade_migrates_legacy_tester_env_and_projects_into_new_version(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             current, target, legacy = [root / name for name in ("old", "new", "legacy")]
-            current_config = current / "config"
-            target_config = target / "config"
+            current_config = current
+            target_config = target
             current_config.mkdir(parents=True)
             target_config.mkdir(parents=True)
             legacy.mkdir()
@@ -257,8 +257,8 @@ class ServiceContractTests(unittest.TestCase):
             self.assertEqual((target_config / ".env.local").stat().st_mode & 0o777, 0o600)
 
             migrated_runtime = json.loads((target_config / "runtime.json").read_text())
-            self.assertEqual(migrated_runtime["TESTER_CONTROL_CONFIG"], "/opt/deploy/tester/config/projects.json")
-            self.assertEqual(migrated_runtime["TESTER_ENV_FILE"], "/opt/deploy/tester/config/.env.local")
+            self.assertEqual(migrated_runtime["TESTER_CONTROL_CONFIG"], "/opt/deploy/tester/projects.json")
+            self.assertEqual(migrated_runtime["TESTER_ENV_FILE"], "/opt/deploy/tester/.env.local")
             self.assertEqual(migrated_runtime["TESTER_PRIVATE_REPORT_DIR"], "/data/test-results-private")
             self.assertEqual(migrated_runtime["TESTER_CONTROL_PORT"], "18082")
             self.assertEqual((target_config / "runtime.json").stat().st_mode & 0o777, 0o600)

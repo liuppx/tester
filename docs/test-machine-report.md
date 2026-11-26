@@ -57,8 +57,8 @@ Notification settings can be environment variables or entries in the private
 file. Environment variables take precedence. Start with the example:
 
 ```bash
-sudo install -d -m 700 /opt/deploy/tester/config
-sudo install -m 600 scripts/feishu.env.example /opt/deploy/tester/config/feishu.env
+sudo install -d -m 700 /opt/deploy/tester
+sudo install -m 600 scripts/feishu.env.example /opt/deploy/tester/feishu.env
 ```
 
 Fill in the real webhook and report URL in that private file. Never commit

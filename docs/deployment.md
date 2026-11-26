@@ -79,19 +79,19 @@ tester tester-web tester-web https://<tester-domain>/
 - Bash、coreutils、`jq`、`flock`、Xvfb、Bubblewrap 以及 Chromium 所需系统库。
 - `/opt/deploy/tester` 作为稳定入口；版本目录由标准升级器创建。
 - `/data/test-results` 保存公开报告；`/data/test-results-private` 保存私有报告、数据库和运行状态，不存放长期配置文件。
-- `runtime.json`、`projects.json` 和 `.env.local` 由项目升级钩子复制到每个服务版本的 `config/`，稳定入口为 `/opt/deploy/tester/config/`。配置目录权限为 `700`，配置文件权限为 `600`。
+- `runtime.json`、`projects.json` 和 `.env.local` 由项目升级钩子复制到每个服务版本目录根部，稳定入口分别为 `/opt/deploy/tester/runtime.json`、`/opt/deploy/tester/projects.json` 和 `/opt/deploy/tester/.env.local`。稳定入口 `/opt/deploy/tester` 是当前不可变版本目录的软链接。版本目录权限为 `700`，配置文件权限为 `600`。
 - `/data/tester` 保存 PID、运行锁和临时数据；`/opt/logs` 保存服务日志。
 - 受保护的 runtime、项目配置、测试环境变量和管理员 DID。凭据文件权限为 `600`，私有目录权限为 `700`。
 - 产品 E2E 所需的产品服务和公共中间件。Tester 负责排队、部署适配器和运行用例，不负责自动启动所有产品及中间件。
 
 ## 4. 配置初始化
 
-Tester 的控制服务配置、项目清单和 E2E 环境文件统一放在 `/opt/deploy/tester/config/`。`/opt/deploy/tester` 是指向当前不可变版本目录的稳定软链接。每次升级由项目 `scripts/upgrade.sh copy-config` 使用 Shell 和 `jq` 将当前配置复制到目标版本，并保留目标版本已存在的文件。首次迁移时，该钩子把旧的 `consolidated-projects.json` 转为标准名 `projects.json`，并把旧 `tester.env` 迁移为 `.env.local`。钩子同时通过 systemd drop-in 将 runtime 入口更新到 `/opt/deploy/tester/config/runtime.json`。配置完成标准迁移后的路径如下：
+Tester 的控制服务配置、项目清单和 E2E 环境文件统一放在 `/opt/deploy/tester` 稳定入口根部。每次升级由项目 `scripts/upgrade.sh copy-config` 使用 Shell 和 `jq` 将当前配置复制到目标版本目录根部，并保留目标版本已存在的文件。首次迁移时，该钩子兼容旧版本目录内 `config/` 布局和旧外部控制目录，把 `consolidated-projects.json` 转为标准名 `projects.json`，并把旧 `tester.env` 迁移为 `.env.local`。钩子同时通过 systemd drop-in 将 runtime 入口更新到 `/opt/deploy/tester/runtime.json`。配置完成标准迁移后的路径如下：
 
 ```bash
-/opt/deploy/tester/config/runtime.json
-/opt/deploy/tester/config/projects.json
-/opt/deploy/tester/config/.env.local
+/opt/deploy/tester/runtime.json
+/opt/deploy/tester/projects.json
+/opt/deploy/tester/.env.local
 ```
 
 确认当前链接、systemd runtime 路径和权限：
@@ -99,10 +99,10 @@ Tester 的控制服务配置、项目清单和 E2E 环境文件统一放在 `/op
 ```bash
 readlink -f /opt/deploy/tester
 systemctl show tester-control.service --property=Environment --value
-stat -c '%a %n' /opt/deploy/tester/config/runtime.json /opt/deploy/tester/config/projects.json /opt/deploy/tester/config/.env.local
+stat -c '%a %n' /opt/deploy/tester/runtime.json /opt/deploy/tester/projects.json /opt/deploy/tester/.env.local
 ```
 
-`config/runtime.json.template` 提供控制服务配置项，`config/tester.env.template` 提供 Playwright 产品 URL 和测试凭据的环境变量名。两者由各自的运行入口读取，内容不重复。本地开发将 E2E 模板复制为仓库根目录 `.env.local`；GPU 测试部署将它复制为 `/opt/deploy/tester/config/.env.local`。Tester service 使用 `TESTER_ENV_FILE` 显式指向部署文件。控制服务模板复制为 `/opt/deploy/tester/config/runtime.json`。升级钩子负责把这些实际配置复制到新版本。不要把真实身份 DID 或凭据写进公开文档。
+仓库根目录的 `runtime.json.template` 提供控制服务配置项，`tester.env.template` 提供 Playwright 产品 URL 和测试凭据的环境变量名，`projects.json.template` 提供 watcher 项目清单结构。三者由各自的运行入口读取，内容不重复。本地开发将 E2E 模板复制为根目录 `.env.local`；GPU 测试部署将它复制为 `/opt/deploy/tester/.env.local`。Tester service 使用 `TESTER_ENV_FILE` 显式指向部署文件。控制服务模板复制为 `/opt/deploy/tester/runtime.json`，项目清单模板复制为 `/opt/deploy/tester/projects.json`。`local-test-dependencies.json` 是随代码发布的源码测试依赖图，不属于私有配置模板。升级钩子负责把实际配置复制到新版本根目录。不要把真实身份 DID 或凭据写进公开文档。
 
 运行配置至少确认：
 
@@ -111,7 +111,7 @@ stat -c '%a %n' /opt/deploy/tester/config/runtime.json /opt/deploy/tester/config
 - `TESTER_CONTROL_ORIGIN` 与用户访问控制台的 HTTPS origin 完全一致。
 - `TESTER_ADMIN_DID` 是已经完成 Node 身份注册、邮箱验证和钱包绑定的管理员 DID。
 - `TESTER_IDENTITY_ISSUER_URL` 指向受信任的身份发行方。
-- `TESTER_ENV_FILE` 指向 `/opt/deploy/tester/config/.env.local`；其中的 API key、钱包私钥和 Webhook secret 不写入报告。
+- `TESTER_ENV_FILE` 指向 `/opt/deploy/tester/.env.local`；其中的 API key、钱包私钥和 Webhook secret 不写入报告。
 
 GPU 测试机当前仍在迁移前状态，systemd runtime 和 E2E 配置位于 `/data/test-results-private/control/`。下次部署包含新 `copy-config` 钩子的 Tester service 制品时，项目升级阶段会将配置迁入当前和目标版本目录，更新 runtime 中的稳定配置路径，并保留旧源文件用于回滚。新版本健康检查与配置备份通过后，再清理旧配置副本。不要把 `/data/test-results-private` 中的报告、SQLite 数据库或运行状态移动到部署目录。
 

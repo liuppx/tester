@@ -6,7 +6,7 @@ Tester 控制服务提供 `/api/`、成员授权、项目用例/依赖信息、�
 
 控制服务使用 SQLite 保存 DID、管理员/成员角色、身份文档和授权状态。SQLite migration 在服务启动时自动执行；数据库路径由 `TESTER_AUTH_DATABASE` 指定，否则位于 `${TESTER_PRIVATE_REPORT_DIR}/control/tester-auth.sqlite3`。GPU 当前实例把私有报告路径配置在 `/data/test-results-private`，实际数据库为 `/data/test-results-private/control/tester-auth.sqlite3`。备份使用 `scripts/config_backup.sh` / `scripts/config-backup.py` 的 SQLite 在线备份机制，不要直接复制正在写入的 SQLite 文件。
 
-首次配置须在 `/opt/deploy/tester/config/runtime.json` 中设置管理员 DID 和身份发行方，例如：
+首次配置须在 `/opt/deploy/tester/runtime.json` 中设置管理员 DID 和身份发行方，例如：
 
 ```json
 {
@@ -33,7 +33,7 @@ DID 必须已在对应 Node issuer 完成身份注册、钱包绑定、用户名
 
 当前已有隔离部署适配器的项目为 Book、Chat、Marketplace、Router、Wallet。其他项目即使配置在 Playwright 中，也不等于 watcher 能更新/部署它们。Tester 自身制品升级由 Deployer 负责，与产品 watcher 分离。
 
-`TESTER_LOCAL_SOURCE_MODE=1` 时，手动测试调用本地源码启动器，按 `config/local-test-dependencies.json` 启动产品源码 worktree；默认制品模式连接已部署产品。两种模式下报告都应记录运行模式和被测 commit。
+`TESTER_LOCAL_SOURCE_MODE=1` 时，手动测试调用本地源码启动器，按 `local-test-dependencies.json` 启动产品源码 worktree；默认制品模式连接已部署产品。两种模式下报告都应记录运行模式和被测 commit。
 
 ## 报告目录与访问
 
@@ -63,6 +63,6 @@ scripts/starter.sh restart
 scripts/health-check.sh --level all --format json
 ```
 
-产品 URL、私钥、API key 和 webhook secret 放在 `/opt/deploy/tester/config/.env.local` 等权限受限配置中。GPU 旧配置迁移完成前，现有值仍从 `/data/test-results-private/control/tester.env` 读取。服务端和产品 watcher 的真实值不要粘贴到公开文档、命令输出、报告或 PR。
+产品 URL、私钥、API key 和 webhook secret 放在 `/opt/deploy/tester/.env.local` 等权限受限配置中。GPU 旧配置迁移完成前，现有值仍从 `/data/test-results-private/control/tester.env` 读取。服务端和产品 watcher 的真实值不要粘贴到公开文档、命令输出、报告或 PR。
 
 部署、Nginx、升级、回滚详见[部署手册](deployment.md)；GPU 产品服务和中间件状态详见[测试环境现状](test-machine-architecture.md)；源码服务启动详见[本地源码测试模式](local-source-mode.md)。

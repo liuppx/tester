@@ -18,8 +18,10 @@ DEFAULT_BROWSER_CACHE = Path.home() / ".cache" / "yeying" / "tester" / "playwrig
 DEFAULT_NPM_REGISTRY = "https://registry.npmmirror.com"
 DEFAULT_PLAYWRIGHT_DOWNLOAD_HOST = "https://npmmirror.com/mirrors/playwright"
 FILES = ("package.json", ".nvmrc",
-         "LICENSE", "README.md", "playwright.config.ts", "playwright.safe.config.ts", "tsconfig.json")
-DIRS = ("products", "shared", "scripts", "config", "docs")
+         "LICENSE", "README.md", "playwright.config.ts", "playwright.safe.config.ts", "tsconfig.json",
+         "runtime.json.template", "projects.json.template", "tester.env.template",
+         "local-test-dependencies.json")
+DIRS = ("products", "shared", "scripts", "docs")
 
 def run(args, **kwargs):
     return subprocess.run(args, check=True, **kwargs)

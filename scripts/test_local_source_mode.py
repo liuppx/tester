@@ -24,14 +24,14 @@ def load_manager():
 
 class LocalSourceModeTests(unittest.TestCase):
     def test_dependency_manifest_covers_safe_full_projects(self):
-        manifest = json.loads((ROOT / "config/local-test-dependencies.json").read_text())
+        manifest = json.loads((ROOT / "local-test-dependencies.json").read_text())
         self.assertEqual(len(manifest["full_run_projects"]), 11)
         for project in manifest["full_run_projects"]:
             self.assertIn(project, manifest["projects"])
             self.assertTrue(manifest["projects"][project]["repositories"])
 
     def test_product_dependency_closures_include_cross_product_services(self):
-        manifest = json.loads((ROOT / "config/local-test-dependencies.json").read_text())
+        manifest = json.loads((ROOT / "local-test-dependencies.json").read_text())
         self.assertIn("router", manifest["projects"]["chat"]["repositories"])
         self.assertIn("warehouse", manifest["projects"]["chat"]["repositories"])
         self.assertIn("warehouse-api", manifest["projects"]["project"]["services"])
@@ -133,7 +133,7 @@ class LocalSourceModeTests(unittest.TestCase):
             self.assertEqual(target.stat().st_mode & 0o777, 0o600)
 
     def test_public_local_source_docs_do_not_contain_ip_addresses(self):
-        for path in (ROOT / "docs/local-source-mode.md", ROOT / "config/local-test-dependencies.json"):
+        for path in (ROOT / "docs/local-source-mode.md", ROOT / "local-test-dependencies.json"):
             self.assertIsNone(re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", path.read_text()), path)
 
     def test_main_worktree_is_detached_from_dirty_original_checkout(self):
