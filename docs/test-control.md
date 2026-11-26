@@ -66,3 +66,11 @@ scripts/health-check.sh --level all --format json
 产品 URL、私钥、API key 和 webhook secret 放在 `/opt/deploy/tester/.env.local` 等权限受限配置中。服务端和产品 watcher 的真实值不要粘贴到公开文档、命令输出、报告或 PR。
 
 部署、Nginx、升级、回滚详见[部署手册](deployment.md)；GPU 产品服务和中间件状态详见[测试环境现状](test-machine-architecture.md)；源码服务启动详见[本地源码测试模式](local-source-mode.md)。
+
+## Agent 质量分析
+
+管理员用钱包登录控制台，在「成员授权」中的「Skill 分析 Token」生成凭据。Token 有效期可设为 1 至 90 天，默认 30 天。控制台仅在创建时返回明文，SQLite 保存摘要和到期时间。管理员可在相同面板撤销凭据。
+
+将控制台 HTTPS origin 和 Token 配置为 Agent 的 `YEYING_TESTER_URL`、`YEYING_TESTER_TOKEN`。Bearer 凭据的读取范围为 `/api/v1/analysis/`，包括总体概览、项目用例和配置、批次及稳定性。网页报告继续使用钱包会话。配置接口提供环境变量名和配置状态，依赖可用性应结合运行结果确认。
+
+每次受管测试写入私有批次元数据和 Playwright 执行记录，记录运行模式、可用的源码版本、运行配置、用例 ID、重试和耗时。旧批次按保留的 JUnit 或报告汇总提供历史数据。部署更新时同时升级 `tester-service` 与 `tester-web`，服务启动时自动迁移 Token 表。Agent 使用方式和用例规范见 [Marketplace 的 yeying-tester](https://github.com/yeying-community/marketplace/tree/main/skills/yeying-tester)。

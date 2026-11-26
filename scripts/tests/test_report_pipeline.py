@@ -282,6 +282,7 @@ Path(args.output).write_bytes(Path(args.report).read_bytes())
 ''')
         shutil.copyfile(SCRIPTS / 'run-full-on-test-machine.sh',
                         scripts / 'run-full-on-test-machine.sh')
+        shutil.copyfile(SCRIPTS / 'tester-run-metadata.py', scripts / 'tester-run-metadata.py')
         # Namespace behavior is checked separately on Linux; this suite uses
         # a synthetic runner and only verifies report publication semantics.
         (scripts / 'browser-runtime.sh').write_text('exec "$@"\n')

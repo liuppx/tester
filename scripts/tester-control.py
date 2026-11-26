@@ -19,7 +19,9 @@ import threading
 import time
 from http.cookies import SimpleCookie
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
+
+import tester_analysis as analysis
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -625,7 +627,7 @@ def daily_scheduler(schedule: tuple[clock_time, ZoneInfo]) -> None:
         print(f"Tester daily full run queued: {item['id']} for {target.isoformat()}", flush=True)
 
 
-def overview_payload() -> dict:
+def overview_payload(include_history: bool = True) -> dict:
     """Use published counts and an allowlist: never expose private runner paths."""
     fields = {"id", "project", "source", "started_at", "finished_at", "result", "report"}
     def public_record(item):
@@ -651,14 +653,15 @@ def overview_payload() -> dict:
     metadata_path = REPO / "release.json"
     metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
     return {
-        "service": {"status": "pass", "version": metadata.get("version", "development")},
+        "service": {"status": "pass", "version": metadata.get("version", "development"),
+                    "source_commit": metadata.get("source_commit")},
         "full": {
             "busy": active == FULL or FULL in pending,
             "last": {key: full[key] for key in ("run", "status", "finished_at", "started_at") if key in full},
             "summary": summary,
         },
         "projects": projects,
-        "history": load_report_history(),
+        "history": load_report_history() if include_history else [],
     }
 
 
@@ -686,7 +689,7 @@ class Handler(BaseHTTPRequestHandler):
     def origin_matches(self) -> bool:
         return self.headers.get("Origin", "").rstrip("/") == ORIGIN.rstrip("/")
 
-    def current_session(self) -> tuple[str, dict] | None:
+    def current_session(self) -> tuple[str, dict, dict] | None:
         cookie = SimpleCookie()
         try:
             cookie.load(self.headers.get("Cookie", ""))
@@ -707,8 +710,169 @@ class Handler(BaseHTTPRequestHandler):
     def clear_session_cookie(self) -> None:
         self.send_header("Set-Cookie", f"{SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax")
 
+    def analysis_get(self, path: str, query: str) -> None:
+        auth = self.headers.get("Authorization", "")
+        token = auth.removeprefix("Bearer ") if auth.startswith("Bearer ") else ""
+        valid = False
+        if analysis.TOKEN.fullmatch(token):
+            with open_auth_database() as database:
+                valid = database.execute(
+                    """SELECT 1 FROM tester_analysis_tokens AS token
+                       JOIN tester_users AS owner ON owner.did=token.created_by
+                       WHERE token.digest=? AND token.revoked_at IS NULL AND token.expires_at>?
+                         AND owner.role='admin' AND owner.status='active'""",
+                    (analysis.token_digest(token), now()),
+                ).fetchone() is not None
+        if not valid:
+            self.json_reply(401, {"error": "Valid Tester analysis token required"},
+                            {"WWW-Authenticate": "Bearer"})
+            return
+
+        route = path.removeprefix("/api/v1/analysis/")
+        catalog = {item["id"]: item for item in load_test_cases()}
+        if route == "overview":
+            value = overview_payload(include_history=False)
+            full_run = value["full"]["last"].get("run")
+            full_evidence = None
+            if isinstance(full_run, str) and analysis.RUN_ID.fullmatch(full_run):
+                full_evidence = analysis.load_run_evidence(PRIVATE.parent / full_run, PUBLIC / "runs" / full_run)
+            value.pop("history")
+            with MUTEX:
+                value["queue"] = {"active": (STATE["active"] or {}).get("project"),
+                                  "queued": len(STATE["pending"])}
+            for name in sorted(set(catalog) | set(PROJECTS)):
+                project = value["projects"].setdefault(name, {"status": "untracked", "busy": False})
+                project["documented_cases"] = catalog.get(name, {}).get("case_count", 0)
+                project["watcher_enabled"] = bool(PROJECTS.get(name, {}).get("enabled"))
+                last = latest_summary(name)
+                project["latest_published"] = {
+                    key: last.get(key) for key in ("run", "status", "finished_at", "tests", "passed", "failed", "skipped")
+                } if last else None
+                if full_evidence is not None:
+                    history = analysis.RunHistory(PRIVATE.parent, PUBLIC, name, REPO)
+                    full_result = history.detail(FULL, full_run, full_evidence)
+                    project["latest_full_batch"] = (
+                        {key: full_result[key] for key in ("run", "stage", "evidence", "counts", "report")}
+                        if full_result else None
+                    )
+            self.json_reply(200, value)
+            return
+
+        parts = route.split("/")
+        if len(parts) < 2 or parts[0] != "projects" or parts[1] not in set(catalog) | set(PROJECTS):
+            self.json_reply(404, {"error": "Project or endpoint not found"})
+            return
+        name = parts[1]
+        if len(parts) == 2:
+            self.json_reply(200, {
+                "project": name, "catalog": catalog.get(name),
+                "configuration": analysis.project_configuration(REPO, name, PROJECTS.get(name, {}), LOCAL_SOURCE_MODE),
+            })
+            return
+
+        history = analysis.RunHistory(PRIVATE.parent, PUBLIC, name, REPO)
+        try:
+            params = parse_qs(query, keep_blank_values=True, max_num_fields=12)
+            if len(parts) == 5 and parts[2] == "runs":
+                scope, encoded_run = parts[3:]
+                run = unquote(encoded_run)
+                if scope not in (name, FULL) or not analysis.RUN_ID.fullmatch(run):
+                    raise ValueError()
+                datetime.strptime(run, analysis.STAMP_FORMAT)
+                record = history.detail(scope, run)
+                if record is None:
+                    self.json_reply(404, {"error": "Run not found for this project"})
+                    return
+                self.json_reply(200, record)
+                return
+
+            if len(parts) == 3 and parts[2] in ("runs", "stability"):
+                requested = parts[2]
+                limit = int(params.get("limit", ["20"])[0])
+                if not 1 <= limit <= 50:
+                    raise ValueError()
+                mode = params.get("mode", [None])[0]
+                if mode not in (None, "deployed", "local-source", "unknown"):
+                    raise ValueError()
+                before = None
+                if "before" in params:
+                    run, scope = params["before"][0].split("/")
+                    if scope not in (FULL, name) or not analysis.RUN_ID.fullmatch(run):
+                        raise ValueError()
+                    before = datetime.strptime(run, analysis.STAMP_FORMAT).timestamp(), run, scope
+                runs = history.list(limit + 1, before, mode)
+                page = runs[:limit]
+                cursor = f"{page[-1]['run']}/{page[-1]['scope']}" if len(runs) > limit else None
+                batches = [{key: item for key, item in run.items() if key not in ("cases", "config")}
+                           for run in page]
+                value = {"project": name, "runs": batches, "next_cursor": cursor}
+                if requested == "stability":
+                    value["groups"] = analysis.stability(page)
+                self.json_reply(200, value)
+                return
+        except ValueError:
+            self.json_reply(400, {"error": "Invalid run ID or filter"})
+            return
+        self.json_reply(404, {"error": "Endpoint not found"})
+
+    def analysis_token_write(self, path: str, user: dict) -> None:
+        if user["role"] != "admin":
+            self.json_reply(403, {"error": "管理员权限不足"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= 1024:
+                raise ValueError()
+            body = json.loads(self.rfile.read(length))
+            if not isinstance(body, dict):
+                raise ValueError()
+            if path.endswith("/revoke"):
+                token_id = body.get("id")
+                if not isinstance(token_id, str) or not re.fullmatch(r"[0-9a-f]{24}", token_id):
+                    raise ValueError()
+                with open_auth_database() as database:
+                    changed = database.execute("UPDATE tester_analysis_tokens SET revoked_at=? WHERE id=?",
+                                               (now(), token_id)).rowcount
+                self.json_reply(200 if changed else 404, {"ok": bool(changed)})
+                return
+            label = body.get("label")
+            days = body.get("days", 30)
+            if (not isinstance(label, str) or not 1 <= len(label.strip()) <= 80
+                    or type(days) is not int or not 1 <= days <= 90):
+                raise ValueError()
+        except ValueError:
+            self.json_reply(400, {"error": "Token 名称、有效期或 ID 无效"})
+            return
+
+        token = "yt_" + secrets.token_urlsafe(32)
+        token_id = secrets.token_hex(12)
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat(timespec="seconds")
+        with open_auth_database() as database:
+            database.execute(
+                """INSERT INTO tester_analysis_tokens(id,digest,label,created_by,created_at,expires_at)
+                   VALUES(?,?,?,?,?,?)""",
+                (token_id, analysis.token_digest(token), label.strip(), user["did"], now(), expires_at),
+            )
+        self.json_reply(201, {"id": token_id, "expires_at": expires_at, "token": token})
+
     def do_GET(self) -> None:
-        path = urlsplit(self.path).path
+        url = urlsplit(self.path)
+        path = url.path
+        if path.startswith("/api/v1/analysis/"):
+            self.analysis_get(path, url.query)
+            return
+        if path == "/api/auth/analysis-tokens":
+            current = self.current_session()
+            if not current or current[2]["role"] != "admin":
+                self.json_reply(403 if current else 401, {"error": "管理员权限不足"})
+                return
+            with open_auth_database() as database:
+                rows = database.execute(
+                    """SELECT id,label,created_at,expires_at,revoked_at FROM tester_analysis_tokens
+                       ORDER BY created_at DESC, id"""
+                ).fetchall()
+            self.json_reply(200, {"tokens": [dict(row) for row in rows]})
+            return
         if path == "/healthz":
             metadata = REPO / "release.json"
             value = json.loads(metadata.read_text()) if metadata.exists() else {}
@@ -829,6 +993,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/auth/identity/login/session",
             "/api/auth/identity/login/verify",
             "/api/auth/logout",
+            "/api/auth/analysis-tokens",
+            "/api/auth/analysis-tokens/revoke",
             "/api/auth/users/approve",
             "/api/auth/users/revoke",
             "/api/run",
@@ -927,6 +1093,9 @@ class Handler(BaseHTTPRequestHandler):
         current = self.current_session()
         if not current or self.headers.get("X-Tester-CSRF") != current[1]["csrf"]:
             self.json_reply(401 if not current else 403, {"error": "请先登录或刷新页面后重试"})
+            return
+        if path in ("/api/auth/analysis-tokens", "/api/auth/analysis-tokens/revoke"):
+            self.analysis_token_write(path, current[2])
             return
         if path in ("/api/auth/users/approve", "/api/auth/users/revoke"):
             if current[2]["role"] != "admin":
