@@ -25,7 +25,7 @@ function skipIfNoService() {
   test.skip(!baseURLFor('node'), 'NODE_BASE_URL not configured');
 }
 
-test(localizedTitle("【应用市场与应用生命周期 / UI】 市场网格呈现并且卡片打开其详细视图", "market grid renders and a card opens its detail view"), async ({ page, recorder }) => {
+test(localizedTitle("【应用市场与应用生命周期 / UI】 ND-UI-006 市场网格呈现并且卡片打开其详细视图", "ND-UI-006 market grid renders and a card opens its detail view"), async ({ page, recorder }) => {
   skipIfNoService();
   const env = envFor('node');
   test.skip(!env['NODE_WALLET_PRIVATE_KEY'], 'NODE_WALLET_PRIVATE_KEY not configured');
@@ -59,7 +59,7 @@ test(localizedTitle("【应用市场与应用生命周期 / UI】 市场网格�
   }
 });
 
-test(localizedTitle("【应用市场与应用生命周期 / UI】 我的应用程序视图显示创建者/历史申请选项卡和创建按钮", "my-apps view shows creator/request-history tabs and the create button"), async ({
+test(localizedTitle("【应用市场与应用生命周期 / UI】 ND-UI-008 我的应用程序视图显示创建者/历史申请选项卡和创建按钮", "ND-UI-008 my-apps view shows creator/request-history tabs and the create button"), async ({
   page,
   recorder,
 }) => {

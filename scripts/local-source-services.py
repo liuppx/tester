@@ -240,11 +240,15 @@ def source_checkout(project: str, source_root: Path, worktree_root: Path, sha: s
     return worktree
 
 
+def node_web_origin(port: int) -> str:
+    return f"http://localhost:{port}"
+
+
 def write_node_runtime_config(original_config: Path, worktree_config: Path, api_port: int, web_port: int) -> None:
     """Keep Node issuer identity and browser authorization URLs on local ports."""
     worktree_config.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     api_origin = f"http://127.0.0.1:{api_port}"
-    web_origin = f"http://localhost:{web_port}"
+    web_origin = node_web_origin(web_port)
     origins = [web_origin, f"http://127.0.0.1:{web_port}"]
     worktree_config.write_text(
         "const source = require(" + json.dumps(str(original_config)) + ");\n"
@@ -254,7 +258,7 @@ def write_node_runtime_config(original_config: Path, worktree_config: Path, api_
         "corsAllowedOrigins: [...new Set([...(source.app?.corsAllowedOrigins || []), ...origins])] }, "
         "issuer: { ...source.issuer, baseUrl: " + json.dumps(api_origin) + " }, "
         "identity: { ...source.identity, publicBaseUrl: " + json.dumps(web_origin) + ", "
-        "webauthn: { ...source.identity?.webauthn, origin: " + json.dumps(web_origin) + " } } };\n",
+        "webauthn: { ...source.identity?.webauthn, rpId: 'localhost', origin: " + json.dumps(web_origin) + " } } };\n",
         encoding="utf-8",
     )
     worktree_config.chmod(0o600)
@@ -524,6 +528,8 @@ def start(args: argparse.Namespace) -> int:
         shas[project] = fetched[project]
 
     overrides = {key: f"http://127.0.0.1:{value}" for key, value in ports.items()}
+    if "node-web" in services:
+        overrides["NODE_BASE_URL"] = node_web_origin(ports["NODE_BASE_URL"])
     overrides["TEST_ENV"] = "local"
     if "book" in sources:
         overrides["BOOK_REPO_PATH"] = str(sources["book"])

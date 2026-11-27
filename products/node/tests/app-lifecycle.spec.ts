@@ -36,7 +36,7 @@ function skipIfNoService() {
   test.skip(!baseURLFor('node'), 'NODE_BASE_URL not configured');
 }
 
-test(localizedTitle("【应用市场与应用生命周期 / API】 创建草稿应用程序，在我创建的中查看它，然后将其删除", "create a draft application, see it in 我创建的, then delete it"), async ({
+test(localizedTitle("【应用市场与应用生命周期 / API】 ND-E2E-001 创建草稿应用程序，在我创建的中查看它，然后将其删除", "ND-E2E-001 create a draft application, see it in 我创建的, then delete it"), async ({
   page,
   recorder,
 }) => {

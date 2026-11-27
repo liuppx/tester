@@ -66,7 +66,7 @@ async function siweVerify(api: string, wallet: BaseWallet) {
 
 const JWT_RE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
-test(localizedTitle("【健康检查与就绪 / API】 健康端点返回正常", "health endpoint returns ok"), async () => {
+test(localizedTitle("【健康检查与就绪 / API】 ND-API-001 健康端点返回正常", "ND-API-001 health endpoint returns ok"), async () => {
   skipIfNoService();
   const env = envFor('node');
   const api = env['NODE_API_URL'] ?? env['baseURL']!;
@@ -82,7 +82,7 @@ test(localizedTitle("【健康检查与就绪 / API】 健康端点返回正常"
   }
 });
 
-test(localizedTitle("【健康检查与就绪 / API】 就绪端点确认数据库", "ready endpoint confirms the database"), async () => {
+test(localizedTitle("【健康检查与就绪 / API】 ND-API-002 就绪端点确认数据库", "ND-API-002 ready endpoint confirms the database"), async () => {
   skipIfNoService();
   const env = envFor('node');
   const api = env['NODE_API_URL'] ?? env['baseURL']!;
@@ -99,7 +99,7 @@ test(localizedTitle("【健康检查与就绪 / API】 就绪端点确认数据�
   }
 });
 
-test(localizedTitle("【SIWE 认证与会话 / API】 SIWE 质询返回 EIP-4361 消息", "SIWE challenge returns an EIP-4361 message"), async () => {
+test(localizedTitle("【SIWE 认证与会话 / API】 ND-API-005 SIWE 质询返回 EIP-4361 消息", "ND-API-005 SIWE challenge returns an EIP-4361 message"), async () => {
   skipIfNoService();
   const env = envFor('node');
   test.skip(!env['NODE_WALLET_PRIVATE_KEY'], 'NODE_WALLET_PRIVATE_KEY not configured');
@@ -120,7 +120,7 @@ test(localizedTitle("【SIWE 认证与会话 / API】 SIWE 质询返回 EIP-4361
   }
 });
 
-test(localizedTitle("【SIWE 认证与会话 / API】 SIWE 验证产生 JWT 并将其绑定到钱包", "SIWE verify yields a JWT and binds it to the wallet"), async () => {
+test(localizedTitle("【SIWE 认证与会话 / API】 ND-API-007 SIWE 验证产生 JWT 并将其绑定到钱包", "ND-API-007 SIWE verify yields a JWT and binds it to the wallet"), async () => {
   skipIfNoService();
   const env = envFor('node');
   test.skip(!env['NODE_WALLET_PRIVATE_KEY'], 'NODE_WALLET_PRIVATE_KEY not configured');
@@ -131,7 +131,7 @@ test(localizedTitle("【SIWE 认证与会话 / API】 SIWE 验证产生 JWT 并�
   );
 });
 
-test(localizedTitle("【SIWE 认证与会话 / API】 profile/me 需要有效的 JWT", "profile/me requires a valid JWT"), async () => {
+test(localizedTitle("【SIWE 认证与会话 / API】 ND-API-011 profile/me 需要有效的 JWT", "ND-API-011 profile/me requires a valid JWT"), async () => {
   skipIfNoService();
   const env = envFor('node');
   test.skip(!env['NODE_WALLET_PRIVATE_KEY'], 'NODE_WALLET_PRIVATE_KEY not configured');
@@ -148,7 +148,7 @@ test(localizedTitle("【SIWE 认证与会话 / API】 profile/me 需要有效的
   }
 });
 
-test(localizedTitle("【SIWE 认证与会话 / API】 profile/me 拒绝没有 JWT 的请求", "profile/me rejects requests without a JWT"), async () => {
+test(localizedTitle("【SIWE 认证与会话 / API】 ND-API-012 profile/me 拒绝没有 JWT 的请求", "ND-API-012 profile/me rejects requests without a JWT"), async () => {
   skipIfNoService();
   const env = envFor('node');
   const api = env['NODE_API_URL'] ?? env['baseURL']!;
@@ -161,7 +161,7 @@ test(localizedTitle("【SIWE 认证与会话 / API】 profile/me 拒绝没有 JW
   }
 });
 
-test(localizedTitle("【SIWE 认证与会话 / API】 auth/refresh + auth/logout 保留刷新 cookie 合约", "auth/refresh + auth/logout keep the refresh-cookie contract"), async () => {
+test(localizedTitle("【SIWE 认证与会话 / API】 ND-API-013 无刷新 Cookie 时 refresh 返回 401", "ND-API-013 refresh returns 401 without a refresh cookie"), async () => {
   skipIfNoService();
   const env = envFor('node');
   test.skip(!env['NODE_WALLET_PRIVATE_KEY'], 'NODE_WALLET_PRIVATE_KEY not configured');
