@@ -3,25 +3,25 @@
 > 测试人员视角整理的**应有** E2E 用例清单,作为实现依据。
 > 状态说明:✅ 已实现(链接到 spec) / ⬜ 待实现。
 > 端点:前后端同源,均由 8100 的 Express 实例托管(8991 为约定配置端口,非独立服务);API 前缀 `/api/v1/public/*`;EIP-4361 SIWE 登录
-> 最后更新:2026-10-29
+> 最后更新:2026-11-27
 
 ## 覆盖总览
 
 | 模块 | 用例数 | 已实现 | 待实现 |
 | --- | --- | --- | --- |
-| 一、健康检查与就绪 | 4 | 3 | 1 |
+| 一、健康检查与就绪 | 4 | 4 | 0 |
 | 二、SIWE 认证与会话 | 11 | 11 | 0 |
 | 三、前端首页与导航 | 5 | 5 | 0 |
 | 四、应用市场浏览 | 4 | 4 | 0 |
-| 五、开发者应用生命周期 | 15 | 13 | 2 |
-| 六、应用审核 | 2 | 1 | 1 |
+| 五、开发者应用生命周期 | 15 | 15 | 0 |
+| 六、应用审核 | 2 | 2 | 0 |
 | 七、已发布应用直接使用 | 1 | 1 | 0 |
 | 八、身份能力(TOTP/Passkey/邮箱/授权码) | 8 | 8 | 0 |
 | 九、通知中心 | 6 | 6 | 0 |
 | 十、会话与鉴权守卫 | 2 | 2 | 0 |
-| **合计** | **58** | **54** | **4** |
+| **合计** | **58** | **58** | **0** |
 
-> 说明:后端与前端由同一 Express 实例托管,API 根路径统一为 `/api/v1/public/*`;响应统一信封 `{code, message, data, timestamp}`(成功 `code=0`)。写操作(建应用、发布、下线、删除、配置)均需在请求体内携带 `personal_sign` 的**签名动作信封**(action 分别为 `application_create` / `application_update` / `application_publish` / `application_unpublish` / `application_delete` / `application_config_upsert`)。剩余 4 个待实现均为**降级跳过**(依赖管理员审批或非破坏性造 DB 断连,环境不具备),已在对应 spec 中以 `test.skip` + 明确原因落地,绝不伪造通过。
+> 说明:后端与前端由同一 Express 实例托管,API 根路径统一为 `/api/v1/public/*`;响应统一信封 `{code, message, data, timestamp}`(成功 `code=0`)。写操作(建应用、发布、下线、删除、配置)均需在请求体内携带 `personal_sign` 的**签名动作信封**(action 分别为 `application_create` / `application_update` / `application_publish` / `application_unpublish` / `application_delete` / `application_config_upsert`)。58 个文档用例 ID 均已关联实现。Playwright 当前列出 61 个测试场景，其中 3 个冒烟检查没有单独的业务 ID，`ND-UI-002` 有两个执行场景，另有一个场景同时覆盖 `ND-UI-001` 和 `ND-UI-004`。真实钉钉、飞书机器人投递仍需要各自的 webhook URL 和加签密钥，没有配置时对应场景会跳过，不能计为通过。
 
 ---
 
@@ -57,10 +57,13 @@
 ### ND-API-004 数据库不可用时就绪返回 503
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现(降级跳过)— products/node/tests/api.spec.ts(无法在共享实例上非破坏性地制造数据库断连,`ready` 的 200 分支已由 ND-API-002 覆盖)
-- 前置条件:可模拟数据库未初始化/断连(如停库或断开连接的测试实例)。
+- 状态:✅ 已实现 — products/node/tests/api.spec.ts(独立 Node E2E 数据库)
+- 前置条件:使用本地源码模式单独运行 Node,启动器创建的专用 PostgreSQL 数据库与 Node 服务已就绪。
 - 步骤:
-  1. 在数据库不可用状态下 GET `/api/v1/public/ready`。
+  1. 确认 `/api/v1/public/ready` 返回 200。
+  2. 暂停该测试数据库接受连接并终止它的现有会话。
+  3. 确认就绪返回 503,而健康检查继续返回 200。
+  4. 恢复数据库连接,再次确认就绪返回 200。
 - 预期结果:HTTP 503;信封 `code=503`,`message` 提示数据库未就绪;`/health` 仍返回 200(存活与就绪相互独立)。
 
 ---
@@ -353,18 +356,19 @@
 ### ND-E2E-003 审核通过后发布并出现在市场
 - 优先级:P0
 - 类型:E2E
-- 状态:⬜ 待实现(降级跳过)— products/node/tests/admin-audit.spec.ts(需管理员审批能力,无法真跑;反向边界「未过审无法发布」由 ND-API-022 覆盖)
-- 前置条件:应用已提交审核并被管理员审批通过(见 ND-E2E-004)。
+- 状态:✅ 已实现 — products/node/tests/admin-audit.spec.ts(本地源码隔离数据库)
+- 前置条件:Node 源码模式为该批次创建隔离数据库、临时管理员和独立应用;浏览器会话已注入。
 - 步骤:
-  1. 在「我创建的」对该应用点击「发布」并完成签名。
-  2. 打开 `/market` 应用中心。
+  1. 使用开发者钱包创建应用并签名提交上架审核。
+  2. 使用临时管理员身份批准审核。
+  3. 在浏览器中按应用名称检索应用市场。
 - 预期结果:发布 POST 返回 `code=0`;应用状态变为上线(`BUSINESS_STATUS_ONLINE`);市场网格中出现该应用卡片。
 
 ### ND-API-023 下线应用恢复为离线
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现(降级跳过)— products/node/tests/app-write-api.spec.ts(需先有已上线应用,而上线依赖管理员审批,同 ND-E2E-003/004 无法真跑;他人已上线应用无法下线—Owner mismatch)
-- 前置条件:应用已上线;构造 `application_unpublish` 签名信封。
+- 状态:✅ 已实现 — products/node/tests/admin-audit.spec.ts(本地源码隔离数据库)
+- 前置条件:隔离 Node 数据库中有刚通过管理员审批的专用应用。
 - 步骤:
   1. POST `/api/v1/public/applications/:uid/unpublish`。
 - 预期结果:HTTP 200;状态变为 `BUSINESS_STATUS_OFFLINE`;应用从市场公开网格移除;属主仍可在「我创建的」看到。
@@ -413,13 +417,13 @@
 ### ND-E2E-004 管理员审核:提交 → 审批通过 → 可发布
 - 优先级:P0
 - 类型:E2E
-- 状态:⬜ 待实现(降级跳过)— products/node/tests/admin-audit.spec.ts(需管理员审批能力,无法真跑)
-- 前置条件:管理员地址(命中 vault `ADMIN_DIDS` 或 `USER_ROLE_OWNER`)已登录;存在一条待审核应用。
+- 状态:✅ 已实现 — products/node/tests/admin-audit.spec.ts(本地源码隔离数据库)
+- 前置条件:Node 源码模式启动的临时数据库包含仅供该批次使用的管理员钱包。
 - 步骤:
-  1. 开发者提交应用送审(POST `/api/v1/public/audits`)。
-  2. 管理员进入审批页 `/market/dev/approval`,对该记录选择「审批通过」。
-  3. 开发者对应用执行发布。
-- 预期结果:审批状态变为「审批通过」;`hasApprovedAudit` 为真;发布成功(呼应 ND-E2E-003 / ND-API-022 的反向用例)。
+  1. 开发者创建并签名提交上架审核。
+  2. 临时管理员对待审记录签名批准。
+  3. 独立查询审核状态和应用状态。
+- 预期结果:审核状态为「审批通过」,计数为 1,应用状态为上线。
 
 ### ND-API-028 非管理员审核检索被限定范围
 - 优先级:P1

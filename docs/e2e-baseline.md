@@ -28,16 +28,19 @@
 | --- | --- | --- | ---: | ---: | ---: |
 | [2026-11-27 08:47](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_08-47-27+0800/index.html) | 本地源码 | `db1b1c6` / `d7a20dc` | 49 | 2 | 9 |
 | [2026-11-27 08:53](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_08-53-34+0800/index.html) | 本地源码，Tester 候选代码 | `8882d69` / `d7a20dc` | 54 | 0 | 6 |
+| [2026-11-27 09:04](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-04-23+0800/index.html) | 本地源码，Tester 候选代码 | `3273676` / `d7a20dc` | 54 | 1 | 6 |
+| [2026-11-27 09:13](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-13-04+0800/index.html) | 本地源码，Tester 候选代码 | `76e9185` / `d7a20dc` | 55 | 0 | 6 |
+| [2026-11-27 09:19](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-19-58+0800/index.html) | 本地源码，首次启用隔离审批和数据库场景 | `2e2a59c` / `d7a20dc` | 54 | 5 | 2 |
+| [2026-11-27 09:23](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-23-14+0800/index.html) | 本地源码、隔离数据库 | `d6eba97` / `d7a20dc` | 59 | 0 | 2 |
+| [2026-11-27 09:32](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-32-25+0800/index.html) | 本地源码、隔离数据库，重复批次 | `7f653d7` / `d7a20dc` | 59 | 0 | 2 |
 
-GPU 上的 PostgreSQL、Redis 和 Mailpit 可访问，默认测试端口没有 Node API 和 Web 进程。Node 源码批次由 Tester 临时拉起隔离的 API 和 Web 后执行，保存了 Playwright 逐场景证据。首轮剩余失败发生在创建草稿后的 UI 跳转和 WebAuthn 注册。跳过项涉及数据库不可用分支、管理员审批及依赖审批的下线流程、三个邮箱身份场景，以及钉钉和飞书真实投递。
+GPU 上的 PostgreSQL、Redis 和 Mailpit 可访问，Node 测试由 Tester 临时拉起源码 API 和 Web。Node 单项目批次创建专用 PostgreSQL 数据库和每批一次性 vault、管理员钱包。服务运行自动迁移后执行用例，结束时清除数据库及临时凭证。最后两轮各运行 61 个场景，以一个 worker、零重试完成，每轮均为 59 通过、0 失败、2 跳过。数据库断连、审核批准、发布及下线用例均已实际执行。两轮已执行场景通过率为 100%（59/59），全场景通过比例为 96.7%（59/61）。
 
+WebAuthn 初始失败由 WebAuthn origin 与浏览器 origin 不匹配导致。后续统一以 `localhost` 配置 Node Web、WebAuthn RP 和浏览器入口。市场详情首次失败是断言没有等待无钱包插件环境中的 Provider 发现窗口。通过 role 选择菜单并调整路由断言超时后复测通过。草稿初始跳转失败原因仍未确认，同场景后续通过。首次新增隔离数据库用例时有五项 fixture 失败，调整数据初始状态与签名载荷后通过。
 
-候选批次让 Node Web、Tester 浏览器入口和 WebAuthn RP 统一使用 `localhost`，并为本次运行启用本地 Mailpit 邮箱身份用例。Passkey 注册与三个邮箱用例均通过。创建草稿、跳转、定位并删除的同一组断言也通过，首批次跳转失败的根因仍待确认。候选批次使用单 worker，重试次数为 0。
-
-| 未通过验收的用例 | 需要补齐的证据 |
+| 尚未完成的场景 | 需要补齐的证据 |
 | --- | --- |
-| `ND-API-004` | 在独立数据库实例中验证断连时的就绪响应。Node 的就绪接口集成测试已覆盖数据源未初始化时返回 503 |
-| `ND-E2E-003`、`ND-E2E-004`、`ND-API-023` | 拥有测试管理员身份的审批、发布和下线闭环 |
-| `ND-API-035`、`ND-API-036` | 通过专用测试机器人验证钉钉和飞书真实投递 |
+| `ND-API-035` | 配置真实钉钉群机器人的 webhook URL 和加签密钥，并验证群内收到消息 |
+| `ND-API-036` | 配置真实飞书群机器人的 webhook URL 和加签密钥，并验证群内收到消息 |
 
-节点本次已执行场景通过率为 54/54，发现场景通过占比为 54/60。用例文档共 58 个 ID，Playwright 的两个批次均发现 60 个场景。报告按标题提取业务 ID，页面场景含条件分支时仍需检查分支是否执行。
+Node 用例文档包含 58 个唯一业务 ID，均已实现。Playwright 列出 61 个执行场景，其中 3 个冒烟检查没有单独的业务 ID，`ND-UI-002` 有两个执行场景，另有一个场景同时覆盖 `ND-UI-001` 和 `ND-UI-004`。已检查 GPU 上 Tester 的 `/opt/deploy/tester/.env.local`，以下配置项均未设置：`NODE_DINGTALK_WEBHOOK_URL`、`NODE_DINGTALK_WEBHOOK_SECRET`、`NODE_FEISHU_WEBHOOK_URL`、`NODE_FEISHU_WEBHOOK_SECRET`。Node 功能用例与产品缺陷排查已完成，严格的全场景 100% 门禁仍需实际运行上述两个外部集成场景。
