@@ -48,8 +48,10 @@ test(localizedTitle("【应用市场浏览 / UI】 ND-UI-007 卡片打开详情�
   const card = page.locator('.tab.tab-market-clickable').first();
   await expect(card, '市场需要至少一个已上线的应用').toBeVisible({ timeout: 15_000 });
   await card.locator('.card-menu-trigger').click();
-  await page.locator('.el-dropdown-menu__item:visible', { hasText: '详情' }).first().click();
-  await expect(page).toHaveURL(/\/market\/detail/);
+  await page.getByRole('menuitem', { name: '详情', exact: true }).click();
+  // Without a wallet extension, the route guard waits up to five seconds
+  // for provider discovery before accepting the seeded SIWE session.
+  await expect(page).toHaveURL(/\/market\/detail\?uid=[^&]+/, { timeout: 10_000 });
   await expect(page.locator('.detail')).toBeVisible();
   await expect(page.getByText('基本信息')).toBeVisible();
   await recorder.step(page, '应用详情页');
