@@ -21,6 +21,7 @@ import { injectWallet } from '../helpers/wallet';
 import { apiContext } from '../../../shared/api';
 import { loginWithWallet } from '../helpers/auth';
 import { buildCreateApplicationBody, deleteBody } from '../helpers/signedAction';
+import { withPublication } from '../helpers/publication';
 
 function skipIfNoService() {
   test.skip(!baseURLFor('node'), 'NODE_BASE_URL not configured');
@@ -145,18 +146,30 @@ test(localizedTitle("【应用市场 / E2E】 ND-E2E-005 已发布应用无需�
 
   const wallet = Wallet.createRandom();
 
+  const publishedApp = process.env.NODE_TEST_DATABASE
+    ? await withPublication(async ({ app, approve }) => {
+        await approve();
+        return app;
+      })
+    : undefined;
+
   await injectWallet(page, wallet.privateKey);
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await seedWalletSession(page, baseURL, wallet.privateKey);
 
-  await page.goto(`${baseURL}/market`, { waitUntil: 'domcontentloaded' });
-  const cards = page.locator('.tab.tab-market-clickable');
-  await expect(cards.first()).toBeVisible({ timeout: 15_000 });
+  const market = new URL('/market', baseURL);
+  if (publishedApp) market.searchParams.set('keyword', publishedApp.name);
+  await page.goto(market.href, { waitUntil: 'domcontentloaded' });
+  const card = page.locator('.tab.tab-market-clickable').first();
+  await expect(card).toBeVisible({ timeout: 15_000 });
   // Published apps are directly usable from the market card. The old
   // global "申请使用" action is intentionally absent; historical request
   // records remain available from the request-history tab, but no new
   // request can be started from the public market.
-  await expect(cards.first().getByText('申请使用', { exact: true })).toHaveCount(0);
-  await expect(cards.first()).toHaveClass(/tab-market-clickable/);
+  await expect(card.getByText('申请使用', { exact: true })).toHaveCount(0);
+  if (publishedApp) {
+    await card.getByText(publishedApp.name, { exact: true }).click();
+    await expect(page).toHaveURL(publishedApp.location);
+  }
   await recorder.step(page, '已发布应用默认点击即用且无申请入口');
 });

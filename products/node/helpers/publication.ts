@@ -9,6 +9,7 @@ import { buildCreateApplicationBody, signAction } from './signedAction';
 interface Application {
   uid: string;
   name: string;
+  location: string;
   status: string;
   isOnline: boolean;
 }
@@ -25,7 +26,7 @@ async function readData<T>(response: APIResponse): Promise<T> {
   return body.data;
 }
 
-export async function withPublication(
+export async function withPublication<T>(
   exercise: (fixture: {
     app: Application;
     auditId: string;
@@ -34,8 +35,8 @@ export async function withPublication(
     readApplication: () => Promise<Application>;
     readMarket: () => Promise<Application[]>;
     unpublish: () => Promise<void>;
-  }) => Promise<void>,
-) {
+  }) => Promise<T>,
+): Promise<T> {
   const env = envFor('node');
   const base = env.baseURL;
   const adminKey = process.env.NODE_TEST_ADMIN_PRIVATE_KEY;
@@ -47,9 +48,11 @@ export async function withPublication(
   const ownerApi = await apiContext(base!, { Authorization: `Bearer ${ownerSession.token}` });
   const adminApi = await apiContext(base!, { Authorization: `Bearer ${adminSession.token}` });
   try {
-    const { body, did, version } = await buildCreateApplicationBody(owner, owner.address);
+    const { body, did, version } = await buildCreateApplicationBody(owner, owner.address, {
+      location: new URL('/?tester-market=launch', base).href,
+    });
     const app = await readData<Application>(await ownerApi.post('/api/v1/public/applications', { data: body }));
-    expect(app).toMatchObject({ name: body.name, status: 'BUSINESS_STATUS_OFFLINE', isOnline: false });
+    expect(app).toMatchObject({ name: body.name, status: 'BUSINESS_STATUS_PENDING', isOnline: false });
     const auditBody = {
       auditType: 'application',
       appOrServiceMetadata: JSON.stringify({ uid: app.uid, did, version, name: app.name, operateType: 'application' }),
@@ -68,7 +71,7 @@ export async function withPublication(
     const auditId = audit.meta.uid;
     const appPath = `/api/v1/public/applications/${app.uid}`;
     const auditPath = `/api/v1/public/audits/${auditId}`;
-    await exercise({
+    return await exercise({
       app,
       auditId,
       readAudit: async () => readData<Audit>(await ownerApi.get(auditPath)),
