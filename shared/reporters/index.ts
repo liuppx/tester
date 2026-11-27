@@ -8,5 +8,8 @@ export function defaultReporters(): ReporterDescription[] {
     ['html', { open: 'never', outputFolder: process.env.TESTER_RUNTIME_DIR ? `${process.env.TESTER_RUNTIME_DIR}/reports` : 'reports' }],
     ['junit', { outputFile: process.env.TESTER_RUNTIME_DIR ? `${process.env.TESTER_RUNTIME_DIR}/junit.xml` : 'junit.xml' }],
     [summaryReporterPath],
+    ...(process.env.TESTER_ANALYSIS_RESULTS_FILE
+      ? [[new URL('./analysis.ts', import.meta.url).pathname] as [string]]
+      : []),
   ];
 }

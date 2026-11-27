@@ -95,6 +95,21 @@
           <article id="admin-tools" class="admin-panel" hidden>
             <div class="section-heading"><div><p class="eyebrow">ACCESS</p><h2>成员授权</h2></div><button id="users-toggle" class="button button-quiet">管理成员</button></div>
             <section id="user-panel" hidden><p class="muted">完成钱包身份登录申请的成员会列在这里。</p><div id="user-list"></div></section>
+            <details id="analysis-tokens">
+              <summary>Skill 分析 Token</summary>
+              <form id="analysis-token-form">
+                <label>名称 <input name="label" required maxlength="80" placeholder="例如质量周报"></label>
+                <label>有效天数 <input name="days" type="number" min="1" max="90" value="30" required></label>
+                <button class="button button-quiet" type="submit">生成 Token</button>
+              </form>
+              <p id="analysis-token-status" role="status"></p>
+              <div id="analysis-token-secret" hidden>
+                <label for="analysis-token-value">Token 仅本次显示</label>
+                <input id="analysis-token-value" type="password" readonly autocomplete="off" spellcheck="false">
+                <button id="analysis-token-copy" class="button button-quiet" type="button">复制 Token</button>
+              </div>
+              <div id="analysis-token-list"></div>
+            </details>
           </article>
           <article class="history-panel">
             <div class="section-heading"><div><p class="eyebrow">RECENT RUNS</p><h2>最近运行</h2></div><a href="/report/" class="text-link">全部报告</a></div>

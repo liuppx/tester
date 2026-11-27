@@ -264,6 +264,7 @@ async function refresh() {
   try {
     const authResponse = await fetch("/api/auth/status", { cache: "no-store" });
     if (authResponse.status === 401) {
+      clearAnalysisToken();
       document.querySelector("#login-card").hidden = false;
       document.querySelector("#session-bar").hidden = true;
       document.querySelector("#console").hidden = true;
@@ -281,6 +282,7 @@ async function refresh() {
     document.querySelector("#service-error").hidden = true;
     document.querySelector("#identity").textContent = identity.did;
     document.querySelector("#admin-tools").hidden = identity.role !== "admin";
+    if (identity.role !== "admin") clearAnalysisToken();
 
     const [statusResponse, overviewResponse] = await Promise.all([
       fetch("/api/status", { cache: "no-store" }),
@@ -334,6 +336,109 @@ document.querySelector("#users-toggle").addEventListener("click", async () => {
   if (!panel.hidden) await loadUsers();
 });
 
+const tokenPanel = document.querySelector("#analysis-tokens");
+const tokenForm = document.querySelector("#analysis-token-form");
+const tokenStatus = document.querySelector("#analysis-token-status");
+const tokenSecret = document.querySelector("#analysis-token-secret");
+const tokenInput = tokenSecret.querySelector("input");
+
+function clearAnalysisToken() {
+  tokenInput.value = "";
+  tokenInput.type = "password";
+  tokenSecret.hidden = true;
+}
+
+async function tokenRequest(operation = "", body) {
+  const options = body ? {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Tester-CSRF": csrfToken },
+    body: JSON.stringify(body),
+  } : { cache: "no-store" };
+  const response = await fetch("/api/auth/analysis-tokens" + operation, options);
+  if (!response.ok) throw new Error("Token 操作失败（HTTP " + response.status + "）。");
+  return response.json();
+}
+
+async function loadAnalysisTokens() {
+  const { tokens } = await tokenRequest();
+  const list = document.querySelector("#analysis-token-list");
+  list.replaceChildren();
+  for (const token of tokens) {
+    const row = document.createElement("div");
+    row.className = "user-row";
+    const info = document.createElement("span");
+    const expired = Date.parse(token.expires_at) <= Date.now();
+    const status = token.revoked_at ? "已撤销" : expired ? "已到期" : "有效";
+    info.textContent = `${token.label} · ${status} · 到期 ${new Date(token.expires_at).toLocaleString()}`;
+    row.append(info);
+    if (!token.revoked_at && !expired) {
+      const revoke = document.createElement("button");
+      revoke.className = "button button-quiet";
+      revoke.type = "button";
+      revoke.textContent = "撤销";
+      revoke.addEventListener("click", async () => {
+        revoke.disabled = true;
+        try {
+          await tokenRequest("/revoke", { id: token.id });
+          clearAnalysisToken();
+          await loadAnalysisTokens();
+        } catch (error) {
+          tokenStatus.textContent = error.message;
+          revoke.disabled = false;
+        }
+      });
+      row.append(revoke);
+    }
+    list.append(row);
+  }
+}
+
+tokenPanel.addEventListener("toggle", async () => {
+  if (!tokenPanel.open) {
+    clearAnalysisToken();
+    return;
+  }
+  tokenStatus.textContent = "";
+  try {
+    await loadAnalysisTokens();
+  } catch (error) {
+    tokenStatus.textContent = error.message;
+  }
+});
+
+tokenForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const submit = tokenForm.querySelector("button");
+  submit.disabled = true;
+  clearAnalysisToken();
+  try {
+    const form = new FormData(tokenForm);
+    const { token } = await tokenRequest("", { label: form.get("label"), days: Number(form.get("days")) });
+    if (tokenPanel.open && csrfToken) {
+      tokenInput.value = token;
+      tokenSecret.hidden = false;
+    }
+    tokenStatus.textContent = "已生成只读 Token。";
+    tokenForm.reset();
+    await loadAnalysisTokens();
+  } catch (error) {
+    tokenStatus.textContent = error.message;
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+document.querySelector("#analysis-token-copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(tokenInput.value);
+    tokenStatus.textContent = "Token 已复制。";
+  } catch {
+    tokenInput.type = "text";
+    tokenInput.select();
+    tokenStatus.textContent = "请手动复制选中的 Token。";
+  }
+});
+
 document.querySelector("#login").addEventListener("click", async () => {
   const loginMessage = document.querySelector("#login-message");
   loginMessage.textContent = "请在钱包中确认身份授权…";
@@ -365,6 +470,7 @@ document.querySelector("#login").addEventListener("click", async () => {
 });
 
 document.querySelector("#logout").addEventListener("click", async () => {
+  clearAnalysisToken();
   await fetch("/api/auth/logout", {
     method: "POST",
     headers: { "X-Tester-CSRF": csrfToken },

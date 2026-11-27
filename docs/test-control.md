@@ -2,6 +2,34 @@
 
 Tester 控制服务提供 `/api/`、成员授权、项目用例/依赖信息、运行队列、结果状态和受授权保护的报告访问。产品代码执行由 runner 完成。服务监听回环地址，由 Nginx 同源代理；浏览器页面和 API 均使用 `tester-web` 与控制服务的同一 HTTPS origin。
 
+## 后端、制品和进程管理
+
+`tester-service` 制品包含 Python 控制服务和 Playwright runner。独立的 `tester-web` 制品由 Nginx 提供静态页面。Deployer 通过制品内的 `scripts/starter.sh` 启停后端，并运行健康检查。`tester-control.service` 是可选的 systemd 单元，调用同一 starter，提供开机自启和进程异常重启。
+
+```plantuml
+@startuml
+component "Deployer" as Deployer
+component "tester-control.service" as Systemd
+component "tester-service" as Service {
+  component "starter.sh + service-runtime.py" as Starter
+  component "service-supervisor.py" as Supervisor
+  component "tester-control.py" as Control
+  component "Playwright runner" as Runner
+}
+component "Nginx" as Nginx
+artifact "tester-web" as Web
+Deployer --> Starter : 升级时启停
+Systemd --> Starter : 宿主机自启和故障恢复
+Starter --> Supervisor : PID、启停和就绪检查
+Supervisor --> Control : 子进程和日志轮转
+Control --> Runner : 执行排队任务
+Nginx --> Web : 提供静态页面
+Nginx --> Control : 转发 /api/
+@enduml
+```
+
+更换宿主机进程管理方式前，应验证开机自启、异常恢复，以及 Deployer 升级停止旧进程和启动目标版本时的协作。运行接口和鉴权见 [HTTP API](api.md)。
+
 ## 钱包登录与成员授权
 
 控制服务使用 SQLite 保存 DID、管理员/成员角色、身份文档和授权状态。SQLite migration 在服务启动时自动执行；数据库路径由 `TESTER_AUTH_DATABASE` 指定，否则位于 `${TESTER_PRIVATE_REPORT_DIR}/control/tester-auth.sqlite3`。GPU 当前实例把私有报告路径配置在 `/data/test-results-private`，实际数据库为 `/data/test-results-private/control/tester-auth.sqlite3`。备份使用 `scripts/config_backup.sh` / `scripts/config-backup.py` 的 SQLite 在线备份机制，不要直接复制正在写入的 SQLite 文件。
@@ -15,7 +43,7 @@ Tester 控制服务提供 `/api/`、成员授权、项目用例/依赖信息、�
 }
 ```
 
-DID 必须已在对应 Node issuer 完成身份注册、钱包绑定、用户名和邮箱凭证验证。管理员第一次登录后可从控制台批准待审核成员或撤销成员。匿名用户不能访问测试用例、依赖信息或执行操作；匿名 `/api/auth/status` 返回 `401` 是预期结果。
+DID 必须已在对应 Node issuer 完成身份注册、钱包绑定、用户名和邮箱凭证验证。管理员第一次登录后可从控制台批准待审核成员或撤销成员。依赖关系图允许匿名访问，用例与执行操作要求钱包会话。匿名 `/api/auth/status` 返回 `401`。
 
 ### 登录失败时的检查
 
@@ -66,3 +94,11 @@ scripts/health-check.sh --level all --format json
 产品 URL、私钥、API key 和 webhook secret 放在 `/opt/deploy/tester/.env.local` 等权限受限配置中。服务端和产品 watcher 的真实值不要粘贴到公开文档、命令输出、报告或 PR。
 
 部署、Nginx、升级、回滚详见[部署手册](deployment.md)；GPU 产品服务和中间件状态详见[测试环境现状](test-machine-architecture.md)；源码服务启动详见[本地源码测试模式](local-source-mode.md)。
+
+## Agent 质量分析
+
+管理员用钱包登录控制台，在「成员授权」中的「Skill 分析 Token」生成凭据。Token 有效期可设为 1 至 90 天，默认 30 天。控制台仅在创建时返回明文，SQLite 保存摘要和到期时间。管理员可在相同面板撤销凭据。
+
+将控制台 HTTPS origin 和 Token 配置为 Agent 的 `YEYING_TESTER_URL`、`YEYING_TESTER_TOKEN`。Bearer 凭据的读取范围为 `/api/v1/analysis/`，包括总体概览、项目用例和配置、批次及稳定性。网页报告继续使用钱包会话。配置接口提供环境变量名和配置状态，依赖可用性应结合运行结果确认。
+
+每次受管测试写入私有批次元数据和 Playwright 执行记录，记录运行模式、可用的源码版本、运行配置、用例 ID、重试和耗时。旧批次按保留的 JUnit 或报告汇总提供历史数据。部署更新时同时升级 `tester-service` 与 `tester-web`，服务启动时自动迁移 Token 表。Agent 使用方式和用例规范见 [Marketplace 的 yeying-tester](https://github.com/yeying-community/marketplace/tree/main/skills/yeying-tester)。

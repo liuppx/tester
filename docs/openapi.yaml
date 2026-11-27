@@ -1,0 +1,1321 @@
+openapi: 3.1.0
+info:
+  title: YeYing Tester API
+  version: 1.0.0
+  description: |
+    Tester 控制服务当前仓库版本的 HTTP 契约。旧版浏览器路由与 Skill 分析路由使用各自现有路径。
+    x-category 标记社区接口分类。各运行环境支持的接口取决于 service 制品版本。
+servers:
+  - url: https://tester.example.org
+    description: 替换为实际 Tester 站点
+tags:
+  - name: Wallet
+  - name: Console
+  - name: Administration
+  - name: Analysis
+  - name: Runtime
+paths:
+  /api/auth/identity/login/session:
+    post:
+      tags: [Wallet]
+      x-category: public
+      operationId: createWalletLoginSession
+      summary: 创建一次性钱包登录挑战
+      description: 无需请求体。挑战有效期为 300 秒。
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: 登录挑战和签发方配置
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [code, message, data]
+                properties:
+                  code: {const: 0}
+                  message: {type: string}
+                  data:
+                    type: object
+                    required: [session_id, nonce, audience, issuerEndpoint, scopes, expires_at]
+                    properties:
+                      session_id: {type: string}
+                      nonce: {type: string}
+                      audience: {type: string, format: uri}
+                      issuerEndpoint: {type: string, format: uri}
+                      scopes:
+                        type: array
+                        items: {type: string}
+                        example: [identity.basic, identity.wallet, identity.username, identity.email]
+                      expires_at: {type: string, format: date-time}
+        '403':
+          $ref: '#/components/responses/InvalidOrigin'
+  /api/auth/identity/login/verify:
+    post:
+      tags: [Wallet]
+      x-category: public
+      operationId: verifyWalletLogin
+      summary: 验证钱包身份凭证并建立浏览器会话
+      description: |
+        将 Web3 BS 生成的钱包 Presentation 原样提交。挑战在取出校验时消耗。
+        首次通过凭证验证的普通用户会进入待审批状态。
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        required: true
+        description: JSON 请求体大小为 1 到 65536 字节。
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id, presentation]
+              properties:
+                session_id: {type: string}
+                presentation:
+                  type: object
+                  description: 由 Web3 BS 钱包身份协议定义的签名对象。
+      responses:
+        '200':
+          description: 登录成功
+          headers:
+            Set-Cookie:
+              description: 设置 tester_session，作用域为 /，有效期为 28800 秒，带 HttpOnly、Secure 和 SameSite=Lax。
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [code, message, data]
+                properties:
+                  code: {const: 0}
+                  message: {type: string}
+                  data:
+                    type: object
+                    required: [token, did]
+                    properties:
+                      token:
+                        type: string
+                        description: 浏览器会话标识，与 Cookie 同值。
+                      did: {type: string}
+        '401':
+          description: 请求大小或结构无效、挑战失效或凭证验证失败
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WalletError'}
+        '403':
+          description: 来源不匹配、账号待审批或停用
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Error'
+                  - $ref: '#/components/schemas/WalletError'
+  /api/auth/status:
+    get:
+      tags: [Wallet]
+      x-category: public
+      operationId: getWalletSession
+      summary: 查询当前钱包会话及 CSRF 值
+      security:
+        - WalletSession: []
+      responses:
+        '200':
+          description: 有效会话
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authenticated, did, csrf, role]
+                properties:
+                  authenticated: {const: true}
+                  did: {type: string}
+                  csrf: {type: string}
+                  role: {$ref: '#/components/schemas/UserRole'}
+        '401':
+          description: 未登录、会话无效或账号已停用
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authenticated]
+                properties:
+                  authenticated: {const: false}
+  /api/auth/logout:
+    post:
+      tags: [Wallet]
+      x-category: public
+      operationId: logoutWalletSession
+      summary: 退出当前浏览器会话
+      security:
+        - WalletSession: []
+          CsrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: 已退出
+          headers:
+            Set-Cookie:
+              description: 清除 tester_session。
+              schema: {type: string}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Ok'}
+        '403':
+          description: 来源、会话或 CSRF 校验失败
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /api/architecture:
+    get:
+      tags: [Console]
+      x-category: public
+      operationId: getArchitecture
+      summary: 获取项目和依赖关系图
+      security: []
+      responses:
+        '200':
+          description: 项目与依赖拓扑
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Architecture'}
+  /api/cases:
+    get:
+      tags: [Console]
+      x-category: public
+      operationId: listCaseCatalogs
+      summary: 获取全部项目的用例目录
+      security:
+        - WalletSession: []
+      responses:
+        '200':
+          description: 按项目、模块组织的文档用例
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CaseCatalog'}
+        '401':
+          $ref: '#/components/responses/WalletRequired'
+  /api/overview:
+    get:
+      tags: [Console]
+      x-category: public
+      operationId: getConsoleOverview
+      summary: 获取控制台质量概览
+      description: 返回至多 30 条报告记录。当前实现会在查询时刷新报告索引。
+      security:
+        - WalletSession: []
+      responses:
+        '200':
+          description: 服务、全量运行、各项目及报告历史
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Overview'
+                  - type: object
+                    required: [history]
+                    properties:
+                      history:
+                        type: array
+                        items: {$ref: '#/components/schemas/Report'}
+        '401':
+          $ref: '#/components/responses/WalletRequired'
+  /api/status:
+    get:
+      tags: [Console]
+      x-category: public
+      operationId: getExecutionStatus
+      summary: 获取队列与项目执行状态
+      security:
+        - WalletSession: []
+      responses:
+        '200':
+          description: 全量与单项目状态及串行任务队列
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ExecutionStatus'}
+        '401':
+          $ref: '#/components/responses/WalletRequired'
+  /api/run:
+    post:
+      tags: [Console]
+      x-category: public
+      operationId: enqueueRun
+      summary: 提交当前环境的单项目或全量测试
+      description: 同项目同模式已有执行中或等待中的任务时复用任务 ID。返回 202 时需继续查询执行状态。
+      security:
+        - WalletSession: []
+          CsrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        required: true
+        description: JSON 请求体大小为 1 到 1024 字节。项目标识来自当前项目配置。
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode: {const: test, default: test}
+                project: {$ref: '#/components/schemas/Scope'}
+                scope: {type: string}
+              anyOf:
+                - required: [project]
+                  properties:
+                    project: {$ref: '#/components/schemas/ProjectId'}
+                - required: [scope]
+                  properties:
+                    scope: {const: full}
+                    project: {const: __full__}
+            examples:
+              single:
+                value: {project: wallet}
+              full:
+                value: {scope: full}
+      responses:
+        '202':
+          description: 已受理或复用现有任务
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, status]
+                properties:
+                  id: {$ref: '#/components/schemas/RecordId'}
+                  status: {const: queued}
+        '400':
+          $ref: '#/components/responses/InvalidBody'
+        '401':
+          $ref: '#/components/responses/WalletRequired'
+        '403':
+          $ref: '#/components/responses/RejectedWrite'
+  /api/reports:
+    get:
+      tags: [Console]
+      x-category: public
+      operationId: listReports
+      summary: 获取报告中心的索引
+      description: 以结束时间倒序返回至多 200 条报告。当前实现会在查询时刷新报告索引。
+      security:
+        - WalletSession: []
+      responses:
+        '200':
+          description: 报告列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reports]
+                properties:
+                  reports:
+                    type: array
+                    items: {$ref: '#/components/schemas/Report'}
+        '401':
+          $ref: '#/components/responses/WalletRequired'
+  /api/reports/files/:
+    get:
+      tags: [Console]
+      x-category: public
+      operationId: getReportIndexFile
+      summary: 读取报告目录的默认 index.html
+      description: 这是后端默认文件入口。站点的 /report/ 为独立的报告中心页面。
+      security:
+        - WalletSession: []
+      responses:
+        '200':
+          $ref: '#/components/responses/ReportFile'
+        '401':
+          $ref: '#/components/responses/WalletRequired'
+        '404':
+          $ref: '#/components/responses/ReportFileNotFound'
+  /api/reports/files/{relative_path}:
+    get:
+      tags: [Console]
+      x-category: public
+      operationId: getReportFile
+      summary: 读取已发布报告文件
+      description: |
+        路径参数表示完整相对路径，可跨多个路径段。浏览器应优先使用列表返回的 /report/ 链接，
+        由 Nginx 转发到本接口。响应类型由文件扩展名决定。
+      security:
+        - WalletSession: []
+      parameters:
+        - name: relative_path
+          in: path
+          required: true
+          description: 保留各路径段之间的斜杠。
+          schema: {type: string}
+          example: projects/wallet/runs/2026-01-01_12-00-00+0800/index.html
+      responses:
+        '200':
+          $ref: '#/components/responses/ReportFile'
+        '401':
+          $ref: '#/components/responses/WalletRequired'
+        '404':
+          $ref: '#/components/responses/ReportFileNotFound'
+  /api/auth/users:
+    get:
+      tags: [Administration]
+      x-category: admin
+      operationId: listUsers
+      summary: 列出待审批、有效和停用的账号
+      security:
+        - WalletSession: []
+      responses:
+        '200':
+          description: 用户列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/User'}
+        '401':
+          $ref: '#/components/responses/WalletRequired'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+  /api/auth/users/approve:
+    post:
+      tags: [Administration]
+      x-category: admin
+      operationId: approveUser
+      summary: 授权普通用户
+      security:
+        - WalletSession: []
+          CsrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        $ref: '#/components/requestBodies/UserAction'
+      responses:
+        '200':
+          description: 用户状态为 active
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserActionResult'}
+        '400':
+          $ref: '#/components/responses/InvalidUserAction'
+        '401':
+          $ref: '#/components/responses/WalletRequired'
+        '403':
+          $ref: '#/components/responses/RejectedAdminWrite'
+  /api/auth/users/revoke:
+    post:
+      tags: [Administration]
+      x-category: admin
+      operationId: revokeUser
+      summary: 停用普通用户
+      security:
+        - WalletSession: []
+          CsrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        $ref: '#/components/requestBodies/UserAction'
+      responses:
+        '200':
+          description: 用户状态为 disabled
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserActionResult'}
+        '400':
+          $ref: '#/components/responses/InvalidUserAction'
+        '401':
+          $ref: '#/components/responses/WalletRequired'
+        '403':
+          $ref: '#/components/responses/RejectedAdminWrite'
+  /api/auth/analysis-tokens:
+    get:
+      tags: [Administration]
+      x-category: admin
+      operationId: listAnalysisTokens
+      summary: 查询分析 Token 元数据
+      security:
+        - WalletSession: []
+      responses:
+        '200':
+          description: Token 元数据列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tokens]
+                properties:
+                  tokens:
+                    type: array
+                    items: {$ref: '#/components/schemas/TokenMetadata'}
+        '401':
+          $ref: '#/components/responses/WalletRequired'
+        '403':
+          $ref: '#/components/responses/AdminRequired'
+    post:
+      tags: [Administration]
+      x-category: admin
+      operationId: createAnalysisToken
+      summary: 签发只读分析 Token
+      security:
+        - WalletSession: []
+          CsrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        required: true
+        description: JSON 请求体大小为 1 到 1024 字节。
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              properties:
+                label:
+                  type: string
+                  description: 首尾去空白后长度为 1 到 80 个字符。
+                days: {type: integer, minimum: 1, maximum: 90, default: 30}
+      responses:
+        '201':
+          description: Token 创建成功。此响应为唯一返回 Token 明文的接口。
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, expires_at, token]
+                properties:
+                  id: {$ref: '#/components/schemas/RecordId'}
+                  expires_at: {type: string, format: date-time}
+                  token: {type: string, pattern: '^yt_[A-Za-z0-9_-]{43}$'}
+        '400':
+          $ref: '#/components/responses/InvalidBody'
+        '401':
+          $ref: '#/components/responses/WalletRequired'
+        '403':
+          $ref: '#/components/responses/RejectedAdminWrite'
+  /api/auth/analysis-tokens/revoke:
+    post:
+      tags: [Administration]
+      x-category: admin
+      operationId: revokeAnalysisToken
+      summary: 撤销分析 Token
+      security:
+        - WalletSession: []
+          CsrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        required: true
+        description: JSON 请求体大小为 1 到 1024 字节。
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: {$ref: '#/components/schemas/RecordId'}
+      responses:
+        '200':
+          description: 已撤销
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Ok'}
+        '400':
+          $ref: '#/components/responses/InvalidBody'
+        '401':
+          $ref: '#/components/responses/WalletRequired'
+        '403':
+          $ref: '#/components/responses/RejectedAdminWrite'
+        '404':
+          description: Token ID 不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: {const: false}
+  /api/v1/analysis/overview:
+    get:
+      tags: [Analysis]
+      x-category: public
+      operationId: getAnalysisOverview
+      summary: 获取 Tester 与各项目的质量概览
+      security:
+        - AnalysisToken: []
+      responses:
+        '200':
+          description: 服务版本、队列、全量结果及各项目证据概况
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AnalysisOverview'}
+        '401':
+          $ref: '#/components/responses/AnalysisTokenRequired'
+  /api/v1/analysis/projects/{project}:
+    parameters:
+      - $ref: '#/components/parameters/Project'
+    get:
+      tags: [Analysis]
+      x-category: public
+      operationId: getAnalysisProject
+      summary: 获取项目用例目录、依赖和当前配置
+      security:
+        - AnalysisToken: []
+      responses:
+        '200':
+          description: 当前用例目录和配置键状态
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [project, catalog, configuration]
+                properties:
+                  project: {$ref: '#/components/schemas/ProjectId'}
+                  catalog:
+                    anyOf:
+                      - $ref: '#/components/schemas/CaseCatalog'
+                      - type: 'null'
+                  configuration: {$ref: '#/components/schemas/ProjectConfiguration'}
+        '401':
+          $ref: '#/components/responses/AnalysisTokenRequired'
+        '404':
+          $ref: '#/components/responses/ProjectNotFound'
+  /api/v1/analysis/projects/{project}/runs:
+    parameters:
+      - $ref: '#/components/parameters/Project'
+    get:
+      tags: [Analysis]
+      x-category: public
+      operationId: listAnalysisRuns
+      summary: 分页获取可归属给项目的单项目与全量批次
+      security:
+        - AnalysisToken: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Mode'
+        - $ref: '#/components/parameters/Before'
+      responses:
+        '200':
+          description: 批次列表，详情由批次详情接口返回
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RunPage'}
+        '400':
+          $ref: '#/components/responses/InvalidRunFilter'
+        '401':
+          $ref: '#/components/responses/AnalysisTokenRequired'
+        '404':
+          $ref: '#/components/responses/ProjectNotFound'
+  /api/v1/analysis/projects/{project}/runs/{scope}/{run}:
+    parameters:
+      - $ref: '#/components/parameters/Project'
+      - name: scope
+        in: path
+        required: true
+        description: 当前项目标识或全量标识 __full__。
+        schema: {$ref: '#/components/schemas/Scope'}
+      - name: run
+        in: path
+        required: true
+        description: 复制批次列表返回的 run 值。
+        schema: {$ref: '#/components/schemas/RunId'}
+    get:
+      tags: [Analysis]
+      x-category: public
+      operationId: getAnalysisRun
+      summary: 获取指定批次的运行配置、用例结果与重试记录
+      security:
+        - AnalysisToken: []
+      responses:
+        '200':
+          description: 当前项目在指定批次中的证据
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RunDetail'}
+        '400':
+          $ref: '#/components/responses/InvalidRunFilter'
+        '401':
+          $ref: '#/components/responses/AnalysisTokenRequired'
+        '404':
+          description: 项目不存在，或批次无法归属给该项目
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /api/v1/analysis/projects/{project}/stability:
+    parameters:
+      - $ref: '#/components/parameters/Project'
+    get:
+      tags: [Analysis]
+      x-category: public
+      operationId: getAnalysisStability
+      summary: 对当前页批次按运行模式、证据类型统计稳定性
+      security:
+        - AnalysisToken: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Mode'
+        - $ref: '#/components/parameters/Before'
+      responses:
+        '200':
+          description: 批次页与同一页的稳定性统计
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/RunPage'
+                  - type: object
+                    required: [groups]
+                    properties:
+                      groups:
+                        type: array
+                        items: {$ref: '#/components/schemas/StabilityGroup'}
+        '400':
+          $ref: '#/components/responses/InvalidRunFilter'
+        '401':
+          $ref: '#/components/responses/AnalysisTokenRequired'
+        '404':
+          $ref: '#/components/responses/ProjectNotFound'
+  /healthz:
+    get:
+      tags: [Runtime]
+      x-category: internal
+      operationId: getRuntimeHealth
+      summary: 检查本机控制服务是否响应
+      description: 通过回环地址调用。响应中的版本与 PID 用于 starter 和健康检查核对进程。
+      servers:
+        - url: 'http://127.0.0.1:{port}'
+          variables:
+            port: {default: '18082'}
+      security: []
+      responses:
+        '200':
+          description: 控制服务正在响应
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, unit, version, source_commit, artifact_mode, pid, service_pid]
+                properties:
+                  status: {const: pass}
+                  unit: {const: tester}
+                  version: {type: string}
+                  source_commit: {$ref: '#/components/schemas/NullableString'}
+                  artifact_mode: {type: boolean}
+                  pid: {type: integer}
+                  service_pid: {type: integer}
+components:
+  securitySchemes:
+    WalletSession:
+      type: apiKey
+      in: cookie
+      name: tester_session
+      description: 钱包验证成功后签发的浏览器会话。账号必须处于 active 状态。
+    CsrfHeader:
+      type: apiKey
+      in: header
+      name: X-Tester-CSRF
+      description: 来自 GET /api/auth/status 的当前会话 CSRF 值。
+    AnalysisToken:
+      type: http
+      scheme: bearer
+      description: Tester 管理员签发的分析 Token。签发者须保持有效管理员身份。
+  parameters:
+    Origin:
+      name: Origin
+      in: header
+      required: true
+      description: 与部署配置的 TESTER_CONTROL_ORIGIN 相同。
+      schema: {type: string, format: uri}
+    Project:
+      name: project
+      in: path
+      required: true
+      description: 用例目录或服务项目配置中存在的项目标识。
+      schema: {$ref: '#/components/schemas/ProjectId'}
+    Limit:
+      name: limit
+      in: query
+      description: 每页批次数。
+      schema: {type: integer, minimum: 1, maximum: 50, default: 20}
+    Mode:
+      name: mode
+      in: query
+      description: 筛选运行模式。省略时返回所有模式。
+      schema: {$ref: '#/components/schemas/RunMode'}
+    Before:
+      name: before
+      in: query
+      description: 原样传入上页 next_cursor。值采用 run/scope 形式，URL 编码时将批次时区的加号编码为 %2B。
+      schema: {type: string}
+  requestBodies:
+    UserAction:
+      required: true
+      description: JSON 请求体大小为 1 到 1024 字节。
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [did]
+            properties:
+              did: {type: string, minLength: 1}
+  responses:
+    ReportFile:
+      description: 文件内容，使用 private, no-store
+      content:
+        text/html: {}
+        application/json: {}
+        '*/*': {}
+    ReportFileNotFound:
+      description: 文件不存在或路径不符合校验规则
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    WalletRequired:
+      description: 需要有效的钱包会话
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    InvalidOrigin:
+      description: Origin 缺失或与配置的站点来源不匹配
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    RejectedWrite:
+      description: 来源或 CSRF 校验失败
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    RejectedAdminWrite:
+      description: 来源、CSRF 或管理员权限校验失败
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    AdminRequired:
+      description: 需要有效的管理员角色
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    InvalidUserAction:
+      description: 请求无效、成员不存在或不可修改
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    InvalidBody:
+      description: 请求体大小、格式或参数无效
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    AnalysisTokenRequired:
+      description: 分析 Token 缺失、无效、已过期、已撤销，或签发者失去有效管理员身份
+      headers:
+        WWW-Authenticate:
+          schema: {const: Bearer}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    InvalidRunFilter:
+      description: 批次 ID、范围、游标或查询参数无效
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    ProjectNotFound:
+      description: 项目不存在
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: {type: string}
+    WalletError:
+      type: object
+      required: [code, message]
+      properties:
+        code: {const: 1}
+        message: {type: string}
+        data:
+          type: object
+          required: [did]
+          properties:
+            did: {type: string}
+    Ok:
+      type: object
+      required: [ok]
+      properties:
+        ok: {const: true}
+    NullableString:
+      type: [string, 'null']
+    NullableCount:
+      type: [integer, 'null']
+      minimum: 0
+    ProjectId:
+      type: string
+      pattern: '^[a-z][a-z0-9-]*$'
+    Scope:
+      anyOf:
+        - $ref: '#/components/schemas/ProjectId'
+        - const: __full__
+    RecordId:
+      type: string
+      pattern: '^[0-9a-f]{24}$'
+    RunId:
+      type: string
+      pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}[+-][0-9]{4}$'
+      example: 2026-01-01_12-00-00+0800
+    UserRole:
+      type: string
+      enum: [admin, member]
+    User:
+      type: object
+      required: [did, display_name, role, status, requested_at, approved_at, approved_by, last_login_at]
+      properties:
+        did: {type: string}
+        display_name: {type: string}
+        role: {$ref: '#/components/schemas/UserRole'}
+        status: {enum: [pending, active, disabled]}
+        requested_at: {type: string, format: date-time}
+        approved_at: {$ref: '#/components/schemas/NullableString'}
+        approved_by: {$ref: '#/components/schemas/NullableString'}
+        last_login_at: {$ref: '#/components/schemas/NullableString'}
+    UserActionResult:
+      type: object
+      required: [ok, did, status]
+      properties:
+        ok: {const: true}
+        did: {type: string}
+        status: {enum: [active, disabled]}
+    TokenMetadata:
+      type: object
+      required: [id, label, created_at, expires_at, revoked_at]
+      properties:
+        id: {$ref: '#/components/schemas/RecordId'}
+        label: {type: string}
+        created_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+        revoked_at: {$ref: '#/components/schemas/NullableString'}
+    Architecture:
+      type: object
+      required: [version, title, layers, nodes, edges]
+      properties:
+        version: {type: integer}
+        title: {type: string}
+        layers:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: {type: string}
+              name: {type: string}
+        nodes:
+          type: array
+          items:
+            type: object
+            required: [id, layer, name, kind, note]
+            properties:
+              id: {type: string}
+              layer: {type: string}
+              name: {type: string}
+              kind: {type: string}
+              note: {type: string}
+        edges:
+          type: array
+          items:
+            type: object
+            required: [from, to, relation]
+            properties:
+              from: {type: string}
+              to: {type: string}
+              relation: {type: string}
+              optional: {type: boolean}
+    CaseCatalog:
+      type: object
+      required: [id, name, modules, case_count]
+      properties:
+        id: {$ref: '#/components/schemas/ProjectId'}
+        name: {type: string}
+        case_count: {type: integer, minimum: 0}
+        modules:
+          type: array
+          items:
+            type: object
+            required: [id, name, cases]
+            properties:
+              id: {type: string}
+              name: {type: string}
+              cases:
+                type: array
+                items:
+                  type: object
+                  required: [id, title, priority, kind, status, preconditions, steps, expected]
+                  properties:
+                    id: {type: string}
+                    title: {type: string}
+                    priority: {type: string}
+                    kind: {type: string}
+                    status: {type: string}
+                    preconditions: {type: string}
+                    steps: {type: string}
+                    expected: {type: string}
+    PublishedCounts:
+      type: object
+      required: [tests, passed, failed, skipped]
+      properties:
+        tests: {$ref: '#/components/schemas/NullableCount'}
+        passed: {$ref: '#/components/schemas/NullableCount'}
+        failed: {$ref: '#/components/schemas/NullableCount'}
+        skipped: {$ref: '#/components/schemas/NullableCount'}
+    PublishedSummary:
+      allOf:
+        - $ref: '#/components/schemas/PublishedCounts'
+        - type: object
+          required: [run, status, finished_at]
+          properties:
+            run: {$ref: '#/components/schemas/NullableString'}
+            status: {$ref: '#/components/schemas/NullableString'}
+            finished_at: {$ref: '#/components/schemas/NullableString'}
+    Report:
+      allOf:
+        - $ref: '#/components/schemas/PublishedSummary'
+        - type: object
+          required: [project, started_at, report]
+          properties:
+            project: {$ref: '#/components/schemas/Scope'}
+            started_at: {$ref: '#/components/schemas/NullableString'}
+            report: {type: string, format: uri-reference}
+    TaskRecord:
+      type: object
+      properties:
+        id: {$ref: '#/components/schemas/RecordId'}
+        project: {$ref: '#/components/schemas/Scope'}
+        source: {type: string}
+        started_at: {$ref: '#/components/schemas/NullableString'}
+        finished_at: {$ref: '#/components/schemas/NullableString'}
+        result: {type: string}
+        report: {$ref: '#/components/schemas/NullableString'}
+    QueueTask:
+      type: object
+      required: [project, mode, queued_at, deferred_until]
+      properties:
+        project: {$ref: '#/components/schemas/Scope'}
+        mode: {enum: [test, deploy]}
+        queued_at: {$ref: '#/components/schemas/NullableString'}
+        deferred_until: {$ref: '#/components/schemas/NullableString'}
+    ExecutionState:
+      type: object
+      required: [busy, last]
+      properties:
+        busy: {$ref: '#/components/schemas/NullableString'}
+        last:
+          anyOf:
+            - allOf:
+                - $ref: '#/components/schemas/TaskRecord'
+                - type: object
+                  properties:
+                    mode: {enum: [test, deploy]}
+                    target_sha: {$ref: '#/components/schemas/NullableString'}
+                    queued_at: {$ref: '#/components/schemas/NullableString'}
+            - type: 'null'
+    ExecutionStatus:
+      type: object
+      required: [full, projects, queue]
+      properties:
+        full: {$ref: '#/components/schemas/ExecutionState'}
+        projects:
+          type: object
+          additionalProperties:
+            allOf:
+              - $ref: '#/components/schemas/ExecutionState'
+              - type: object
+                required: [enabled, reason, poll_error]
+                properties:
+                  enabled: {type: boolean}
+                  reason: {$ref: '#/components/schemas/NullableString'}
+                  poll_error: {$ref: '#/components/schemas/NullableString'}
+        queue:
+          type: object
+          required: [parallelism, active, pending]
+          properties:
+            parallelism: {const: 1}
+            active:
+              anyOf:
+                - $ref: '#/components/schemas/QueueTask'
+                - type: 'null'
+            pending:
+              type: array
+              items: {$ref: '#/components/schemas/QueueTask'}
+    Overview:
+      type: object
+      required: [service, full, projects]
+      properties:
+        service:
+          type: object
+          required: [status, version, source_commit]
+          properties:
+            status: {const: pass}
+            version: {type: string}
+            source_commit: {$ref: '#/components/schemas/NullableString'}
+        full:
+          type: object
+          required: [busy, last, summary]
+          properties:
+            busy: {type: boolean}
+            last:
+              type: object
+              properties:
+                run: {$ref: '#/components/schemas/NullableString'}
+                status: {$ref: '#/components/schemas/NullableString'}
+                finished_at: {$ref: '#/components/schemas/NullableString'}
+                started_at: {$ref: '#/components/schemas/NullableString'}
+            summary:
+              type: object
+              required: [total, passed, failed, skipped]
+              properties:
+                total: {$ref: '#/components/schemas/NullableCount'}
+                passed: {$ref: '#/components/schemas/NullableCount'}
+                failed: {$ref: '#/components/schemas/NullableCount'}
+                skipped: {$ref: '#/components/schemas/NullableCount'}
+        projects:
+          type: object
+          additionalProperties: {$ref: '#/components/schemas/ProjectOverview'}
+    ProjectOverview:
+      type: object
+      required: [status, busy]
+      properties:
+        status: {type: string}
+        busy: {type: boolean}
+        last:
+          anyOf:
+            - $ref: '#/components/schemas/TaskRecord'
+            - type: 'null'
+    AnalysisOverview:
+      allOf:
+        - $ref: '#/components/schemas/Overview'
+        - type: object
+          required: [queue]
+          properties:
+            queue:
+              type: object
+              required: [active, queued]
+              properties:
+                active:
+                  anyOf:
+                    - $ref: '#/components/schemas/Scope'
+                    - type: 'null'
+                queued: {type: integer, minimum: 0}
+            projects:
+              type: object
+              additionalProperties:
+                type: object
+                required: [documented_cases, watcher_enabled, latest_published]
+                properties:
+                  documented_cases: {type: integer, minimum: 0}
+                  watcher_enabled: {type: boolean}
+                  latest_published:
+                    anyOf:
+                      - $ref: '#/components/schemas/PublishedSummary'
+                      - type: 'null'
+                  latest_full_batch:
+                    description: 有全量批次证据时返回。无法归属给该项目时为 null。
+                    type: [object, 'null']
+                    required: [run, stage, evidence, counts, report]
+                    properties:
+                      run: {$ref: '#/components/schemas/RunId'}
+                      stage: {type: string}
+                      evidence: {$ref: '#/components/schemas/Evidence'}
+                      counts: {$ref: '#/components/schemas/ExecutionCounts'}
+                      report: {$ref: '#/components/schemas/NullableString'}
+    ProjectConfiguration:
+      type: object
+      required: [watcher_enabled, mode, included_in_full_run, dependencies, environment_file_readable, environment_variables]
+      properties:
+        watcher_enabled: {type: boolean}
+        mode: {enum: [deployed, local-source]}
+        included_in_full_run: {type: boolean}
+        dependencies:
+          type: object
+          required: [repositories, services, in_full_run]
+          properties:
+            repositories:
+              type: array
+              items: {type: string}
+            in_full_run:
+              type: boolean
+              description: 项目是否列在依赖清单的全量范围中。
+            services:
+              type: array
+              items:
+                type: object
+                required: [name, kind, environment_key, has_local_default]
+                properties:
+                  name: {type: string}
+                  kind: {type: string}
+                  environment_key: {$ref: '#/components/schemas/NullableString'}
+                  has_local_default: {type: boolean}
+        environment_file_readable: {type: boolean}
+        environment_variables:
+          type: array
+          items:
+            type: object
+            required: [name, configured]
+            properties:
+              name: {type: string}
+              configured:
+                type: boolean
+                description: 配置值去首尾空白后是否非空。服务可用性需独立核对。
+    RunMode:
+      enum: [deployed, local-source, unknown]
+    Evidence:
+      enum: [playwright, junit, summary, metadata]
+    ExecutionCounts:
+      type: [object, 'null']
+      required: [expected, unexpected, flaky, expected-failure, flaky-expected-failure, skipped, interrupted, not-run]
+      additionalProperties: {type: integer, minimum: 0}
+    RunSummary:
+      type: object
+      required: [run, scope, project, mode, stage, evidence, runner_status, summary_status, started_at, finished_at, report, counts, published_counts]
+      properties:
+        run: {$ref: '#/components/schemas/RunId'}
+        scope: {$ref: '#/components/schemas/Scope'}
+        project: {$ref: '#/components/schemas/ProjectId'}
+        mode: {$ref: '#/components/schemas/RunMode'}
+        stage: {type: string}
+        evidence: {$ref: '#/components/schemas/Evidence'}
+        runner_status:
+          type: [string, 'null']
+          description: 整个 Playwright 批次的状态。没有执行记录时为 null。
+        summary_status: {$ref: '#/components/schemas/NullableString'}
+        started_at: {type: string, format: date-time}
+        finished_at: {$ref: '#/components/schemas/NullableString'}
+        report:
+          type: [string, 'null']
+          format: uri-reference
+          description: 报告浏览器链接，需要钱包会话。
+        counts: {$ref: '#/components/schemas/ExecutionCounts'}
+        published_counts:
+          description: 仅在有发布摘要的单项目批次中返回计数。全量批次为 null。
+          anyOf:
+            - $ref: '#/components/schemas/PublishedCounts'
+            - type: 'null'
+    RunPage:
+      type: object
+      required: [project, runs, next_cursor]
+      properties:
+        project: {$ref: '#/components/schemas/ProjectId'}
+        runs:
+          type: array
+          maxItems: 50
+          items: {$ref: '#/components/schemas/RunSummary'}
+        next_cursor:
+          type: [string, 'null']
+          description: 下一页查询的 before 值。没有下一页时为 null。
+    GitCommit:
+      type: string
+      pattern: '^[0-9a-f]{40}$'
+    RunConfiguration:
+      type: object
+      required: [test_env, trigger, tester_commit, target_commit, source_commits, workers, playwright_version, project, environment_variables]
+      properties:
+        test_env: {$ref: '#/components/schemas/NullableString'}
+        trigger: {$ref: '#/components/schemas/NullableString'}
+        tester_commit:
+          anyOf:
+            - $ref: '#/components/schemas/GitCommit'
+            - type: 'null'
+        target_commit:
+          anyOf:
+            - $ref: '#/components/schemas/GitCommit'
+            - type: 'null'
+        source_commits:
+          type: object
+          additionalProperties: {$ref: '#/components/schemas/GitCommit'}
+        workers: {$ref: '#/components/schemas/NullableCount'}
+        playwright_version: {$ref: '#/components/schemas/NullableString'}
+        project:
+          type: [object, 'null']
+          required: [retries, timeout_ms]
+          properties:
+            retries: {type: integer, minimum: 0}
+            timeout_ms: {type: integer, minimum: 0}
+        environment_variables:
+          type: [object, 'null']
+          additionalProperties: {type: boolean}
+    CaseOutcome:
+      enum: [expected, unexpected, flaky, expected-failure, flaky-expected-failure, skipped, interrupted, not-run]
+    RunCase:
+      type: object
+      required: [id, case_ids, file, outcome, duration_ms, attempts]
+      properties:
+        id: {type: string}
+        case_ids:
+          type: array
+          items: {type: string}
+        file: {$ref: '#/components/schemas/NullableString'}
+        line: {type: integer, minimum: 1}
+        outcome: {$ref: '#/components/schemas/CaseOutcome'}
+        expected_status: {type: string}
+        timeout_ms: {type: integer, minimum: 0}
+        duration_ms: {$ref: '#/components/schemas/NullableCount'}
+        attempts:
+          type: [array, 'null']
+          description: Playwright 的逐次结果。历史 JUnit 证据只有最终结果，此字段为 null。
+          items:
+            type: object
+            required: [retry, status, duration_ms, failure_location]
+            properties:
+              retry: {type: integer, minimum: 0}
+              status: {type: string}
+              duration_ms: {$ref: '#/components/schemas/NullableCount'}
+              failure_location:
+                type: [object, 'null']
+                required: [file, line]
+                properties:
+                  file: {type: string}
+                  line: {type: integer, minimum: 1}
+    RunDetail:
+      allOf:
+        - $ref: '#/components/schemas/RunSummary'
+        - type: object
+          required: [config, cases]
+          properties:
+            config: {$ref: '#/components/schemas/RunConfiguration'}
+            cases:
+              type: array
+              items: {$ref: '#/components/schemas/RunCase'}
+    StabilityGroup:
+      type: object
+      required: [mode, evidence, batches, batches_with_cases, counts, cases]
+      properties:
+        mode: {$ref: '#/components/schemas/RunMode'}
+        evidence: {$ref: '#/components/schemas/Evidence'}
+        batches: {type: integer, minimum: 0}
+        batches_with_cases: {type: integer, minimum: 0}
+        counts:
+          type: object
+          additionalProperties: {type: integer, minimum: 0}
+        cases:
+          type: array
+          items:
+            type: object
+            required: [id, case_ids, file, outcomes, executions, mixed_final_outcomes, flaky_rate, p95_duration_ms]
+            properties:
+              id: {type: string}
+              case_ids:
+                type: array
+                items: {type: string}
+              file: {$ref: '#/components/schemas/NullableString'}
+              outcomes:
+                type: object
+                additionalProperties: {type: integer, minimum: 0}
+              executions: {type: integer, minimum: 0}
+              mixed_final_outcomes:
+                type: [boolean, 'null']
+                description: 有至少两次可比较结果时，标记是否同时观察到异常和最终符合预期的结果。
+              flaky_rate:
+                type: [number, 'null']
+                minimum: 0
+                maximum: 1
+                description: Playwright 证据中的 flaky 次数除以 expected、unexpected 和 flaky 的总次数。
+              p95_duration_ms:
+                $ref: '#/components/schemas/NullableCount'

@@ -101,7 +101,7 @@ a:hover { color: var(--mint); text-decoration: underline; text-underline-offset:
 .service-indicator { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .service-indicator i { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); }
 label { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 650; }
-select {
+select, #analysis-tokens input {
   width: 100%;
   min-height: 45px;
   padding: 9px 12px;
@@ -155,6 +155,11 @@ select:focus-visible, button:focus-visible, a:focus-visible { outline: 3px solid
 .history-row .muted, .user-row .muted { font-size: 12px; }
 .history-row a { flex: 0 0 auto; font-size: 12px; }
 .user-row .identity { max-width: 100%; }
+#analysis-tokens { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 14px; }
+#analysis-tokens summary { cursor: pointer; }
+#analysis-token-form { margin-top: 12px; }
+#analysis-tokens input { margin-top: 5px; }
+#analysis-token-secret .button { margin: 8px 0; }
 
 [hidden] { display: none !important; }
 

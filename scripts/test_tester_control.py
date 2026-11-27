@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import sys
 import threading
 import unittest
 from datetime import datetime, time as clock_time, timedelta
@@ -12,11 +13,13 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 from urllib.error import HTTPError
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 from http.server import ThreadingHTTPServer
 
 
 SCRIPT = Path(__file__).parent / "tester-control.py"
+sys.path.insert(0, str(SCRIPT.parent.resolve()))
 
 
 class TesterControlTests(unittest.TestCase):
@@ -402,12 +405,107 @@ class TesterControlTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0], [str(control.TESTER_MAIN_RUNNER), "b" * 40])
         self.assertEqual(control.STATE["recent"][0]["result"], "passed")
 
+    def test_analysis_token_and_batch_evidence(self):
+        control = self.module
+        server = ThreadingHTTPServer(("127.0.0.1", 0), control.Handler)
+        self.addCleanup(server.server_close)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.shutdown)
+        base = f"http://127.0.0.1:{server.server_port}"
+        api = "/api/v1/analysis/"
+        token_route = "/api/auth/analysis-tokens"
+        control.AUTH_SESSIONS["admin"] = {"did": self.admin_did, "expires_at": 4e9, "csrf": "fixture"}
+        admin = {"Cookie": "tester_session=admin", "Origin": control.ORIGIN, "X-Tester-CSRF": "fixture"}
+
+        def request(path, headers=None, body=None):
+            data = json.dumps(body).encode() if body is not None else None
+            with urlopen(Request(base + path, data=data, headers=headers or {}), timeout=3) as response:
+                return json.load(response)
+
+        def assert_status(status, path, headers=None, body=None):
+            with self.assertRaises(HTTPError) as error:
+                request(path, headers, body)
+            self.assertEqual(error.exception.code, status)
+
+        assert_status(401, api + "overview", admin)
+        assert_status(403, token_route, {**admin, "X-Tester-CSRF": "wrong"}, {"label": "fixture"})
+        issued = request(token_route, admin, {"label": "fixture", "days": 1})
+        token = issued["token"]
+        bearer = {"Authorization": f"Bearer {token}"}
+        self.assertNotIn(token, json.dumps(request(token_route, admin)))
+        with control.open_auth_database() as database:
+            stored = database.execute("SELECT digest FROM tester_analysis_tokens").fetchone()[0]
+        self.assertEqual(stored, control.analysis.token_digest(token))
+        assert_status(401, "/api/run", {**bearer, "Origin": control.ORIGIN}, {"project": "router"})
+        assert_status(401, token_route, bearer)
+        overview = request(api + "overview", bearer)
+        self.assertGreater(overview["projects"]["router"]["documented_cases"], 0)
+        project = api + "projects/router"
+        env_file = control.PRIVATE.parent / ".env.local"
+        env_file.write_text("ROUTER_PERSONAL_UPSTREAM_KEY=never-return-this-value\n")
+        with patch.dict(os.environ, {"TESTER_ENV_FILE": str(env_file)}):
+            configuration = request(project, bearer)["configuration"]
+        self.assertIn({"name": "ROUTER_PERSONAL_UPSTREAM_KEY", "configured": True},
+                      configuration["environment_variables"])
+        self.assertNotIn("never-return-this-value", json.dumps(configuration))
+
+        newest, older = "2026-11-26_10-00-00+0800", "2026-11-25_09-00-00+0800"
+        for index, stamp in enumerate((newest, older)):
+            scope = control.PRIVATE.parent / "projects/router" if index == 0 else control.PRIVATE.parent
+            directory = scope / stamp
+            directory.mkdir(parents=True)
+            (directory / "batch.json").write_text(json.dumps({
+                "run": stamp, "stage": "published", "mode": "deployed", "test_env": "local",
+            }))
+            (directory / "execution.json").write_text(json.dumps({
+                "status": "passed",
+                "config": {"workers": 1, "projects": {"router": {"retries": 1, "timeout_ms": 30000}}},
+                "cases": [{
+                    "id": "same-case", "case_ids": ["RT-API-001"], "project": "router",
+                    "file": "products/router/tests/auth.spec.ts", "line": 10,
+                    "expected_status": "passed", "timeout_ms": 30000,
+                    "outcome": "flaky" if index == 0 else "unexpected",
+                    "attempts": [
+                        {"retry": 0, "status": "failed", "duration_ms": 10, "raw_error": "private"}
+                    ] + ([{"retry": 1, "status": "passed", "duration_ms": 20}] if index == 0 else []),
+                }],
+            }))
+        runs = request(project + "/runs?limit=1", bearer)
+        self.assertEqual(runs["runs"][0]["run"], newest)
+        earlier = request(project + "/runs?" + urlencode({"before": runs["next_cursor"]}), bearer)
+        self.assertEqual(earlier["runs"][0]["scope"], "__full__")
+        detail = request(project + "/runs/router/" + quote(newest, safe=""), bearer)
+        self.assertEqual(detail["config"]["workers"], 1)
+        self.assertEqual(len(detail["cases"][0]["attempts"]), 2)
+        self.assertNotIn("raw_error", json.dumps(detail))
+        row = request(project + "/stability", bearer)["groups"][0]["cases"][0]
+        self.assertEqual(row["flaky_rate"], 0.5)
+        self.assertTrue(row["mixed_final_outcomes"])
+        self.assertEqual(row["p95_duration_ms"], 30)
+        blocked = "2026-11-26_11-00-00+0800"
+        directory = control.PRIVATE.parent / blocked
+        directory.mkdir()
+        (directory / "batch.json").write_text(json.dumps({
+            "run": blocked, "stage": "preflight-services", "mode": "deployed", "planned_projects": ["router"],
+        }))
+        record = request(project + "/runs?limit=1", bearer)["runs"][0]
+        self.assertEqual(record["stage"], "preflight-services")
+        self.assertEqual(record["scope"], "__full__")
+        self.assertIsNone(record["counts"])
+        self.assertNotIn(blocked, json.dumps(request(api + "projects/knowledge/runs", bearer)))
+        with control.open_auth_database() as database:
+            database.execute("UPDATE tester_analysis_tokens SET expires_at='2000-01-01T00:00:00+00:00'")
+        assert_status(401, api + "overview", bearer)
+        second = request(token_route, admin, {"label": "second"})
+        request(token_route + "/revoke", admin, {"id": second["id"]})
+        assert_status(401, api + "overview", {"Authorization": "Bearer " + second["token"]})
+
     def test_database_bootstraps_admin_and_admin_approves_members(self):
         control = self.module
         control.migrate_auth_database()
         with control.open_auth_database() as database:
             migrations = database.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall()
-        self.assertEqual([row[0] for row in migrations], [1, 2])
+        self.assertEqual([row[0] for row in migrations], [1, 2, 3])
         admin_did = self.admin_did
         member_did = "did:yeying:wid_" + "b" * 32
         admin_document = {"id": admin_did, "version": 1, "revision": 1, "controllers": [], "proof": {}}
