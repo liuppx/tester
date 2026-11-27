@@ -57,9 +57,12 @@ test(localizedTitle("【索引与数据校验 / DATA】 packages.json 格式良�
   expect(parsed).toBeDefined();
 });
 
-test(localizedTitle("【索引与数据校验 / API】 （可选）MARKETPLACE_BASE_URL 响应 2xx", "(optional) MARKETPLACE_BASE_URL responds 2xx"), async ({ request }) => {
+test(localizedTitle("【索引与数据校验 / API】 MP-API-001 静态索引返回 2xx 与条目列表", "MP-API-001 static index returns 2xx and a catalog"), async ({ request }) => {
   test.skip(!hasEnv('MARKETPLACE_BASE_URL'), 'MARKETPLACE_BASE_URL not set');
   const baseURL = process.env['MARKETPLACE_BASE_URL']!;
   const res = await request.get(`${baseURL.replace(/\/$/, '')}/index.json`);
-  expect(res.status()).toBeLessThan(500);
+  expect(res.ok()).toBe(true);
+  const catalog = await res.json();
+  expect(Array.isArray(catalog)).toBe(true);
+  expect(catalog.length).toBeGreaterThan(0);
 });

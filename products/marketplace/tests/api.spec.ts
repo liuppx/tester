@@ -1,8 +1,5 @@
 /**
- * marketplace — optional static-URL smoke + disk-fallback (MP-API-002 .. 004).
- *
- * MARKETPLACE_BASE_URL is unset in this environment: the HTTP-fetch variants
- * (002/003) skip, and the disk-fallback path (004) is exercised for real.
+ * marketplace — static-URL smoke and independent disk reads (MP-API-002 .. 004).
  */
 import { localizedTitle } from '../../../shared/title';
 import { test, expect, hasEnv } from '../fixtures';
@@ -30,10 +27,7 @@ test(localizedTitle("【可选静态 URL 与冒烟 / API】 MP-API-003 静态 UR
   expect(Array.isArray(await res.json())).toBe(true);
 });
 
-test(localizedTitle("【可选静态 URL 与冒烟 / API】 MP-API-004 未设置 BASE_URL 时回退磁盘读取", "MP-API-004 with BASE_URL unset, data cases fall back to disk with no side effects"), () => {
-  // Precondition of this suite: static URL is not configured.
-  expect(hasEnv('MARKETPLACE_BASE_URL')).toBe(false);
-  // The disk-fallback path must produce real, usable data.
+test(localizedTitle("【可选静态 URL 与冒烟 / API】 MP-API-004 从源码目录读取完整目录", "MP-API-004 the source checkout contains a usable catalog"), () => {
   const index = readIndex();
   expect(Array.isArray(index)).toBe(true);
   expect(index.length).toBeGreaterThan(0);

@@ -500,6 +500,7 @@ def ensure_npm_dependencies(project: str, repo: Path, package_dir: Path, runtime
 
 def prepare_dependencies(project: str, repo: Path, services: list[str], runtime: Path, env: dict[str, str], logs: Path) -> None:
     package_dirs = {
+        "book": [repo / "reader"],
         "node": [repo, repo / "web"],
         "router": [repo / "web"],
         "warehouse": [repo / "web"],
@@ -517,7 +518,7 @@ def prepare_dependencies(project: str, repo: Path, services: list[str], runtime:
         "project": {"project-api"},
         "knowledge": {"knowledge-api", "knowledge-web"},
     }
-    if not (set(services) & project_services.get(project, set())):
+    if project != "book" and not (set(services) & project_services.get(project, set())):
         return
     for package_dir in package_dirs.get(project, []):
         ensure_npm_dependencies(project, repo, package_dir, runtime, env, logs)
@@ -594,6 +595,10 @@ def start(args: argparse.Namespace) -> int:
         overrides["BOOK_REPO_PATH"] = str(sources["book"])
     if "marketplace" in sources:
         overrides["MARKETPLACE_REPO_PATH"] = str(sources["marketplace"])
+        if not (os.environ.get("MARKETPLACE_BASE_URL") or base.get("MARKETPLACE_BASE_URL")):
+            overrides["MARKETPLACE_BASE_URL"] = (
+                "https://raw.githubusercontent.com/yeying-community/marketplace/" + shas["marketplace"]
+            )
     if "wallet" in sources:
         overrides["WALLET_REPO_PATH"] = str(sources["wallet"])
         overrides["WALLET_EXTENSION_PATH"] = str(sources["wallet"])
