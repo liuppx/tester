@@ -21,12 +21,13 @@ import { localizedTitle } from '../../../shared/title';
 import { test, expect, baseURLFor, envFor } from '../fixtures';
 
 import { seedWalletSession } from '../helpers/session';
+import { withPublication } from '../helpers/publication';
 
 function skipIfNoService() {
   test.skip(!baseURLFor('node'), 'NODE_BASE_URL not configured');
 }
 
-async function openMarket(page: Page) {
+async function openMarket(page: Page, keyword = '') {
   skipIfNoService();
   const env = envFor('node');
   test.skip(!env['NODE_WALLET_PRIVATE_KEY'], 'NODE_WALLET_PRIVATE_KEY not configured');
@@ -34,7 +35,8 @@ async function openMarket(page: Page) {
 
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await seedWalletSession(page, baseURL, env['NODE_WALLET_PRIVATE_KEY']!);
-  await page.goto(`${baseURL}/market`, { waitUntil: 'domcontentloaded' });
+  const params = keyword ? `?keyword=${encodeURIComponent(keyword)}` : '';
+  await page.goto(`${baseURL}/market${params}`, { waitUntil: 'domcontentloaded' });
 }
 
 test(localizedTitle("【应用市场浏览 / UI】 ND-UI-006 市场网格渲染", "ND-UI-006 market grid renders"), async ({ page, recorder }) => {
@@ -44,7 +46,14 @@ test(localizedTitle("【应用市场浏览 / UI】 ND-UI-006 市场网格渲染"
 });
 
 test(localizedTitle("【应用市场浏览 / UI】 ND-UI-007 卡片打开详情页", "ND-UI-007 a published app card opens its details"), async ({ page, recorder }) => {
-  await openMarket(page);
+  if (process.env.NODE_TEST_DATABASE) {
+    await withPublication(async ({ app, approve }) => {
+      await approve();
+      await openMarket(page, app.name);
+    });
+  } else {
+    await openMarket(page);
+  }
   const card = page.locator('.tab.tab-market-clickable').first();
   await expect(card, '市场需要至少一个已上线的应用').toBeVisible({ timeout: 15_000 });
   await card.locator('.card-menu-trigger').click();

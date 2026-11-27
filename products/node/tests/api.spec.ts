@@ -16,6 +16,7 @@
  *   - NODE_WALLET_PRIVATE_KEY
  */
 import { localizedTitle } from '../../../shared/title';
+import { execFileSync } from 'node:child_process';
 import type { APIResponse } from '@playwright/test';
 import { Wallet, getAddress, type BaseWallet } from 'ethers';
 
@@ -189,12 +190,33 @@ test(localizedTitle("【SIWE 认证与会话 / API】 ND-API-013 无刷新 Cooki
 
 test(localizedTitle("【健康检查与就绪 / API】 ND-API-004 数据库不可用时就绪返回 503", "ND-API-004 ready returns 503 when the database is down"), async () => {
   skipIfNoService();
-  // Inducing a real DB outage would require stopping/disconnecting the shared
-  // Postgres instance this suite (and every other product) runs against — a
-  // destructive action the plan explicitly forbids. The success side of the
-  // liveness/readiness split is covered by 'ready endpoint confirms the
-  // database' above; the 503 branch cannot be exercised non-destructively here.
-  test.skip(true, 'cannot induce a DB outage non-destructively against the shared live instance');
+  const database = process.env.NODE_TEST_DATABASE ?? '';
+  test.skip(!database, 'requires the isolated Node source-mode database');
+  expect(database).toMatch(/^tester_node_e2e_[a-f0-9]{16}$/);
+  const api = envFor('node')['NODE_API_URL']!;
+  expect(new URL(api).hostname).toBe('127.0.0.1');
+  const ctx = await apiContext(api);
+  const sql = (statement: string) => execFileSync('docker', [
+    'exec', 'postgres', 'sh', '-c', 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -c "$1"',
+    'sh', statement,
+  ], { stdio: 'pipe', timeout: 10_000 });
+  const ready = '/api/v1/public/ready';
+  try {
+    expect((await ctx.get(ready)).status()).toBe(200);
+    try {
+      sql(`ALTER DATABASE "${database}" ALLOW_CONNECTIONS false`);
+      sql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${database}'`);
+      const response = await ctx.get(ready, { timeout: 8_000 });
+      expect(response.status()).toBe(503);
+      expect(await response.json()).toMatchObject({ code: 503, message: 'Database is not ready' });
+      expect((await ctx.get('/api/v1/public/health')).status()).toBe(200);
+    } finally {
+      sql(`ALTER DATABASE "${database}" ALLOW_CONNECTIONS true`);
+    }
+    expect((await ctx.get(ready)).status()).toBe(200);
+  } finally {
+    await ctx.dispose();
+  }
 });
 
 test(localizedTitle("【健康检查与就绪 / API】 ND-API-003 健康检查向后兼容别名", "ND-API-003 healthCheck alias mirrors /health (backward-compatible)"), async () => {

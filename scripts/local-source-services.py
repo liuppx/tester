@@ -144,6 +144,65 @@ def drop_router_test_database(database: str) -> None:
     )
 
 
+def node_test_database(database: str, sql: str) -> None:
+    if not re.fullmatch(r"tester_node_e2e_[a-f0-9]{16}", database):
+        raise RuntimeError("invalid isolated Node database name")
+    result = subprocess.run(
+        ["docker", "exec", "postgres", "sh", "-c", 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -c "$1"', "sh", sql],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    if result.returncode:
+        raise RuntimeError("isolated Node database operation failed")
+
+
+def start_node_fixture(repository: Path, original: Path, runtime: Path, database: str) -> tuple[Path, str]:
+    fixture = runtime / "node-fixtures" / database
+    fixture.mkdir(parents=True, mode=0o700)
+    try:
+        result = subprocess.run(
+            ["node", str(ROOT / "scripts/node-test-vault.cjs"), str(repository), str(original / "config.js"), str(fixture)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        if result.returncode:
+            raise RuntimeError("could not initialize the isolated Node vault from the local Node test configuration")
+        credentials = json.loads(result.stdout)
+        owner = credentials["owner"]
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", owner):
+            raise RuntimeError("Node database owner is not a safe PostgreSQL role name")
+        config = fixture / "config.js"
+        overrides = {
+            "database": {"database": database},
+            "secrets": {"file": str(fixture / "secrets.enc.json"), "passwordFile": str(fixture / "password")},
+            "audit": {"approvers": [], "requiredApprovals": 1},
+        }
+        config.write_text(
+            "const source = require(" + json.dumps(str(repository / "config.js")) + ");\n"
+            "const overrides = " + json.dumps(overrides) + ";\n"
+            "module.exports = { ...source, "
+            "database: { ...source.database, ...overrides.database }, "
+            "secrets: { ...source.secrets, ...overrides.secrets }, "
+            "audit: { ...source.audit, ...overrides.audit } };\n",
+            encoding="utf-8",
+        )
+        config.chmod(0o600)
+        node_test_database(database, f'CREATE DATABASE "{database}" OWNER "{owner}"')
+        return config, credentials["admin"]
+    except Exception:
+        shutil.rmtree(fixture)
+        raise
+
+
+def stop_node_fixture(runtime: Path, database: str) -> None:
+    node_test_database(database, f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE)')
+    shutil.rmtree(runtime / "node-fixtures" / database, ignore_errors=True)
+
+
 def sql_quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
@@ -577,7 +636,14 @@ def start(args: argparse.Namespace) -> int:
         prepare_dependencies(project, repo, services, args.runtime, env, logs)
     local_databases: list[dict[str, str]] = []
     node_redirect_updates: list[dict[str, str]] = []
+    node_config = None
+    node_test_env = {}
     try:
+        if projects == ["node"]:
+            database = f"tester_node_e2e_{secrets.token_hex(8)}"
+            node_config, admin_key = start_node_fixture(sources["node"], source_root / "node", args.runtime, database)
+            local_databases.append({"engine": "node-postgres", "name": database})
+            node_test_env = {"NODE_TEST_DATABASE": database, "NODE_TEST_ADMIN_PRIVATE_KEY": admin_key}
         if database_names.get("router"):
             create_router_test_database(sources["router"] / "config.yaml", database_names["router"])
             local_databases.append({"engine": "postgres", "name": database_names["router"]})
@@ -591,6 +657,8 @@ def start(args: argparse.Namespace) -> int:
             if info is None:
                 raise RuntimeError(f"no local-source adapter for {name}")
             cwd, command, extra_env = info
+            if name == "node-api" and node_config:
+                extra_env["APP_CONFIG_PATH"] = str(node_config)
             if not cwd.is_dir():
                 raise RuntimeError(f"source directory is missing for {name}: {cwd}")
             project = next((item for item in ("node", "router", "warehouse", "chat", "social", "project", "knowledge", "orchestrator") if item in cwd.parts), None)
@@ -629,6 +697,8 @@ def start(args: argparse.Namespace) -> int:
         for database in reversed(local_databases):
             if database["engine"] == "postgres":
                 drop_router_test_database(database["name"])
+            elif database["engine"] == "node-postgres":
+                stop_node_fixture(args.runtime, database["name"])
         for update in reversed(node_redirect_updates):
             restore_node_identity_redirect(update)
         raise
@@ -645,8 +715,9 @@ def start(args: argparse.Namespace) -> int:
     }
     args.manifest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     args.manifest.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    exports = {**overrides, "TESTER_LOCAL_SOURCE_MANIFEST": str(args.manifest)}
+    exports = {**overrides, **node_test_env, "TESTER_LOCAL_SOURCE_MANIFEST": str(args.manifest)}
     args.env_output.write_text("".join(f"export {key}={shlex.quote(value)}\n" for key, value in exports.items()), encoding="utf-8")
+    args.env_output.chmod(0o600)
     print(f"Started {len(started)} local source services for {', '.join(projects)}")
     return 0
 
@@ -662,6 +733,8 @@ def stop(args: argparse.Namespace) -> int:
     for database in reversed(state.get("local_databases", [])):
         if database.get("engine") == "postgres":
             drop_router_test_database(database.get("name", ""))
+        elif database.get("engine") == "node-postgres":
+            stop_node_fixture(args.runtime, database.get("name", ""))
     args.state.unlink(missing_ok=True)
     args.env_output.unlink(missing_ok=True)
     return 0

@@ -377,18 +377,6 @@ test(localizedTitle("【开发者应用生命周期 / API】 ND-API-021 更新�
   }
 });
 
-test(localizedTitle("【开发者应用生命周期 / API】 ND-API-023 下线应用恢复为离线", "ND-API-023 unpublish restores an application to offline and removes it from the market"), async () => {
-  skipIfNoService();
-  // The behavior under test — an ONLINE application transitioning to
-  // BUSINESS_STATUS_OFFLINE and disappearing from the public market grid —
-  // requires first bringing an app online, which needs an admin-approved audit
-  // (see ND-E2E-003/004, skipped for the same reason). No admin approver is
-  // available in this environment and other owners' online apps can't be
-  // unpublished (Owner mismatch), so the online→offline path can't be driven
-  // without faking a green.
-  test.skip(true, 'requires an online (admin-approved & published) application; publish path is not drivable in this environment');
-});
-
 test(localizedTitle("【开发者应用生命周期 / API】 ND-API-024 删除他人应用返回 403", "ND-API-024 deleting another owner’s application returns 403 Owner mismatch"), async () => {
   skipIfNoService();
   test.skip(!envFor('node')['NODE_WALLET_PRIVATE_KEY'], 'node wallet env not configured');
