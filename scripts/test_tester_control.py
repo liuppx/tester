@@ -831,6 +831,15 @@ class TesterControlTests(unittest.TestCase):
 class ArtifactModeBoundaryTests(unittest.TestCase):
     setUp = TesterControlTests.setUp
 
+    def test_tester_main_polling_is_disabled_in_artifact_mode(self):
+        control = self.module
+        with patch.object(control, "ARTIFACT_MODE", True), \
+             patch.object(control, "WATCH_UPSTREAM_MAIN", True), \
+             patch.object(control, "git_sha") as git:
+            control.poll_tester_main()
+        git.assert_not_called()
+        self.assertFalse(control.STATE["pending"])
+
     def test_upstream_polling_can_be_disabled_in_artifact_mode(self):
         control = self.module
         with patch.object(control, "ARTIFACT_MODE", True), \
