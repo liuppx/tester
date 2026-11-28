@@ -114,7 +114,8 @@ test(localizedTitle("【钱包自定义 SIWE 鉴权 / API】 挑战拒绝丢失/
 // live-detected reason; otherwise we assert the controlled rejection.
 test(localizedTitle("【钱包自定义 SIWE 鉴权 / API】 当自动注册被禁用时，质询会拒绝未绑定的地址", "challenge rejects an unbound address when auto-register is disabled"), async () => {
   skipIfNoService();
-  const ctx = await apiContext(baseURLFor('router')!);
+  const restrictedURL = process.env.ROUTER_RESTRICTED_BASE_URL;
+  const ctx = await apiContext(restrictedURL || baseURLFor('router')!);
   try {
     const fresh = Wallet.createRandom().address.toLowerCase();
     const res = await ctx.post(CHALLENGE, { data: { address: fresh } });
@@ -124,7 +125,7 @@ test(localizedTitle("【钱包自定义 SIWE 鉴权 / API】 当自动注册被�
     // Auto-register ON → an unbound address still gets a nonce; the reject branch
     // can never fire on this deployment.
     test.skip(
-      parsed.success === true,
+      !restrictedURL && parsed.success === true,
       'AutoRegisterEnabled=true on this deployment: unbound wallet addresses are auto-registered, ' +
         'so the challenge reject branch (RT-API-008) cannot fire',
     );

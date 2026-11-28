@@ -121,23 +121,16 @@ test(localizedTitle("【OpenAI 兼容模型与中继 / API】 RT-API-046 未实�
 // to remain the live gated surface.
 test(localizedTitle("【OpenAI 兼容模型与中继 / API】 RT-API-047 DISABLE_OPENAI_COMPAT 时旧 /v1/* 路径被禁用", "DISABLE_OPENAI_COMPAT turns off the legacy /v1/* routes (RT-API-047)"), async () => {
   skipIfNoService();
-  const ctx = await apiContext(baseURLFor('router')!);
+  const restrictedURL = process.env.ROUTER_RESTRICTED_BASE_URL;
+  const ctx = await apiContext(restrictedURL || baseURLFor('router')!);
   try {
     // The canonical entry is always present and gated (401), never 404.
     const canonical = await ctx.post(CHAT, { data: chatBody });
     expect(canonical.status()).toBe(401);
 
     const legacy = await ctx.post('/v1/chat/completions', { data: chatBody });
-    const legacyBody = (await legacy.json()) as {
-      error?: { type?: string; message?: string };
-    };
-    // Compat ON → the legacy route is registered and gated by TokenAuth (401).
-    // Compat OFF → the route is gone (404 invalid_request_error / not found).
-    const compatEnabled =
-      legacy.status() === 401 ||
-      (legacy.status() !== 404 && legacyBody.error?.type === 'one_api_error');
     test.skip(
-      compatEnabled,
+      !restrictedURL && legacy.status() === 401,
       'DISABLE_OPENAI_COMPAT is not set on this deployment: the legacy /v1/* routes are still ' +
         'registered (compat enabled), so the disabled branch cannot be exercised',
     );

@@ -10,7 +10,8 @@
  * `internal/admin/controller/topup/*` + api.go routes.
  */
 import { localizedTitle } from '../../../shared/title';
-import { test, expect, baseURLFor, envFor } from '../fixtures';
+import { test } from '../helpers/topup-catalog';
+import { expect, baseURLFor, envFor } from '../fixtures';
 import { apiContext } from '../../../shared/api';
 import { acquireRouterToken } from '../helpers/auth';
 
@@ -110,7 +111,7 @@ test(localizedTitle("【令牌、充值与余额 / API】 GET /user/topup/redemp
 // is safe to run against the live external-pay deployment. The empty-id
 // validation ("套餐 ID 不能为空") is asserted too. Verified against
 // `PreviewPackagePurchase` + `PreviewPackagePurchaseWithDB`.
-test(localizedTitle("【充值与订单生命周期 / API】 RT-API-036 POST /topup/package/preview 套餐购买预览", "POST /user/topup/package/preview previews a package purchase (RT-API-036)"), async () => {
+test(localizedTitle("【充值与订单生命周期 / API】 RT-API-036 POST /topup/package/preview 套餐购买预览", "POST /user/topup/package/preview previews a package purchase (RT-API-036)"), async ({ catalog }) => {
   skipIfNoService();
   skipIfNoKey();
   const baseURL = baseURLFor('router')!;
@@ -127,9 +128,11 @@ test(localizedTitle("【充值与订单生命周期 / API】 RT-API-036 POST /to
     expect(emptyBody.message ?? '').toMatch(/套餐 ID 不能为空|套餐/);
 
     const pkgs = (await (await ctx.get('/api/v1/public/user/packages')).json()) as {
-      data?: Array<{ id?: string; name?: string }>;
+      success?: boolean; message?: string; data?: Array<{ id?: string; name?: string }>;
     };
-    const pkg = (pkgs.data ?? [])[0];
+    expect(pkgs.success, pkgs.message).toBe(true);
+    const pkg = catalog ? pkgs.data?.find(p => p.id === catalog.packageId) : pkgs.data?.[0];
+    if (catalog) expect(pkg?.id).toBe(catalog.packageId);
     test.skip(!pkg?.id, 'no purchasable package available to preview');
     const packageId = String(pkg!.id).trim();
 

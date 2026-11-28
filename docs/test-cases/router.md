@@ -153,7 +153,7 @@
 
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现(降级跳过)— products/router/tests/auth-negative.spec.ts:113(本部署 `AutoRegisterEnabled=true`,未绑定地址会被自动注册,拒绝分支不可达;测试探测随机地址 challenge,检测到自动注册开启即降级跳过,关闭时才断言拒绝)
+- 实现见 `products/router/tests/auth-negative.spec.ts`。本地源码批次额外启动一个关闭钱包自动注册和 OpenAI 兼容路由的 Router 实例，使用独立的 PostgreSQL 库。
 - 前置条件:后台 `AutoRegisterEnabled=false`;使用一个从未绑定账户的随机地址。
 - 步骤:
   1. POST challenge,body `{address: <未绑定地址>}`。
@@ -671,7 +671,7 @@
 
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现(降级跳过)— products/router/tests/topup-orders.spec.ts(本部署 `top_up_mode=api`,下单会命中真实外部支付网关 wp.tidukongjian.com;redirect 模式下自动执行完整下单→列表→详情→刷新→取消流程)
+- 实现见 `products/router/tests/topup-orders.spec.ts`。本地源码模式在本批数据库里创建充值方案，使用 redirect 模式运行。
 - 前置条件:持有用户 JWT;stub 外部支付网关或断言到下单边界。
 - 步骤:
   1. POST `/user/topup/orders`,body `{business_type:'balance_topup', plan_id}`。
@@ -681,7 +681,7 @@
 
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现(降级跳过)— products/router/tests/topup-orders.spec.ts(本部署 `top_up_mode=api`,依赖已创建订单=真实外部支付网关;redirect 模式下随订单生命周期流程一并执行)
+- 实现见 `products/router/tests/topup-orders.spec.ts`。本地源码模式在本批数据库里创建充值方案，使用 redirect 模式运行。
 - 前置条件:已创建至少 1 个订单。
 - 步骤:
   1. GET `/user/topup/orders`。
@@ -692,7 +692,7 @@
 
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现(降级跳过)— products/router/tests/topup-orders.spec.ts(本部署 `top_up_mode=api`,刷新会查询真实外部支付网关;redirect 模式下随订单生命周期流程一并执行)
+- 实现见 `products/router/tests/topup-orders.spec.ts`。本地源码模式在本批数据库里创建充值方案，使用 redirect 模式运行。
 - 前置条件:存在 pending 订单。
 - 步骤:
   1. POST `/user/topup/orders/:id/refresh`。
@@ -702,7 +702,7 @@
 
 - 优先级:P1
 - 类型:API
-- 状态:⬜ 待实现(降级跳过)— products/router/tests/topup-orders.spec.ts(本部署 `top_up_mode=api`,取消会查询真实外部支付网关;redirect 模式下随订单生命周期流程一并执行并自清理)
+- 实现见 `products/router/tests/topup-orders.spec.ts`。本地源码模式在本批数据库里创建充值方案，使用 redirect 模式运行。
 - 前置条件:存在 pending 订单。
 - 步骤:
   1. POST `/user/topup/orders/:id/cancel`。
@@ -713,20 +713,16 @@
 - 优先级:P2
 - 类型:API
 - 状态:✅ 已实现(无套餐时验证参数错误;有效套餐分支需可购套餐)— products/router/tests/topup-balance.spec.ts:112
-- 前置条件:存在可购套餐(当前环境未配置可购套餐,有效套餐分支条件跳过;空套餐 ID 参数校验仍会执行)。
+- 本地源码批次通过管理员 API 创建测试套餐，预览时按该套餐 ID 选择。
 - 步骤:
   1. POST `/user/topup/package/preview`,body 含套餐/操作类型。
 - 预期结果:空 `package_id` 返回“套餐 ID 不能为空”;取 `GET /user/packages` 的有效套餐预览返回 `success=true`、`target_package_id` 一致、`payable_amount` 为数值、`payable_currency` 非空,不实际下单。
 
-### RT-API-037 订单状态流转覆盖(created→pending→paid→fulfilled 及失败/取消分支)
+### RT-API-037 支付回调履约一次，失败订单不入账
 
-- 优先级:P2
-- 类型:API
-- 状态:⬜ 待实现(降级跳过)— products/router/tests/topup-orders.spec.ts:185(本部署 `top_up_mode=api`:推进状态机需创建真实外部支付订单并桩化回调,越过外部支付边界不可行,故降级跳过)
-- 前置条件:可通过 stub 支付回调驱动状态。
-- 步骤:
-  1. 依次以合法状态推进订单,并验证非法跳转被拒。
-- 预期结果:状态机遵循 created→pending→paid→fulfilled;failed/canceled 为终态;`NormalizeTopupOrderStatus` 对未知值归一。
+- 优先级 P2。实现见 `products/router/tests/topup-orders.spec.ts`。
+- 在批次专用数据库中使用新钱包创建订单，通过回环接口和每批单独生成的支付回调凭证提交 pending、paid。检查订单已履约、充值余额增加了订单对应的额度。
+- 再次通知同一笔支付，余额与首次履约后相同。另一笔订单收到 failed 后，检查失败状态和充值余额。取消订单见 RT-API-035。
 
 ### RT-UI-024 套餐购买页展示订阅套餐卡片
 
@@ -742,26 +738,17 @@
 
 ## 八、余额与兑换码
 
-### RT-UI-025 余额状态页显示三类余额
+### RT-UI-025 工作台展示总额度、已用和剩余额度
 
-- 优先级:P2
-- 类型:UI
-- 状态:⬜ 待实现(降级跳过)— products/router/tests/pricing-ui.spec.ts:43(BalanceStatusPage `.router-topup-balance-layout` 为死代码:`web/src/App.jsx` 无任何路由挂载它,`/workspace/topup` 无视 `?tab` 恒渲染 QuotaPage,三余额状态布局本构建不可达)
-- 前置条件:已注入会话。
-- 步骤:
-  1. 打开余额状态页(BalanceStatusPage,`.router-topup-balance-layout`)。
-- 预期结果:3 个 `.router-topup-statistic`:充值余额、兑换余额、赠送余额;含“兑换码充值”入口。
+- 优先级 P2。实现见 `products/router/tests/pricing-ui.spec.ts`。
+- 使用已登录的钱包打开 `/workspace/topup`，以 YYC 为显示单位。对照本次页面实际取得的 `/api/v1/public/user/quota/overview` 响应，核对三项额度的标签、数值和单位。
+- 充值、兑换和赠送三类余额的 API 契约见 RT-API-038。
 
-### RT-E2E-003 兑换码充值弹窗输入并提交
+### RT-E2E-003 从工作台提交无效兑换码并显示错误
 
-- 优先级:P1
-- 类型:E2E
-- 状态:⬜ 待实现(降级跳过)— products/router/tests/redeem.spec.ts(兑换码弹窗 `RedeemCodePage` 仅被未挂载路由的 `BalanceStatusPage`/`TopUpRecordsPage` 引用,当前 `App.jsx` 无任何 live 路由可到达用户兑换码弹窗)
-- 前置条件:已注入会话;准备一个测试兑换码(或断言到提交边界)。
-- 步骤:
-  1. 打开余额状态页,点击“兑换码充值”打开 `RedeemCodePage` 弹窗。
-  2. 在 `.router-machine-input` 输入兑换码,点确认。
-- 预期结果:有效码 → 结果表显示兑换金额/前后余额;无效/过期码 → 友好错误提示;`submitRedemption` 请求携带该码。
+- 优先级 P1。实现见 `products/router/tests/redeem.spec.ts`。
+- 从 `/workspace/topup` 点击“兑换码”，在弹窗中输入本次生成的无效码并确认。
+- 检查页面发往 `POST /api/v1/public/user/topup` 的兑换码与输入一致，接口返回兑换码无效，页面展示相同的错误提示。
 
 ### RT-API-038 GET /user/topup/balance/summary 返回余额汇总
 
@@ -898,7 +885,7 @@
 
 - 优先级:P2
 - 类型:API
-- 状态:⬜ 待实现(降级跳过)— products/router/tests/relay.spec.ts:121(本部署 OpenAI 兼容开启:探测 legacy `/v1/chat/completions` 返回 401=兼容已启用,禁用分支不可达,故降级跳过;需以 `DISABLE_OPENAI_COMPAT=true` 重启服务才能断言 404)
+- 实现见 `products/router/tests/relay.spec.ts`。本地源码批次额外启动一个关闭钱包自动注册和 OpenAI 兼容路由的 Router 实例，使用独立的 PostgreSQL 库。
 - 前置条件:以 `DISABLE_OPENAI_COMPAT=true` 启动服务。
 - 步骤:
   1. 请求旧 `/v1/chat/completions` 与 `/dashboard/*`。
@@ -1147,7 +1134,7 @@
 
 - 优先级:P0
 - 类型:API + 扩展
-- 状态:⬜ 待实现(降级跳过)— products/router/tests/identity-login.spec.ts:233(同 RT-067 走完整真实入网 + 出示 VP;但本部署 `AutoRegisterEnabled=true`,全新身份会被自动注册而非拒绝,拒绝分支不可达,故 verify 成功即据实降级跳过;`AutoRegisterEnabled=false` 时才断言拒绝)
+- 实现见 `products/router/tests/identity-login.spec.ts`。本地源码批次额外启动一个关闭钱包自动注册和 OpenAI 兼容路由的 Router 实例，使用独立的 PostgreSQL 库。
 - 前置条件:同 RT-067;另需部署 `AutoRegisterEnabled=false` 才能真正命中拒绝分支。
 - 步骤:
   1. 同 RT-067 入网并对 Router 会话产出全新身份的 VP。
@@ -1288,7 +1275,7 @@
 
 - 优先级:P0
 - 类型:API
-- 状态:⬜ 待实现(条件跳过)— products/router/tests/admin-channel-alerts.spec.ts:132(部署未迁移 `channel_alert_states` 表时返回「channel alert state table is not ready」,据实跳过;本部署即处此态)
+- 实现见 `products/router/tests/admin-channel-alerts.spec.ts`。全新数据库由 Router 正式迁移自动建表，缺表会导致本用例失败。
 - 前置条件:部署已迁移 `channel_alert_states` 表。
 - 步骤:对停用态渠道 + 合成 `alert_key`:
   1. `POST /admin/channel/alerts/acknowledge`。
@@ -1373,7 +1360,7 @@
 
 ## 已评审：Token 分组顺序与组间路由 E2E
 
-> 本节场景边界已通过评审。GR-E2E-001 至 013 已纳入自动化 spec，但尚未在配置的一次性 Router 环境运行，仍不计入上方“已实现且验证”数量。
+> GR-E2E-001 至 013 组成一个 Playwright 验收用例。2026-11-28 的 GPU 隔离批次已执行该用例，留下了分组顺序未作用于中继和 Token 开关缺失的失败记录。详见[项目基线](../e2e-baseline.md#router)。
 > Router 当前只保存和读取 Token 的 `group_route_order`，实际 relay 还没有按该顺序遍历权益分组；选路类用例定义未来 Router 能力的验收标准。
 
 ### 测试拓扑
@@ -1396,7 +1383,7 @@ Stub --> Router: 可控状态码和响应标记
 Router --> Tester: 响应、路由和结算结果
 Tester -> DB: 销毁一次性测试数据库
 note bottom of Tester
-  只有 TEST_ENV=test 且保护开关启用时运行
+  本地源码运行器或显式配置的隔离测试环境
   生产和共享真实账务地址必须被拒绝
 end note
 @enduml
@@ -1404,7 +1391,7 @@ end note
 
 ### 测试环境与数据边界
 
-- 仅在 Tester 的 `TEST_ENV=test` 下，对专用测试 Router 实例和可重建的独立测试数据库运行。测试环境使用专用钱包、管理员身份、API Token、测试权益和测试分组。Tester 必须检查当前加载的是 `.env.test`，不允许把 `ROUTER_BASE_URL` 指向生产或共享真实账务环境。
+- GPU 本地源码批次使用 `TEST_ENV=local`。运行器分配回环地址和一次性 PostgreSQL 数据库，从 Tester 配置读取管理员身份，并为普通用户创建临时钱包。独立运行可用 `TEST_ENV=test`，需显式提供专用数据库和测试钱包。
 - 被测分组和渠道必须由测试夹具独占。受控上游 stub 返回可区分的组/渠道标记，并记录收到的请求次数与请求内容摘要。stub 必须能从 Router 主机访问，不依赖真实模型供应商。
 - 运行需要显式环境保护开关 `ROUTER_GROUP_ROUTE_E2E_ENABLED=true`、`TEST_ENV=test`、精确允许的隔离 `ROUTER_BASE_URL`、专用测试身份和可销毁的测试数据库。开关缺失、测试环境标记不符、目标 URL 不匹配、stub 不可达或无法确保数据清理时必须 fail closed，不得改测真实渠道。
 - 优先通过 Router 管理 API 建立和清理测试组、模型、渠道、权益与 Token。若当前 API 不能安全创建完整夹具，只能在一次性测试数据库初始化时 seed。禁止直接修改生产或共享数据库。运行结束校验夹具已清除，或销毁一次性测试数据库。
@@ -1440,17 +1427,17 @@ end note
 
 ### 自动化实现和执行条件
 
-`products/router/tests/group-route-order.spec.ts` 将 13 个验收场景放在一个串行隔离运行中，并包含空 `group_route_order` 的兼容回归检查。它会启动可按上游模型排队返回 HTTP 故障、传输断开、SSE 响应和客户端断连的 stub，通过管理 API 建立夹具、分配套餐权益，逐个创建 Token 并执行真实中继请求。每个场景的期望值用 soft assertion 汇总，避免首个产品缺陷使后续场景没有运行。运行失败仍会清理 Token、套餐、分组和渠道。
+`products/router/tests/group-route-order.spec.ts` 将 13 个验收场景放在一个串行隔离运行中，并包含空 `group_route_order` 的兼容回归检查。它会启动可按渠道返回 HTTP 故障、传输断开、SSE 响应和客户端断连的 stub，通过管理 API 建立夹具、分配套餐权益，逐个创建 Token 并执行真实中继请求。每个场景的期望值用 soft assertion 汇总，避免首个产品缺陷使后续场景没有运行。运行失败仍会清理 Token、套餐、分组和渠道。
 
 运行前，测试用户和管理员账号需使用独立测试身份。普通测试用户应没有已有权益和个人渠道。测试 Router 必须连接专用的一次性数据库，并且 Tester 配置的数据库引擎、主机、端口、库名和凭据必须指向同一实例。GR-E2E-003 需要数据库客户端执行精确的订阅状态更新，因为 Router 没有单条套餐分配撤销 API。用例执行完成后会通过 Router API 删除订阅关联的套餐、分组和渠道。
 
-A、B 组都发布同一个 `ROUTER_GROUP_ROUTE_E2E_MODEL` 并映射到不同上游模型。B 组主候选与 `ROUTER_GROUP_ROUTE_E2E_UPSTREAM_MODEL_B` 一致。A、B 组至少分别配置两个渠道候选，用于同组切换和失败后继续尝试。候选使用 `per_1k_tokens` 价格和套餐额度。创建的渠道 Base URL 指向 `http://127.0.0.1:<ROUTER_GROUP_ROUTE_E2E_STUB_PORT>`。
+A、B 组通过管理 API 把上游目录中的 `gpt-5.4` 发布为同一逻辑模型。stub 用每条渠道的测试密钥区分候选，B 组主候选使用 `ROUTER_GROUP_ROUTE_E2E_UPSTREAM_MODEL_B` 标记。A、B 组至少分别配置两个渠道候选，用于同组切换和失败后继续尝试。候选使用 `per_1k_tokens` 价格和套餐额度。创建的渠道 Base URL 指向 `http://127.0.0.1:<ROUTER_GROUP_ROUTE_E2E_STUB_PORT>`。
 
 该用例需要 Tester 与 Router 共享测试机的 loopback 网络空间。stub 只绑定 `127.0.0.1`，不对外监听。若 Router 在隔离容器内运行，应通过受控的 loopback/host 网络配置让 Router 能访问该地址。
 
 套餐分配没有单独的撤销 API。用例执行后会删除 Token 并关闭 stub，分组、渠道、套餐和订阅数据由一次性数据库销毁清理，不能在共享数据库中运行。
 
-该用例需要以下 `.env.test` 配置：
+独立运行时可在 `.env.test` 中配置这些值。GPU 本地源码批次由运行器生成对应的私有配置。
 
 ```dotenv
 TEST_ENV=test
@@ -1494,6 +1481,8 @@ ROUTER_BASE_URL=http://127.0.0.1:3011
 | RT-E2E-010 | 备用渠道拒绝旧 item ID   | 同一请求尝试主、备用渠道。备用渠道拒绝旧上游的 item ID 后，Router 返回 400 和 `state_incompatible`                                                                               |
 
 Codex CLI 0.172.0 恢复会话时观察到 HTTP POST 仍携带首轮助手 item ID。RT-E2E-006 验证备用渠道接受该请求时的续聊结果，并在报告中记录该 ID 是否存在。RT-E2E-010 模拟备用渠道拒绝该 ID。
+
+本地源码批次将专用实例的回环地址和新建库的连接参数写入私有运行环境，自动启用分组路由和 Responses 用例。
 
 前两项使用配置中的 Router URL。五项端到端用例在与 Tester 共用 loopback 的独立测试 Router 上运行。Tester 使用管理 API 同步、验证和发布同一模型的两个模拟渠道，并创建分组和套餐，为每个用例生成测试钱包和令牌。用例结束时会删除令牌、撤销套餐订阅并删除套餐、分组和渠道。登录身份等剩余测试数据随一次性数据库销毁。真实 Codex CLI 使用临时会话目录、测试令牌和本地入口。
 

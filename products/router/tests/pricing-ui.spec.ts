@@ -1,19 +1,3 @@
-/**
- * router — package purchase cards & the (unrouted) balance status page
- * (RT-UI-024 / RT-UI-025).
- *
- *   - RT-UI-024: the service-pricing page's `#pricing-package-section` mounts
- *     PackagePurchasePage, which renders package cards when plans are available
- *     and an explicit empty state when the environment has no purchasable plans.
- *   - RT-UI-025: DEGRADED SKIP. BalanceStatusPage (`.router-topup-balance-layout`
- *     with the three 充值/兑换/赠送 `.router-topup-statistic` cards + the 兑换码充值
- *     entry) is dead code — no route in web/src/App.jsx mounts it. `/workspace/topup`
- *     always renders QuotaPage via TopUpLayout regardless of `?tab`, so the
- *     balance status layout is unreachable in this build.
- *
- * Selectors verified against router web/src/pages/ServicePricing/index.jsx,
- * web/src/pages/TopUp/PackagePurchasePage.jsx and BalanceStatusPage.jsx.
- */
 import { localizedTitle } from '../../../shared/title';
 import { test, expect, baseURLFor, envFor } from '../fixtures';
 import { seedWalletSession } from '../helpers/session';
@@ -55,12 +39,31 @@ test(localizedTitle("【pricing ui / UI】 定价页面展示套餐卡片或无�
   }
 });
 
-// RT-UI-025 (P2) — DEGRADED SKIP: BalanceStatusPage is unrouted dead code.
-test(localizedTitle("【余额与兑换码 / UI】 RT-UI-025 余额状态页显示三类余额", "the balance status page shows the three balances (RT-UI-025)"), async () => {
-  test.skip(
-    true,
-    'BalanceStatusPage (`.router-topup-balance-layout`) is not wired into web/src/App.jsx — ' +
-      '/workspace/topup always renders QuotaPage via TopUpLayout regardless of ?tab, so the ' +
-      'three-balance status layout is unreachable in this build',
-  );
+test(localizedTitle(
+  '【余额与兑换码 / UI】 RT-UI-025 工作台显示总额度、已用和剩余额度',
+  'RT-UI-025 the workspace shows total, used and remaining quota',
+), async ({ page, baseURL }) => {
+  skipIfNoService();
+  test.skip(!envFor('router').ROUTER_WALLET_PRIVATE_KEY, 'Router wallet is required');
+  await page.goto(baseURL!);
+  await seedWalletSession(page, baseURL!);
+  await page.evaluate(() => localStorage.setItem('topup_display_currency', 'YYC'));
+  const [overview] = await Promise.all([
+    page.waitForResponse(r => new URL(r.url()).pathname === '/api/v1/public/user/quota/overview'),
+    page.goto('/workspace/topup'),
+  ]);
+  const body = await overview.json();
+  expect(body.success).toBe(true);
+  for (const [field, label] of [
+    ['total_amount', /总额度|Total Quota/i],
+    ['used_amount', /已用额度|Used Quota/i],
+    ['remaining_amount', /剩余额度|Remaining Quota/i],
+  ] as const) {
+    const card = page.locator('.router-quota-summary-item').filter({ hasText: label });
+    expect(typeof body.data[field]).toBe('number');
+    const amount = body.data[field].toLocaleString('en-US', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2,
+    });
+    await expect(card.locator('.router-topup-amount-trigger')).toHaveText(amount + 'YYC');
+  }
 });
