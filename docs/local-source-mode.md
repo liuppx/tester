@@ -37,7 +37,11 @@ T -> M : 删除 Router 临时 DB / 恢复本地回调配置
 
 Router 使用命名形如 `tester_router_e2e_<随机后缀>` 的独立 PostgreSQL 数据库，退出时删除，不连接 Router 正式业务库。Node 身份场景使用现有本地 Node 测试库和已配置应用：启动时将该应用的 redirect URI 临时改成隔离 Router 回调地址，停止时恢复原值。若进程被 `SIGKILL` 或主机掉电打断，自动清理可能来不及完成；先检查私有运行状态文件，再用 `local-source-services.py stop` 清理，不要盲目删除数据库或改回调。
 
-Node API 与 Web 必须使用不同端口。若历史 `tester.env` 将两者配置为同一地址，当前启动器会保留 Node API 端口，并把 Node Web 放在开发默认端口加 offset 的地址。本地源码 Router 测试的 API 目标来自运行器生成的私有环境，不得固定覆盖到正式 Router 端口。
+单独运行 Node 时，启动器会在本地 PostgreSQL 中创建 `tester_node_e2e_<随机后缀>` 数据库，由 Node 启动时执行迁移。每批生成一份临时加密 vault 和管理员钱包，供测试创建、审批和下线独立应用。断连用例只拒绝该临时库的连接，在同一实例中检查存活、就绪和恢复。批次退出会删除临时库和凭证。全量及跨项目批次继续使用本地 Node 联调库，以复用依赖方登记的应用。需要验收四个隔离用例时单独运行 Node。
+
+Node API 与 Web 分别使用不同的回环端口。Node Web 和 WebAuthn 配置使用同一个 `localhost` 源。若历史配置将两者设为同一地址，启动器会保留 Node API 端口，并按开发默认端口和 offset 计算 Node Web 端口。Router 测试使用运行器生成的本地 API 地址。
+
+Book 源码批次会为 `reader/` 安装依赖，并校验 VitePress 生成的首页和接口规范页面。Marketplace 的文件校验直接读取源码。需要从测试机核验已发布目录时，在私有环境中配置 `MARKETPLACE_BASE_URL`，可以使用固定 commit 的官方 GitHub Raw 地址。
 
 ## 前置条件
 

@@ -256,6 +256,26 @@ class TesterControlTests(unittest.TestCase):
         control.CONFIG = config
         self.assertEqual(list(control.load_config()), ["orchestrator"])
 
+    def test_legacy_books_alias_and_unsupported_watcher_are_normalized(self):
+        control = self.module
+        book_repo = Path(self.temp.name) / "book"
+        (book_repo / ".git").mkdir(parents=True)
+        agent_repo = Path(self.temp.name) / "agent"
+        (agent_repo / ".git").mkdir(parents=True)
+        config = Path(self.temp.name) / "projects.json"
+        config.write_text(json.dumps({"projects": {
+            "books": {"repo": str(book_repo), "enabled": True},
+            "agent": {"repo": str(agent_repo), "enabled": True},
+        }}), encoding="utf-8")
+        control.CONFIG = config
+
+        with patch.object(control, "LOCAL_SOURCE_MODE", False):
+            projects = control.load_config()
+
+        self.assertEqual(set(projects), {"book", "agent"})
+        self.assertTrue(projects["book"]["enabled"])
+        self.assertFalse(projects["agent"]["enabled"])
+
     def test_test_only_runs_single_playwright_project_without_git_or_deploy(self):
         control = self.module
         control.PROJECTS["node"] = {"repo": "/tmp/node", "enabled": False}
@@ -810,6 +830,15 @@ class TesterControlTests(unittest.TestCase):
 
 class ArtifactModeBoundaryTests(unittest.TestCase):
     setUp = TesterControlTests.setUp
+
+    def test_tester_main_polling_is_disabled_in_artifact_mode(self):
+        control = self.module
+        with patch.object(control, "ARTIFACT_MODE", True), \
+             patch.object(control, "WATCH_UPSTREAM_MAIN", True), \
+             patch.object(control, "git_sha") as git:
+            control.poll_tester_main()
+        git.assert_not_called()
+        self.assertFalse(control.STATE["pending"])
 
     def test_upstream_polling_can_be_disabled_in_artifact_mode(self):
         control = self.module

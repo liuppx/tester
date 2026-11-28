@@ -11,9 +11,9 @@
 | 每日计划 | 当前配置的全量测试范围 | 控制服务调度线程 | 每个本地日期最多生成一个计划批次。服务在计划时间后重启时，若当天尚无计划记录，会补入当天批次 |
 | 项目 `main` 更新 | 本轮轮询发现变化的项目 | 上游仓库 watcher | 同一轮发现的多个仓库变更合成一个批次，每个项目固定到发现时的 commit。批次等待期间发现的新 commit 更新对应项目的目标 commit |
 | Tester 控制台 | 全量或勾选的一个/多个项目 | `POST /api/run` | 全量、单项目、多项目均作为一个批次入队。同一来源、范围和模式已有活动或等待批次时复用 |
-| Tester 自身 `main` 更新 | 全量测试范围 | Tester watcher | Tester 代码更新用完整测试范围验证，不作为产品项目增量批次 |
+| Tester 自身 `main` 更新（源码模式） | 全量测试范围 | Tester watcher | 源码模式服务用完整测试范围验证 Tester 更新；制品模式通过标准打包升级切换 Tester 版本 |
 
-`main` watcher 只处理项目清单中启用且有已验证隔离部署适配器的项目。当前部署适配器覆盖 Book、Chat、Marketplace、Router、Wallet。启用状态不决定项目是否出现在全量 Playwright 范围内。新增适配器前需要有可重复部署、健康检查和清理流程。
+`main` watcher 只处理项目清单中启用且有已验证隔离部署适配器的项目。当前部署适配器覆盖 Book、Chat、Marketplace、Router、Wallet。旧项目键 `books` 会规范化为 `book`；没有部署适配器的配置项会自动保持 watcher 关闭，但仍可手动单项目测试，也会保留在全量 Playwright 范围内。新增适配器前需要有可重复部署、健康检查和清理流程。
 
 制品模式下，Watcher 先用固定 SHA 更新并验证产品，再直接调用当前安装包内的项目 runner。源码开发模式则先准备 Tester 的上游 Git worktree，再运行项目用例。标准安装包不包含 `.git`，部署适配器不能从制品目录启动 Tester Git worktree。
 

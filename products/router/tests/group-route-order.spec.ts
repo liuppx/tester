@@ -29,6 +29,7 @@ interface AvailableModels extends Envelope<string[]> {
 }
 
 interface UserLogRow {
+  quota?: number;
   id?: string;
   type?: number;
   token_name?: string;
@@ -265,7 +266,7 @@ async function getRetryTimes(
   return setting!.value;
 }
 
-function executeDisposableDatabaseStatement(query: string): void {
+function executeDisposableDatabaseStatement(query: string): string {
   const env = envFor('router');
   const engine = env['ROUTER_GROUP_ROUTE_E2E_DB_ENGINE'];
   const host = env['ROUTER_GROUP_ROUTE_E2E_DB_HOST'];
@@ -282,7 +283,7 @@ function executeDisposableDatabaseStatement(query: string): void {
   expect(password).toBeTruthy();
   expect(query).not.toContain(';');
   if (engine === 'mysql') {
-    execFileSync(
+    return execFileSync(
       'mysql',
       [
         '--batch',
@@ -297,16 +298,16 @@ function executeDisposableDatabaseStatement(query: string): void {
         '-e',
         query,
       ],
-      { env: { ...process.env, MYSQL_PWD: password }, stdio: 'pipe' },
-    );
-    return;
+      { env: { ...process.env, MYSQL_PWD: password }, stdio: 'pipe', encoding: 'utf8' },
+    ).trim();
   }
-  execFileSync(
+  return execFileSync(
     'psql',
     [
       '-X',
       '-q',
       '-t',
+      '-A',
       '-h',
       host!,
       '-p',
@@ -318,8 +319,22 @@ function executeDisposableDatabaseStatement(query: string): void {
       '-c',
       query,
     ],
-    { env: { ...process.env, PGPASSWORD: password }, stdio: 'pipe' },
+    { env: { ...process.env, PGPASSWORD: password }, stdio: 'pipe', encoding: 'utf8' },
+  ).trim();
+}
+
+function groupCounter(
+  userID: string,
+  groupID: string,
+  field: 'consumed_quota' | 'reserved_quota',
+): number {
+  expect(userID).toMatch(/^[a-zA-Z0-9-]+$/);
+  expect(groupID).toMatch(/^[a-zA-Z0-9-]+$/);
+  const value = executeDisposableDatabaseStatement(
+    `SELECT COALESCE(SUM(${field}), 0) FROM group_quota_counters WHERE user_id = '${userID}' AND group_id = '${groupID}' AND counter_type = 'daily'`,
   );
+  expect(value).toMatch(/^\d+$/);
+  return Number(value);
 }
 
 function cancelPackageEntitlement(userID: string, packageID: string): void {
@@ -385,7 +400,14 @@ async function createTestGroup(
     expect(channel.success, channel.message).toBe(true);
     const channelID = String(channel.data?.id ?? '').trim();
     expect(channelID).not.toBe('');
-    await publishTestChannel(admin, channelID, 'gpt-5.4', logicalModel, '/v1/chat/completions', false);
+    await publishTestChannel(
+      admin,
+      channelID,
+      'gpt-5.4',
+      logicalModel,
+      '/v1/chat/completions',
+      false,
+    );
     channelIDs.push(channelID);
     channelsByName[channelSpec.name] = channelID;
     bindings.push({
@@ -450,7 +472,8 @@ async function removeTestGroups(
     for (const userID of userIDs) {
       cancelPackageEntitlement(userID, fixture.packageID);
       expect(fixture.groupID).toMatch(/^[a-zA-Z0-9-]+$/);
-      const column = envFor('router').ROUTER_GROUP_ROUTE_E2E_DB_ENGINE === 'postgres' ? '"group"' : '`group`';
+      const column =
+        envFor('router').ROUTER_GROUP_ROUTE_E2E_DB_ENGINE === 'postgres' ? '"group"' : '`group`';
       executeDisposableDatabaseStatement(
         `UPDATE users SET ${column} = '' WHERE id = '${userID}' AND ${column} = '${fixture.groupID}'`,
       );
@@ -857,6 +880,42 @@ async function runRemainingGroupRouteScenarios(context: GroupRouteScenarioContex
   stub.reset();
   stub.actionsByModel[upstreamModel] = [{ kind: 'success', marker: 'served-by:group-b' }];
 
+  // GR-E2E-009. Several failed candidates followed by success produce a
+  // single successful settlement in the group that actually served the call.
+  stub.actionsByModel['group-a-primary'] = [
+    { kind: 'http_error', status: 429, code: 'rate_limit_exceeded', message: 'fixture rate limit' },
+  ];
+  stub.actionsByModel['group-a-secondary'] = [
+    {
+      kind: 'http_error',
+      status: 503,
+      code: 'upstream_unavailable',
+      message: 'fixture unavailable',
+    },
+  ];
+  const consumedA = groupCounter(userID, firstGroup, 'consumed_quota');
+  const consumedB = groupCounter(userID, preferredGroup, 'consumed_quota');
+  const settledFallback = await requestWithGroupOrder(userContext, orderAFirst, logicalModel, {
+    tokenName: `gr009-${Date.now()}`,
+  });
+  expect.soft(settledFallback.status).toBe(200);
+  const settlementLogs = await waitForUserLogs(userContext, settledFallback.tokenName, (rows) =>
+    rows.some((row) => Number(row.type) === 2),
+  );
+  const successRows = settlementLogs.filter((row) => Number(row.type) === 2);
+  expect.soft(successRows).toHaveLength(1);
+  expect.soft(String(successRows[0]?.group_id ?? '').trim()).toBe(preferredGroup);
+  expect.soft(successRows[0]?.fallback_count ?? 0).toBeGreaterThan(0);
+  const charge = Number(successRows[0]?.quota);
+  expect.soft(charge).toBeGreaterThan(0);
+  expect.soft(groupCounter(userID, firstGroup, 'consumed_quota')).toBe(consumedA);
+  expect.soft(groupCounter(userID, preferredGroup, 'consumed_quota')).toBe(consumedB + charge);
+  for (const group of [firstGroup, preferredGroup]) {
+    expect.soft(groupCounter(userID, group, 'reserved_quota')).toBe(0);
+  }
+  stub.reset();
+
+  // Start the cancellable stream after measuring the isolated request's quota delta.
   const streamToken = await createTokenWithGroupOrder(userContext, orderBFirst, logicalModel, {
     tokenName: `gr008-abort-${Date.now()}`,
   });
@@ -871,32 +930,6 @@ async function runRemainingGroupRouteScenarios(context: GroupRouteScenarioContex
   await userContext.delete(`${USER_TOKEN}/${streamToken.id}/`).catch(() => {});
   stub.reset();
   stub.actionsByModel[upstreamModel] = [{ kind: 'success', marker: 'served-by:group-b' }];
-
-  // GR-E2E-009. Several failed candidates followed by success produce a
-  // single successful settlement in the group that actually served the call.
-  stub.actionsByModel['group-a-primary'] = [
-    { kind: 'http_error', status: 429, code: 'rate_limit_exceeded', message: 'fixture rate limit' },
-  ];
-  stub.actionsByModel['group-a-secondary'] = [
-    {
-      kind: 'http_error',
-      status: 503,
-      code: 'upstream_unavailable',
-      message: 'fixture unavailable',
-    },
-  ];
-  const settledFallback = await requestWithGroupOrder(userContext, orderAFirst, logicalModel, {
-    tokenName: `gr009-${Date.now()}`,
-  });
-  expect.soft(settledFallback.status).toBe(200);
-  const settlementLogs = await waitForUserLogs(userContext, settledFallback.tokenName, (rows) =>
-    rows.some((row) => Number(row.type) === 2),
-  );
-  const successRows = settlementLogs.filter((row) => Number(row.type) === 2);
-  expect.soft(successRows).toHaveLength(1);
-  expect.soft(String(successRows[0]?.group_id ?? '').trim()).toBe(preferredGroup);
-  expect.soft(successRows[0]?.fallback_count ?? 0).toBeGreaterThan(0);
-  stub.reset();
 
   // GR-E2E-010. A caller-selected channel is fixed even when its upstream
   // returns an HTTP failure. It must not enter ordered group failover.
@@ -1042,7 +1075,17 @@ async function runRemainingGroupRouteScenarios(context: GroupRouteScenarioContex
   expect.soft(streamFailover.marker).toContain('streamed-by:group-b');
   expect
     .soft(stub.received.map((item) => item.model))
-    .toEqual(['group-a-stream', 'group-b-stream']);
+    .toEqual([
+      'group-a-primary',
+      'group-a-secondary',
+      'group-a-http-error',
+      'group-a-transport-error',
+      'group-a-stream',
+      upstreamModel,
+      'group-b-http-error',
+      'group-b-secondary',
+      'group-b-stream',
+    ]);
   stub.reset();
 
   // GR-E2E-013. Default and explicit-on enable HTTP error failover. Explicit
@@ -1070,6 +1113,8 @@ async function runRemainingGroupRouteScenarios(context: GroupRouteScenarioContex
   expect.soft(autoOff.autoFailover).toBe(false);
   expect.soft(autoOff.status).toBe(429);
   expect.soft(stub.received.map((item) => item.model)).toEqual(['group-a-primary']);
+
+  stub.reset();
 
   // GR-E2E-003 runs last because it revokes one package entitlement from the
   // dedicated user and administrator fixtures in the disposable test DB.
@@ -1135,7 +1180,8 @@ test(
       'Set ROUTER_GROUP_ROUTE_E2E_ENABLED=true for the isolated Router E2E suite',
     );
     const local = activeTestEnv === 'local';
-    if (local) expect(env.ROUTER_GROUP_ROUTE_E2E_DB_NAME).toMatch(/^tester_router_e2e_[a-f0-9]{8}$/);
+    if (local)
+      expect(env.ROUTER_GROUP_ROUTE_E2E_DB_NAME).toMatch(/^tester_router_e2e_[a-f0-9]{8}$/);
     else expect(activeTestEnv).toBe('test');
 
     const baseURL = baseURLFor('router');
@@ -1145,10 +1191,14 @@ test(
     expect(normalizedURL(baseURL!)).toBe(normalizedURL(allowedURL));
     expect(['127.0.0.1', 'localhost', '::1']).toContain(new URL(baseURL!).hostname);
 
-    const userPrivateKey = local ? Wallet.createRandom().privateKey : env.ROUTER_GROUP_ROUTE_E2E_USER_PRIVATE_KEY ?? '';
-    const adminPrivateKey = (local ? env.ROUTER_ADMIN_PRIVATE_KEY : env.ROUTER_GROUP_ROUTE_E2E_ADMIN_PRIVATE_KEY) ?? '';
+    const userPrivateKey = local
+      ? Wallet.createRandom().privateKey
+      : (env.ROUTER_GROUP_ROUTE_E2E_USER_PRIVATE_KEY ?? '');
+    const adminPrivateKey =
+      (local ? env.ROUTER_ADMIN_PRIVATE_KEY : env.ROUTER_GROUP_ROUTE_E2E_ADMIN_PRIVATE_KEY) ?? '';
     const logicalModel = env.ROUTER_GROUP_ROUTE_E2E_MODEL ?? (local ? 'group-router-fixture' : '');
-    const upstreamModel = env.ROUTER_GROUP_ROUTE_E2E_UPSTREAM_MODEL_B ?? (local ? 'group-b-primary' : '');
+    const upstreamModel =
+      env.ROUTER_GROUP_ROUTE_E2E_UPSTREAM_MODEL_B ?? (local ? 'group-b-primary' : '');
     const stubPort = Number(env['ROUTER_GROUP_ROUTE_E2E_STUB_PORT'] ?? '39091');
     expect(adminPrivateKey).not.toBe('');
     expect(userPrivateKey).not.toBe('');
@@ -1207,9 +1257,7 @@ test(
       adminUserID = adminIdentity.userId.trim();
       ctx = await apiContext(baseURL!, { Authorization: `Bearer ${user.token}` });
       admin = await createAdminContext(baseURL!, adminPrivateKey);
-      const beforeFixture = (await (
-        await ctx.get(AVAILABLE_MODELS)
-      ).json()) as AvailableModels;
+      const beforeFixture = (await (await ctx.get(AVAILABLE_MODELS)).json()) as AvailableModels;
       expect(beforeFixture.success, beforeFixture.message).toBe(true);
       expect(beforeFixture.sources ?? []).toEqual([]);
 
@@ -1255,9 +1303,7 @@ test(
       const noCandidateGroup = noCandidateFixture.groupID;
       const originalRetryTimes = await getRetryTimes(admin);
 
-      const available = (await (
-        await ctx.get(AVAILABLE_MODELS)
-      ).json()) as AvailableModels;
+      const available = (await (await ctx.get(AVAILABLE_MODELS)).json()) as AvailableModels;
       expect(available.success, available.message).toBe(true);
       expect(available.data).toContain(logicalModel);
       const entitledGroupIDs = [
@@ -1270,9 +1316,7 @@ test(
       expect(entitledGroupIDs).toContain(firstGroup);
       expect(entitledGroupIDs).toContain(preferredGroup);
       expect(entitledGroupIDs).toContain(noCandidateGroup);
-      const adminAvailable = (await (
-        await admin.get(AVAILABLE_MODELS)
-      ).json()) as AvailableModels;
+      const adminAvailable = (await (await admin.get(AVAILABLE_MODELS)).json()) as AvailableModels;
       expect(adminAvailable.success, adminAvailable.message).toBe(true);
       expect(adminAvailable.data).toContain(logicalModel);
       const adminGroupOrder = [
@@ -1294,7 +1338,9 @@ test(
       ];
       const preferredOrderResult = await requestWithGroupOrder(ctx, order, logicalModel);
       const preferredOrderCalls = stub.received.map((request) => request.model);
-      const routeLogs = await waitForUserLogs(ctx, preferredOrderResult.tokenName, rows => rows.some(row => Number(row.type) === 2));
+      const routeLogs = await waitForUserLogs(ctx, preferredOrderResult.tokenName, (rows) =>
+        rows.some((row) => Number(row.type) === 2),
+      );
       const preferredSuccessLog = routeLogs.find((row) => Number(row.type) === 2);
       stub.reset();
 
@@ -1308,6 +1354,7 @@ test(
       ];
       const emptyGroupResult = await requestWithGroupOrder(ctx, emptyGroupFirstOrder, logicalModel);
       const emptyGroupCalls = stub.received.map((request) => request.model);
+      stub.reset();
       expect
         .soft({
           preferredOrder: {
