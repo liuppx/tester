@@ -245,8 +245,8 @@ paths:
       tags: [Console]
       x-category: public
       operationId: enqueueRun
-      summary: 提交当前环境的单项目或全量测试
-      description: 同项目同模式已有执行中或等待中的任务时复用任务 ID。返回 202 时需继续查询执行状态。
+      summary: 提交当前环境的单项目、多项目或全量测试批次
+      description: 相同触发来源和测试范围已有执行中或等待中的任务时复用批次。返回 202 时需继续查询执行状态。
       security:
         - WalletSession: []
           CsrfHeader: []
@@ -261,19 +261,36 @@ paths:
               type: object
               properties:
                 mode: {const: test, default: test}
-                project: {$ref: '#/components/schemas/Scope'}
-                scope: {type: string}
-              anyOf:
+                project: {$ref: '#/components/schemas/ProjectId'}
+                projects:
+                  type: array
+                  minItems: 1
+                  uniqueItems: true
+                  items: {$ref: '#/components/schemas/ProjectId'}
+                scope: {enum: [projects, full]}
+              oneOf:
                 - required: [project]
                   properties:
-                    project: {$ref: '#/components/schemas/ProjectId'}
+                    scope: {enum: [projects]}
+                  not:
+                    required: [projects]
+                - required: [scope, projects]
+                  properties:
+                    scope: {const: projects}
+                  not:
+                    required: [project]
                 - required: [scope]
                   properties:
                     scope: {const: full}
-                    project: {const: __full__}
+                  not:
+                    anyOf:
+                      - required: [project]
+                      - required: [projects]
             examples:
               single:
                 value: {project: wallet}
+              selected:
+                value: {scope: projects, projects: [router, wallet]}
               full:
                 value: {scope: full}
       responses:
@@ -283,10 +300,15 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [id, status]
+                required: [id, batch_id, status, scope, projects]
                 properties:
                   id: {$ref: '#/components/schemas/RecordId'}
+                  batch_id: {$ref: '#/components/schemas/RecordId'}
                   status: {const: queued}
+                  scope: {enum: [projects, full]}
+                  projects:
+                    type: array
+                    items: {$ref: '#/components/schemas/ProjectId'}
         '400':
           $ref: '#/components/responses/InvalidBody'
         '401':
@@ -856,6 +878,7 @@ components:
       anyOf:
         - $ref: '#/components/schemas/ProjectId'
         - const: __full__
+        - const: __batch__
     RecordId:
       type: string
       pattern: '^[0-9a-f]{24}$'
@@ -996,12 +1019,55 @@ components:
         report: {$ref: '#/components/schemas/NullableString'}
     QueueTask:
       type: object
-      required: [project, mode, queued_at, deferred_until]
+      required: [batch_id, project, projects, scope, source, mode, queued_at, deferred_until]
       properties:
+        batch_id: {$ref: '#/components/schemas/RecordId'}
         project: {$ref: '#/components/schemas/Scope'}
+        projects:
+          type: array
+          items: {$ref: '#/components/schemas/ProjectId'}
+        scope: {enum: [projects, full]}
+        source: {enum: [manual, main, daily-schedule, tester-main]}
         mode: {enum: [test, deploy]}
+        target_sha:
+          anyOf:
+            - $ref: '#/components/schemas/GitCommit'
+            - type: 'null'
+        target_shas:
+          type: object
+          additionalProperties: {$ref: '#/components/schemas/GitCommit'}
+        schedule_date: {$ref: '#/components/schemas/NullableString'}
         queued_at: {$ref: '#/components/schemas/NullableString'}
         deferred_until: {$ref: '#/components/schemas/NullableString'}
+    RecentBatch:
+      type: object
+      required: [batch_id, project, projects, scope, source, mode, queued_at, finished_at, result]
+      properties:
+        batch_id: {$ref: '#/components/schemas/RecordId'}
+        project: {$ref: '#/components/schemas/Scope'}
+        projects:
+          type: array
+          items: {$ref: '#/components/schemas/ProjectId'}
+        scope: {enum: [projects, full]}
+        source: {enum: [manual, main, daily-schedule, tester-main]}
+        mode: {enum: [test, deploy]}
+        target_sha:
+          anyOf:
+            - $ref: '#/components/schemas/GitCommit'
+            - type: 'null'
+        target_shas:
+          type: object
+          additionalProperties: {$ref: '#/components/schemas/GitCommit'}
+        schedule_date: {$ref: '#/components/schemas/NullableString'}
+        queued_at: {$ref: '#/components/schemas/NullableString'}
+        finished_at: {$ref: '#/components/schemas/NullableString'}
+        result: {type: string}
+        reports:
+          type: object
+          additionalProperties: {type: [string, 'null'], format: uri-reference}
+        results:
+          type: object
+          additionalProperties: {type: object}
     ExecutionState:
       type: object
       required: [busy, last]
@@ -1035,7 +1101,7 @@ components:
                   poll_error: {$ref: '#/components/schemas/NullableString'}
         queue:
           type: object
-          required: [parallelism, active, pending]
+          required: [parallelism, active, pending, recent]
           properties:
             parallelism: {const: 1}
             active:
@@ -1045,6 +1111,10 @@ components:
             pending:
               type: array
               items: {$ref: '#/components/schemas/QueueTask'}
+            recent:
+              type: array
+              maxItems: 12
+              items: {$ref: '#/components/schemas/RecentBatch'}
     Overview:
       type: object
       required: [service, full, projects]
@@ -1215,10 +1285,15 @@ components:
       pattern: '^[0-9a-f]{40}$'
     RunConfiguration:
       type: object
-      required: [test_env, trigger, tester_commit, target_commit, source_commits, workers, playwright_version, project, environment_variables]
+      required: [test_env, trigger, batch_id, batch_project, tester_commit, target_commit, source_commits, workers, playwright_version, project, environment_variables]
       properties:
         test_env: {$ref: '#/components/schemas/NullableString'}
         trigger: {$ref: '#/components/schemas/NullableString'}
+        batch_id:
+          anyOf:
+            - $ref: '#/components/schemas/RecordId'
+            - type: 'null'
+        batch_project: {$ref: '#/components/schemas/NullableString'}
         tester_commit:
           anyOf:
             - $ref: '#/components/schemas/GitCommit'

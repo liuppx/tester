@@ -1,19 +1,17 @@
 # 测试环境现状与架构
 
-> 最近核对：2026-11-25（GPU 测试机只读检查）
+> 最近核对：2026-11-28（Tester 版本、控制服务、调度配置和最近运行报告；公共中间件与产品服务快照仍为 2026-11-25）
 > 本文区分 Tester 自身健康与产品 E2E 环境就绪；两者不能互相替代。
 
 ## 当前结论
 
-**Tester 控制面正常工作，GPU 主机尚未准备好随时运行全项目 E2E。**
+**Tester 控制面 0.1.26 readiness 检查通过，每日全量计划已启用；GPU 全项目 E2E 依赖尚未完成新一轮现场核验。**
 
-本次确认 Tester service `0.1.20` 正在运行，`health-check.sh --level readiness` 和 `--level all` 均通过；`https://tester.tidukongjian.com/` 返回控制台 HTML，匿名 `/api/auth/status` 返回预期的 `401`，`nginx -t` 通过。当前页面由 `tester-web 0.1.19` 提供，service 为 `0.1.20`；Web 与 service 是独立制品，升级时要分别核对版本和来源提交。
+2026-11-28 确认 Tester service `0.1.26` 正在运行，`health-check.sh --level readiness` 的控制服务和 runner 两项均通过。每日全量计划已设置为 03:00 Asia/Shanghai，控制服务日志确认调度已启用；main watcher 和产品源码部署开关保持启用。配置修改前已执行项目配置备份。此次没有核验 `tester-web` 制品版本、Nginx 配置或所有产品服务，因此它们的现场状态仍以 2026-11-25 快照为准。
 
-这些结果只证明 Tester 控制 API、测试 runner 的自检、Nginx 和静态控制台可用。Tester health check 当前只有控制 API 和 runner 两项，不会逐个检查所有产品服务。
+最新全量报告仍是 2026-11-25，结果为 197 通过、413 失败、186 跳过，共 796 项。GPU 在 2026-11-28 检出的 Router main 更新批次完成了源码部署、构建和健康检查，但打包版 Tester 随后从无 `.git` 的安装目录执行 Git worktree 准备，导致用例 runner 失败。当前制品仍受此问题影响，本次 PR 改为直接运行包内项目 runner，升级后需手动重跑该批次范围。Router 最新本地源码测试仍为 116/117，唯一失败在 `group-route-order.spec.ts` 的分组路由场景。Tester readiness 只检查控制 API 和 runner，不会逐个检查所有产品服务。
 
-GPU 上的产品服务目前只确认 Router API 端口在监听。Node API/Web、Warehouse、Chat、Social、Project、Knowledge 和 Orchestrator 等产品服务没有运行；因此登录控制台不代表用户可以成功执行这些项目的 E2E。最近报告时间也不是本次核对时间，不能用旧报告表示当前质量状态。
-
-Tester `main` 上已修复 Router 本地源码模式的端口隔离和身份登录依赖，并在隔离源码服务上完成 Router 全套回归（98 通过、0 失败、11 跳过）。但 GPU 当前运行的 `tester-service-v0.1.20-b9aa158` 和 `tester-web-v0.1.19-3f1e9bf` 早于该修复提交；修复须经标准打包和升级后才会进入当前部署。该源码回归结果也不能替代 GPU 当前制品模式的全套产品验证。
+公共中间件、Node API/Web、Warehouse、Chat、Social、Project、Knowledge 和 Orchestrator 的状态没有在 2026-11-28 重新核验。2026-11-25 快照记录这些服务存在未启动或配置未就绪的项目，因此不能据本次 Tester readiness 推断全项目 E2E 已可运行。
 
 ## 组件与边界
 
@@ -51,12 +49,12 @@ Tester 负责钱包身份授权、用例浏览、任务排队、互斥执行、�
 
 ## GPU 主机快照
 
-以下为 2026-11-25 核对结果；修改主机配置后应重新执行检查，不要把它当作长期不变的承诺。
+以下产品服务和共享中间件为 2026-11-25 核对结果。Tester service 行已更新为 2026-11-28 检查值。修改主机配置后应重新执行检查，不要把历史快照当作长期不变的承诺。
 
 | 范围 | 已核实状态 | 对测试的影响 |
 | --- | --- | --- |
-| Tester service | `0.1.20` active；readiness/all 通过 | 控制面可接收请求并启动 runner |
-| Tester Web | `0.1.19`；站点根路径返回 200 | 控制台可打开；与 service 版本不同，发布时须核对独立制品 |
+| Tester service | `0.1.26` active；2026-11-28 readiness 2/2 通过；每日计划 03:00 启用 | 控制面和 runner 自检通过；每日计划下一次在配置时刻运行 |
+| Tester Web | 最近核验值仍为 2026-11-25 的快照 `0.1.19`；本轮未检查 | 与 service 是独立制品，需在 Web 发布后分别核对 |
 | 系统 Nginx | `nginx -t` 通过；使用 `/etc/nginx/conf.d/tester.conf` | 根路径静态控制台和 `/api/` 入口可用 |
 | 匿名认证状态 | `/api/auth/status` 返回 401 | 钱包登录入口受服务端认证保护 |
 | 公共中间件 | PostgreSQL、Redis、MySQL、Mailpit、Manticore、PlantUML、OnlyOffice 等容器在运行 | 容器运行不代表产品数据库、账号和 schema 都正确 |
@@ -93,7 +91,7 @@ ss -ltn
 | Tester 登录与控制数据库 | 私有控制数据目录中的 SQLite | 启动时自动 migration；由 config backup 做一致性备份 |
 | 产品源码 | `/root/code/<repo>` | 以各仓库 `origin/main` 为准；本地源码 runner 用 detached worktree |
 
-GPU 当前配置使用 `/opt/deploy/tester/runtime.json`、`/opt/deploy/tester/projects.json` 和 `/opt/deploy/tester/.env.local`。更新 `.env.local` 时不要只写入 URL 让 preflight 变绿；先确认服务确实启动、健康检查通过，并核实数据库迁移已应用。Watcher 开启不等于服务已部署。当前 watcher 适配和源码模式依赖范围见 [控制服务](test-control.md) 与[本地源码模式](local-source-mode.md)。
+GPU 当前配置使用 `/opt/deploy/tester/runtime.json`、`/opt/deploy/tester/projects.json` 和 `/opt/deploy/tester/.env.local`。`runtime.json` 中的每日计划于 2026-11-28 启用，配置修改前生成了 `/opt/backup` 中的标准备份归档。更新 `.env.local` 时不要只写入 URL 让 preflight 变绿；先确认服务确实启动、健康检查通过，并核实数据库迁移已应用。Watcher 开启不等于服务已部署。当前 watcher 适配和源码模式依赖范围见 [控制服务](test-control.md) 与[本地源码模式](local-source-mode.md)。
 
 ## 启动和验证顺序
 

@@ -2,7 +2,7 @@
 
 报告流水线将 Playwright 结果按项目归档，生成脱敏 HTML、JUnit 摘要和可选飞书通知。原始日志与 JUnit 保存在私有目录，不对公网提供。
 
-GPU 现状（2026-11-25）：Tester 控制服务和 runner 健康检查通过，但全量和 Router 报告最近更新时间仍是 2026-11-21/2026-11-17；runtime 未配置每日运行项，默认为关闭。不能把旧报告视为本日测试结果。完整现状见[测试环境现状](test-machine-architecture.md)。
+历史快照（2026-11-25）记录当时全量和 Router 报告分别停留在 2026-11-21 和 2026-11-17，且每日计划未启用。2026-11-28 已开启每日全量计划，readiness 检查通过；最近全量报告仍是 2026-11-25，需等待下一计划批次后才能获得新全量证据。完整现场信息见[测试环境现状](test-machine-architecture.md)。
 
 ## Requirements
 
@@ -67,8 +67,8 @@ Notification failure preserves the report and the test runner's exit code.
 
 ## Daily schedule
 
-The packaged Tester control service owns the daily schedule. Set
-`TESTER_DAILY_RUN_ENABLED` to `true`, choose `TESTER_DAILY_RUN_TIME` and
+The packaged Tester control service owns the daily schedule. The runtime template
+enables it by default. Set `TESTER_DAILY_RUN_ENABLED` to `true`, choose `TESTER_DAILY_RUN_TIME` and
 `TESTER_DAILY_RUN_TIMEZONE` in the protected runtime configuration, then restart
 Tester through `scripts/starter.sh`. The standard schedule is **03:00** in
 **Asia/Shanghai**. The schedule enqueues the full run through Tester’s shared
@@ -79,7 +79,7 @@ main commit into its managed worktree. In artifact mode, it runs the published
 Tester package directly. See [test-control.md](test-control.md) for the source
 worktree and protected manual controls.
 
-GPU 当前每日计划未启用（`TESTER_DAILY_RUN_ENABLED` 未设置，默认关闭）。需要启用时先确认全量依赖闭包和人工全量报告通过，再配置受保护 runtime、通过 starter 重启并检查服务日志；不要同时保留旧 cron。
+GPU 当前已启用每日计划，时间为 03:00 Asia/Shanghai。控制服务由 starter 重启后报告调度已启用，详细行为见[批次触发设计](test-batch-scheduling.md)。不要同时保留旧 cron。
 
 Manual source-mode run with the latest Tester main:
 

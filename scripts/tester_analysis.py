@@ -226,6 +226,8 @@ class RunHistory:
             "config": {
                 "test_env": batch.get("test_env"),
                 "trigger": batch.get("trigger") or summary.get("trigger"),
+                "batch_id": batch.get("batch_id") if re.fullmatch(r"[0-9a-f]{24}", str(batch.get("batch_id", ""))) else None,
+                "batch_project": batch.get("batch_project") if isinstance(batch.get("batch_project"), str) else None,
                 "tester_commit": tester_commit,
                 "target_commit": commits.get(self.project) or (tested_commit if scope != FULL else None),
                 "source_commits": commits,

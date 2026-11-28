@@ -55,11 +55,13 @@ DID 必须已在对应 Node issuer 完成身份注册、钱包绑定、用户名
 
 ## 队列与源码 watcher
 
-单项目、全量、每日计划和 watcher 触发的任务共用一个队列和 worker，任务按顺序执行，不会并行运行测试或部署任务。不同测试范围可以分别入队，同一范围且同一模式的重复请求会合并到现有任务。控制台展示当前任务和等待任务。选择有历史记录的范围后，“重跑上次”会重新运行该范围，重新生成报告。
+定时全量、社区仓库 `main` 更新、Tester 自身更新和手动操作都会创建统一的测试批次。批次范围可以是全量或一个/多个项目。完整调度、合并、恢复、报告关联设计见[Tester 触发与测试批次设计](test-batch-scheduling.md)。
 
-`/api/status` 返回 `queue.parallelism`、当前任务和等待任务，前端可据此显示队列。公开队列字段只包含项目名、任务模式和时间，不包含内部任务 ID、日志路径或命令行参数。`TESTER_WATCH_UPSTREAM_MAIN` 控制是否轮询仓库；`TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY` 控制 watcher 是否允许调用项目部署适配器。项目清单的 `enabled` 只参与 watcher，不会从 Playwright 全量集合移除项目。
+单项目、全量和多项目请求共用一个持久化队列和串行 worker。请求按范围和触发来源原子去重。活动批次不能被新 commit 改写，等待中的 main 批次可合并新发现的项目和目标 SHA。每个项目结束后保存结果，服务重启时将未完成批次恢复，并跳过已完成的项目。控制台展示批次 ID、触发来源、项目范围、队列状态和最近完成结果。
 
-当前已有隔离部署适配器的项目为 Book、Chat、Marketplace、Router、Wallet。其他项目即使配置在 Playwright 中，也不等于 watcher 能更新/部署它们。Tester 自身制品升级由 Deployer 负责，与产品 watcher 分离。
+`/api/status` 返回串行度、活动批次、等待批次和最近完成批次。`TESTER_WATCH_UPSTREAM_MAIN` 控制仓库轮询，`TESTER_MAIN_POLL_SECONDS` 控制轮询周期，`TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY` 控制制品模式下是否允许运行项目隔离部署适配器。项目清单的 `enabled` 只控制 watcher，不会从 Playwright 全量集合移除项目。当前已验证适配器覆盖 Book、Chat、Marketplace、Router、Wallet。Tester 自身制品升级由 Deployer 负责，与产品 watcher 分离。
+
+控制台支持全量、单项目和多项目手动触发。界面上的“重跑所选范围”会重新执行当前选择的项目范围，并生成新的批次和报告。
 
 `TESTER_LOCAL_SOURCE_MODE=1` 时，手动测试调用本地源码启动器，按 `local-test-dependencies.json` 启动产品源码 worktree；默认制品模式连接已部署产品。两种模式下报告都应记录运行模式和被测 commit。
 
@@ -69,7 +71,7 @@ DID 必须已在对应 Node issuer 完成身份注册、钱包绑定、用户名
 
 浏览器使用同源 `/api/reports` 读取报告目录，并通过 `/api/reports/files/<相对路径>` 查看 HTML 和下载报告文件。两个 API 都要求有效钱包会话。Nginx 在 `/report/` 提供 `tester-web` 中的报告中心页面，并将具体 `/report/<相对路径>` 转到报告文件 API；报告数据和详情都使用同一个 Tester 登录态，不依赖独立报告 Cookie。服务端只允许读取报告根目录内的普通文件，并拒绝路径穿越和符号链接。
 
-GPU 当前 runtime 中 `TESTER_WATCH_UPSTREAM_MAIN=1`、`TESTER_ALLOW_PRODUCT_SOURCE_DEPLOY=1`；每日运行配置未设置，因此使用默认关闭状态。启动产品 watcher 前必须确认项目有隔离部署适配器并完成单项目 dry-run/回滚验证。
+部署模板默认启用每日全量计划，时间为 Asia/Shanghai 03:00。每日调度和人工、watcher 批次共用队列，不会并发启动。若服务在计划时间后启动且当天尚未排入计划批次，调度器会补入当天的全量测试。GPU runtime 已在 2026-11-28 备份配置、开启每日计划并通过 starter 重启。该机器当前运行的版本 readiness 检查通过，控制服务日志确认计划已启用；启动补入当天批次的逻辑要在本次代码升级后生效。
 
 ## 常用维护命令
 

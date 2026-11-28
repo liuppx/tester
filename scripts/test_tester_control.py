@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import subprocess
 import tempfile
 import sys
 import threading
@@ -81,10 +82,28 @@ class TesterControlTests(unittest.TestCase):
             control.next_daily_run(after, *schedule).date(),
             before.date() + timedelta(days=1),
         )
-        first = control.enqueue(control.FULL, "daily-schedule")
-        second = control.enqueue(control.FULL, "daily-schedule")
-        self.assertEqual(first["id"], second["id"])
+        yesterday = (after.date() - timedelta(days=1)).isoformat()
+        catch_up = control.next_scheduled_daily_run(
+            datetime(2026, 11, 20, 8, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+            *schedule,
+            yesterday,
+        )
+        self.assertEqual(catch_up.date(), after.date())
+        already_scheduled = control.next_scheduled_daily_run(
+            datetime(2026, 11, 20, 8, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+            *schedule,
+            after.date().isoformat(),
+        )
+        self.assertEqual(already_scheduled.date(), after.date() + timedelta(days=1))
+        first = control.enqueue_daily_run(datetime(2026, 11, 20, 3, 0, tzinfo=ZoneInfo("Asia/Shanghai")))
+        second = control.enqueue_daily_run(datetime(2026, 11, 20, 3, 0, tzinfo=ZoneInfo("Asia/Shanghai")))
+        self.assertIsNone(second)
+        persisted = control.load_state()
+        self.assertEqual(persisted["daily_scheduled_date"], "2026-11-20")
         self.assertEqual(len(control.STATE["pending"]), 1)
+        next_day = control.enqueue_daily_run(datetime(2026, 11, 21, 3, 0, tzinfo=ZoneInfo("Asia/Shanghai")))
+        self.assertNotEqual(next_day["id"], first["id"])
+        self.assertEqual(len(control.STATE["pending"]), 2)
 
     def test_daily_schedule_is_disabled_by_default_and_rejects_invalid_values(self):
         control = self.module
@@ -109,7 +128,8 @@ class TesterControlTests(unittest.TestCase):
 
     def test_manual_page_only_offers_scope_selection(self):
         page = (Path(__file__).parent.parent / "web/index.html").read_text()
-        self.assertIn('id="scope"', page)
+        self.assertIn('id="full-scope"', page)
+        self.assertIn('id="project-options"', page)
         self.assertIn('id="run"', page)
         self.assertIn('id="rerun"', page)
         self.assertNotIn('id="mode"', page)
@@ -288,8 +308,49 @@ class TesterControlTests(unittest.TestCase):
         control.STATE["seen"]["router"] = old
         with patch.object(control, "git_sha", side_effect=[new, new]):
             control.poll_main()
-        self.assertEqual(control.STATE["pending"][0]["target_sha"], new)
+        self.assertEqual(control.STATE["pending"][0]["target_shas"], {"router": new})
         self.assertEqual(control.STATE["pending"][0]["source"], "main")
+
+    def test_all_project_changes_in_one_poll_share_a_batch(self):
+        control = self.module
+        control.PROJECTS["book"] = {"repo": "/tmp/book", "enabled": True}
+        control.STATE["seen"].update({"router": "a" * 40, "book": "c" * 40})
+        with patch.object(control, "git_sha", side_effect=["b" * 40, "a" * 40, "d" * 40, "c" * 40]):
+            control.poll_main()
+        self.assertEqual(len(control.STATE["pending"]), 1)
+        batch = control.STATE["pending"][0]
+        self.assertEqual(batch["projects"], ["book", "router"])
+        self.assertEqual(batch["target_shas"], {"book": "d" * 40, "router": "b" * 40})
+        self.assertEqual(batch["scope"], "projects")
+
+    def test_new_main_commit_invalidates_only_its_stale_pending_result(self):
+        control = self.module
+        control.PROJECTS["book"] = {"repo": "/tmp/book", "enabled": True}
+        batch = control.enqueue_batch(
+            ["book", "router"], "main",
+            {"book": "c" * 40, "router": "a" * 40}, mode="deploy",
+        )
+        batch["results"] = {
+            "book": {"completed": True, "result": "passed", "target_sha": "c" * 40},
+            "router": {"completed": True, "result": "passed", "target_sha": "a" * 40},
+        }
+
+        control.enqueue_batch(["router"], "main", {"router": "b" * 40}, mode="deploy")
+
+        self.assertNotIn("router", batch["results"])
+        self.assertEqual(batch["results"]["book"]["target_sha"], "c" * 40)
+        self.assertEqual(batch["target_shas"]["router"], "b" * 40)
+
+    def test_concurrent_manual_requests_reuse_one_batch(self):
+        from concurrent.futures import ThreadPoolExecutor
+
+        control = self.module
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            batches = list(executor.map(
+                lambda _: control.enqueue_batch(["router"], "manual"), range(16)
+            ))
+        self.assertEqual(len({batch["id"] for batch in batches}), 1)
+        self.assertEqual(len(control.STATE["pending"]), 1)
 
     def test_artifact_mode_watches_approved_project_mains(self):
         control = self.module
@@ -301,8 +362,8 @@ class TesterControlTests(unittest.TestCase):
         with patch.object(control, "git_sha", side_effect=[new, new]):
             control.poll_main()
         item = control.STATE["pending"][0]
-        self.assertEqual((item["project"], item["source"], item["target_sha"], item["mode"]),
-                         ("router", "main", new, "deploy"))
+        self.assertEqual((item["project"], item["source"], item["target_shas"], item["mode"]),
+                         ("router", "main", {"router": new}, "deploy"))
 
     def test_artifact_mode_requires_explicit_source_deploy_permission(self):
         control = self.module
@@ -333,10 +394,10 @@ class TesterControlTests(unittest.TestCase):
         queued = control.enqueue("router", "main", "b" * 40)
         self.assertNotEqual(active["id"], queued["id"])
         self.assertEqual(active["target_sha"], "a" * 40)
-        self.assertEqual(queued["target_sha"], "b" * 40)
+        self.assertEqual(queued["target_shas"], {"router": "b" * 40})
         self.assertEqual(len(control.STATE["pending"]), 1)
         self.assertEqual(control.enqueue("router", "main", "c" * 40)["id"], queued["id"])
-        self.assertEqual(queued["target_sha"], "c" * 40)
+        self.assertEqual(queued["target_shas"], {"router": "c" * 40})
 
     def test_router_waits_for_shared_rate_limit_window(self):
         control = self.module
@@ -367,8 +428,59 @@ class TesterControlTests(unittest.TestCase):
         item["retry_at"] = 2000
         item["deferred_until"] = "later"
         control.enqueue("router", "main", "b" * 40)
-        self.assertEqual(item["target_sha"], "b" * 40)
+        self.assertEqual(item["target_shas"], {"router": "b" * 40})
         self.assertNotIn("retry_at", item)
+
+    def test_multi_project_manual_batch_runs_each_project_and_records_reports(self):
+        from hashlib import sha256
+
+        control = self.module
+        control.PROJECTS["book"] = {"repo": "/tmp/book", "enabled": False}
+        item = control.enqueue_batch(["router", "book"], "manual", mode="test")
+        child_ids = [
+            sha256(f"{item['id']}:{project}".encode()).hexdigest()[:24]
+            for project in ("book", "router")
+        ]
+        summaries = [
+            {"request_id": child_id, "run": f"2026-10-17_10-00-0{index}+0800", "status": "passed"}
+            for index, child_id in enumerate(child_ids)
+        ]
+        with patch.object(control, "cooldown_until", return_value=None), \
+             patch.object(control, "latest_summary", side_effect=summaries), \
+             patch.object(control.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as run:
+            self.assertTrue(control.execute(item))
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(
+            {call.kwargs["env"]["TESTER_BATCH_ID"] for call in run.call_args_list},
+            {item["id"]},
+        )
+        self.assertEqual(
+            {call.kwargs["env"]["TESTER_BATCH_PROJECT"] for call in run.call_args_list},
+            {"book", "router"},
+        )
+        self.assertEqual(control.STATE["recent"][0]["result"], "passed")
+        self.assertEqual(set(control.STATE["recent"][0]["reports"]), {"book", "router"})
+        self.assertEqual(control.STATE["recent"][0]["results"]["book"]["result"], "passed")
+
+    def test_project_run_metadata_links_to_its_batch(self):
+        metadata = Path(__file__).parent / "tester-run-metadata.py"
+        with tempfile.TemporaryDirectory() as temporary:
+            environment = dict(os.environ)
+            environment.update({
+                "TESTER_LOCAL_SOURCE_MODE": "0",
+                "TEST_ENV": "local",
+                "TESTER_BATCH_ID": "a" * 24,
+                "TESTER_BATCH_PROJECT": "router",
+                "TESTER_TRIGGER": "main",
+            })
+            subprocess.run([
+                sys.executable, str(metadata), temporary,
+                "2026-11-28_10-00-00+0800", "router", "published",
+            ], env=environment, check=True)
+            batch = json.loads((Path(temporary) / "batch.json").read_text())
+        self.assertEqual(batch["batch_id"], "a" * 24)
+        self.assertEqual(batch["batch_project"], "router")
+        self.assertEqual(batch["trigger"], "main")
 
     def test_tester_main_change_queues_full_on_upstream_commit(self):
         control = self.module
@@ -456,6 +568,7 @@ class TesterControlTests(unittest.TestCase):
             directory.mkdir(parents=True)
             (directory / "batch.json").write_text(json.dumps({
                 "run": stamp, "stage": "published", "mode": "deployed", "test_env": "local",
+                "batch_id": "1" * 24, "batch_project": "router", "trigger": "main",
             }))
             (directory / "execution.json").write_text(json.dumps({
                 "status": "passed",
@@ -476,6 +589,9 @@ class TesterControlTests(unittest.TestCase):
         self.assertEqual(earlier["runs"][0]["scope"], "__full__")
         detail = request(project + "/runs/router/" + quote(newest, safe=""), bearer)
         self.assertEqual(detail["config"]["workers"], 1)
+        self.assertEqual(detail["config"]["batch_id"], "1" * 24)
+        self.assertEqual(detail["config"]["batch_project"], "router")
+        self.assertEqual(detail["config"]["trigger"], "main")
         self.assertEqual(len(detail["cases"][0]["attempts"]), 2)
         self.assertNotIn("raw_error", json.dumps(detail))
         row = request(project + "/stability", bearer)["groups"][0]["cases"][0]
@@ -638,17 +754,27 @@ class TesterControlTests(unittest.TestCase):
             self.assertIsInstance(overview["history"], list)
 
             run_url = base + "/api/run"
-            body = b'{"project":"router"}'
+            body = b'{"scope":"projects","projects":["router"]}'
             missing_csrf = Request(run_url, data=body, method="POST", headers={**origin, "Cookie": cookie})
             with self.assertRaises(HTTPError) as error:
                 urlopen(missing_csrf, timeout=2)
             self.assertEqual(error.exception.code, 403)
+            invalid_scope = Request(
+                run_url, data=b'{"scope":"full","project":"router"}', method="POST",
+                headers={**origin, "Cookie": cookie, "X-Tester-CSRF": auth["csrf"]},
+            )
+            with self.assertRaises(HTTPError) as error:
+                urlopen(invalid_scope, timeout=2)
+            self.assertEqual(error.exception.code, 400)
             run_request = Request(
                 run_url, data=body, method="POST",
                 headers={**origin, "Cookie": cookie, "X-Tester-CSRF": auth["csrf"]},
             )
             with urlopen(run_request, timeout=2) as response:
                 self.assertEqual(response.status, 202)
+                queued_batch = json.load(response)
+            self.assertEqual(queued_batch["projects"], ["router"])
+            self.assertEqual(queued_batch["id"], queued_batch["batch_id"])
 
             status_request = Request(base + "/api/status", headers={"Cookie": cookie})
             with urlopen(status_request, timeout=2) as response:
@@ -656,6 +782,7 @@ class TesterControlTests(unittest.TestCase):
             self.assertEqual(queued_status["projects"]["router"]["busy"], "已排队")
             queued_task = queued_status["queue"]["pending"][0]
             self.assertEqual(queued_task["project"], "router")
+            self.assertEqual(queued_task["batch_id"], queued_batch["batch_id"])
             self.assertNotIn("id", queued_task)
             self.assertNotIn("log", queued_task)
             self.assertNotIn("log", queued_status["projects"]["router"]["last"] or {})
