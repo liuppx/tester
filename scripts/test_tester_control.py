@@ -58,6 +58,22 @@ class TesterControlTests(unittest.TestCase):
         self.assertEqual(first["id"], second["id"])
         self.assertEqual(len(control.STATE["pending"]), 1)
 
+    def test_load_state_migrates_legacy_batch_items(self):
+        control = self.module
+        control.STATE_FILE.write_text(json.dumps({
+            "seen": {},
+            "pending": [{"id": "legacy", "project": "router", "target_sha": "a" * 40}],
+            "active": None,
+            "recent": [],
+            "poll_errors": {},
+        }), encoding="utf-8")
+
+        state = control.load_state()
+
+        self.assertEqual(state["pending"][0]["scope"], "projects")
+        self.assertEqual(state["pending"][0]["projects"], ["router"])
+        self.assertEqual(state["pending"][0]["target_shas"], {"router": "a" * 40})
+
     def test_manual_request_reuses_an_active_task_for_the_same_scope(self):
         control = self.module
         first = control.enqueue("router", "manual", mode="test")

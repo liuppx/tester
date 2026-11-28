@@ -169,9 +169,6 @@ def load_state() -> dict:
     return state
 
 
-STATE = load_state()
-
-
 def open_auth_database() -> sqlite3.Connection:
     AUTH_DATABASE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if AUTH_DATABASE.parent.is_symlink() or not AUTH_DATABASE.parent.is_dir():
@@ -358,6 +355,9 @@ def normalize_batch_item(item: dict) -> dict:
     elif item.get("scope") == "projects" and item["projects"]:
         item["project"] = item["projects"][0]
     return item
+
+
+STATE = load_state()
 
 
 def _enqueue_batch_locked(projects: list[str] | None, source: str,
