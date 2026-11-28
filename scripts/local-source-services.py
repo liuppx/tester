@@ -442,7 +442,11 @@ def command_for(name: str, sources: dict[str, Path], ports: dict[str, int]) -> t
     if name == "node-api":
         return repo("node"), ["scripts/starter.sh", "start"], {"APP_PORT": str(ports["NODE_API_URL"]), "RUN_DIR": str(repo("node") / "run"), "LOG_DIR": str(repo("node") / "logs")}
     if name == "node-web":
-        return repo("node") / "web", ["npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", str(ports["NODE_BASE_URL"])], {"VITE_DEV_API_PROXY_TARGET": f"http://127.0.0.1:{ports['NODE_API_URL']}", "VITE_NODE_API_ENDPOINT": f"http://127.0.0.1:{ports['NODE_API_URL']}"}
+        return (
+            repo("node") / "web",
+            ["npm", "run", "preview", "--", "--host", "127.0.0.1", "--port", str(ports["NODE_BASE_URL"]), "--strictPort"],
+            {"VITE_NODE_API_ENDPOINT": f"http://127.0.0.1:{ports['NODE_API_URL']}"},
+        )
     if name == "router-api":
         return repo("router"), ["build/router", "--config", str(repo("router") / "config.yaml"), "--port", str(ports["ROUTER_BASE_URL"])], {}
     if name == "router-web":
@@ -543,6 +547,19 @@ def build_for(project: str, repo: Path, stamps: Path, env: dict[str, str]) -> No
         subprocess.run(command, cwd=repo, env=env, check=True)
     stamps.mkdir(parents=True, exist_ok=True)
     stamp.write_text("built\n", encoding="utf-8")
+
+
+def build_node_web(web: Path, sha: str, env: dict[str, str]) -> None:
+    stamp = web / ".tester-build"
+    build_key = f"{BUILD_CACHE_SCHEMA}\n{sha}\n{env['VITE_NODE_API_ENDPOINT']}\n"
+    index = web / "dist/index.html"
+    if index.is_file() and stamp.is_file() and stamp.read_text(encoding="utf-8") == build_key:
+        return
+    stamp.unlink(missing_ok=True)
+    subprocess.run(["npm", "run", "build"], cwd=web, env=env, check=True)
+    if not index.is_file():
+        raise RuntimeError("Node Web build did not produce dist/index.html")
+    stamp.write_text(build_key, encoding="utf-8")
 
 
 def wait_port(url: str, timeout: float | None = None) -> None:
@@ -667,12 +684,15 @@ def start(args: argparse.Namespace) -> int:
             if not cwd.is_dir():
                 raise RuntimeError(f"source directory is missing for {name}: {cwd}")
             project = next((item for item in ("node", "router", "warehouse", "chat", "social", "project", "knowledge", "orchestrator") if item in cwd.parts), None)
-            if project:
+            process_env = service_env(overrides, extra_env)
+            if name == "node-web":
+                build_node_web(cwd, shas["node"], process_env)
+            elif project:
                 build_for(project, sources[project], stamps, env)
             url_key = config["services"].get(name, {}).get("url_key")
             log_path = logs / f"{name}.log"
             stream = log_path.open("a", encoding="utf-8")
-            process = subprocess.Popen(command, cwd=cwd, env=service_env(overrides, extra_env), stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
+            process = subprocess.Popen(command, cwd=cwd, env=process_env, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
             stream.close()
             started.append({"name": name, "pid": process.pid, "cwd": str(cwd), "command": command, "log": str(log_path)})
             started_groups.add(group)
