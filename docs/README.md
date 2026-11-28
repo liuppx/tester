@@ -11,6 +11,7 @@
 | 理解钱包授权、控制页面、队列和源码 watcher | [控制服务与授权](test-control.md) |
 | 接入 Web、管理、Skill 分析和探活 API | [接口说明](api.md) · [OpenAPI 契约](openapi.yaml) |
 | 查看报告、计划任务和失败的判读规则 | [报告与调度](test-machine-report.md) |
+| 核对产品的首轮证据和复测进展 | [E2E 基线](e2e-baseline.md) |
 | 了解产品、中间件和跨产品依赖 | [依赖关系](project-dependency-map.md) |
 | 查看产品用例范围与维护约定 | [测试用例目录](test-cases/README.md) |
 | 了解 Tester Web 产品目标与已确认交互 | [Web 产品目标](web-product-brief.md) |

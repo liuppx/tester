@@ -84,7 +84,7 @@ class LocalSourceModeTests(unittest.TestCase):
                 "module.exports = { app: { port: 8100, corsAllowedOrigins: [] }, "
                 "issuer: { baseUrl: 'http://localhost:8100' }, "
                 "identity: { publicBaseUrl: 'http://localhost:8100', "
-                "webauthn: { origin: 'http://localhost:8991', rpId: 'localhost' } } };\n"
+                "webauthn: { origin: 'http://identity.localhost:8991', rpId: 'identity.localhost' } } };\n"
             )
             manager.write_node_runtime_config(original, generated, 18100, 18991)
             result = subprocess.check_output([
@@ -99,7 +99,7 @@ class LocalSourceModeTests(unittest.TestCase):
             self.assertEqual(values["port"], 18100)
             self.assertEqual(values["issuer"], "http://127.0.0.1:18100")
             self.assertEqual(values["public"], "http://localhost:18991")
-            self.assertEqual(values["origin"], "http://localhost:18991")
+            self.assertEqual(values["origin"], manager.node_web_origin(18991))
             self.assertEqual(values["rpId"], "localhost")
             self.assertIn("http://127.0.0.1:18991", values["cors"])
             self.assertEqual(generated.stat().st_mode & 0o777, 0o600)

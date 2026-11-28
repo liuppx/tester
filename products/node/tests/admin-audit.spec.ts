@@ -1,32 +1,39 @@
-/**
- * node — admin audit workflow (ND-E2E-003 / ND-E2E-004).
- *
- * These two cases require an ADMIN approver: publishing an application is
- * gated on an *approved* audit (node `hasApprovedAudit`), and approval only
- * happens through `/api/v1/admin/audits/:uid/approve`, which is restricted to
- * admin principals (vault `ADMIN_DIDS` / `USER_ROLE_OWNER`).
- *
- * In this environment no admin credential is available: the configured wallet
- * reports `isAdmin: false` and every `/api/v1/admin/*` route returns 403, and
- * a throwaway wallet is provisioned as a plain USER_ROLE_NORMAL. There is
- * therefore no way to drive an audit to "approved" and exercise the positive
- * publish path without fabricating a green result.
- *
- * Per the test plan these are skipped cleanly rather than faked. The inverse
- * boundary — an un-approved application cannot be published (403 "Audit not
- * approved") — IS covered and runnable in `app-write-api.spec.ts` (ND-API-022).
- */
 import { localizedTitle } from '../../../shared/title';
-import { test } from '../fixtures';
+import { envFor, expect, test } from '../fixtures';
+import { withPublication } from '../helpers/publication';
+import { seedWalletSession } from '../helpers/session';
 
-const NO_ADMIN_REASON =
-  'requires an admin approver (ADMIN_DIDS / USER_ROLE_OWNER); none available in this ' +
-  'environment. Inverse boundary covered by ND-API-022 in app-write-api.spec.ts.';
-
-test(localizedTitle("【开发者应用生命周期 / E2E】 ND-E2E-003 审核通过后发布并出现在市场", "ND-E2E-003 approved application publishes and appears in the marketplace"), async () => {
-  test.skip(true, NO_ADMIN_REASON);
+test(localizedTitle('【开发者应用生命周期 / E2E】 ND-E2E-003 审核通过后发布并出现在市场', 'ND-E2E-003 approved application appears in the marketplace'), async ({ page }) => {
+  const env = envFor('node');
+  test.skip(!env['NODE_WALLET_PRIVATE_KEY'], 'NODE_WALLET_PRIVATE_KEY not configured');
+  await withPublication(async ({ app, approve }) => {
+    await approve();
+    const base = env.baseURL!;
+    await page.goto(base, { waitUntil: 'domcontentloaded' });
+    await seedWalletSession(page, base, env['NODE_WALLET_PRIVATE_KEY']!);
+    await page.goto(`${base}/market?keyword=${encodeURIComponent(app.name)}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('.tab-market-clickable').getByText(app.name, { exact: true })).toBeVisible({ timeout: 15_000 });
+  });
 });
 
-test(localizedTitle("【应用审核 / E2E】 ND-E2E-004 管理员审核:提交 → 审批通过 → 可发布", "ND-E2E-004 admin audit workflow: submit → approve → publishable"), async () => {
-  test.skip(true, NO_ADMIN_REASON);
+test(localizedTitle('【应用审核 / E2E】 ND-E2E-004 管理员提交审批并核对结果', 'ND-E2E-004 administrator approves a pending application'), async () => {
+  await withPublication(async ({ auditId, readAudit, approve, readApplication }) => {
+    expect(await readAudit()).toMatchObject({ meta: { uid: auditId }, summary: { state: '待审批' } });
+    await approve();
+    expect(await readAudit()).toMatchObject({
+      meta: { uid: auditId },
+      summary: { state: '审批通过', approvalCount: 1, isDecided: true },
+    });
+    expect(await readApplication()).toMatchObject({ status: 'BUSINESS_STATUS_ONLINE', isOnline: true });
+  });
+});
+
+test(localizedTitle('【开发者应用生命周期 / API】 ND-API-023 下线应用恢复为离线', 'ND-API-023 unpublish restores an application to offline and removes it from the market'), async () => {
+  await withPublication(async ({ app, approve, readApplication, readMarket, unpublish }) => {
+    await approve();
+    expect(await readMarket()).toContainEqual(expect.objectContaining({ uid: app.uid, isOnline: true }));
+    await unpublish();
+    expect(await readApplication()).toMatchObject({ uid: app.uid, status: 'BUSINESS_STATUS_OFFLINE', isOnline: false });
+    expect(await readMarket()).not.toContainEqual(expect.objectContaining({ uid: app.uid }));
+  });
 });

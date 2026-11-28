@@ -15,7 +15,7 @@ test(localizedTitle("【首页与导航 / UI】 首页呈现", "home page render
   await expect(page.locator('body')).toBeVisible();
 });
 
-test(localizedTitle("【首页与导航 / UI】 主导航包含预期条目", "primary navigation contains expected entries"), async ({ page }) => {
+test(localizedTitle("【首页与导航 / UI】 ND-UI-002 主导航包含预期条目", "ND-UI-002 primary navigation contains expected entries"), async ({ page }) => {
   test.skip(!baseURLFor('node'), 'NODE_BASE_URL not configured');
   await page.goto(envFor('node').baseURL!);
   // Guests currently land on the email-first sign-in screen; the primary

@@ -6,9 +6,9 @@
  * valid API token even without a live wallet provider. This spec exercises
  * the three read surfaces a user browses:
  *
- *   1. /market                → app grid renders (`.app-center`); if any app
- *      cards exist, open one's 详情 and land on the detail view.
- *   2. /market/dev/my-apps    → 我创建的 / 历史申请 tabs + 创建应用 button.
+ *   1. /market                → app grid renders (`.app-center`).
+ *   2. /market                → a published app card opens its details.
+ *   3. /market/dev/my-apps    → 我创建的 / 历史申请 tabs + 创建应用 button.
  *
  * Mutating flows (create/publish an app) live in `app-lifecycle.spec.ts`
  * because every write triggers a wallet `personal_sign`.
@@ -16,16 +16,18 @@
  * Selectors verified against node `web/src/views/market/**` and the router
  * table in `web/src/router/index.ts`.
  */
+import type { Page } from '@playwright/test';
 import { localizedTitle } from '../../../shared/title';
 import { test, expect, baseURLFor, envFor } from '../fixtures';
 
 import { seedWalletSession } from '../helpers/session';
+import { withPublication } from '../helpers/publication';
 
 function skipIfNoService() {
   test.skip(!baseURLFor('node'), 'NODE_BASE_URL not configured');
 }
 
-test(localizedTitle("【应用市场与应用生命周期 / UI】 市场网格呈现并且卡片打开其详细视图", "market grid renders and a card opens its detail view"), async ({ page, recorder }) => {
+async function openMarket(page: Page, keyword = '') {
   skipIfNoService();
   const env = envFor('node');
   test.skip(!env['NODE_WALLET_PRIVATE_KEY'], 'NODE_WALLET_PRIVATE_KEY not configured');
@@ -33,33 +35,38 @@ test(localizedTitle("【应用市场与应用生命周期 / UI】 市场网格�
 
   await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
   await seedWalletSession(page, baseURL, env['NODE_WALLET_PRIVATE_KEY']!);
+  const params = keyword ? `?keyword=${encodeURIComponent(keyword)}` : '';
+  await page.goto(`${baseURL}/market${params}`, { waitUntil: 'domcontentloaded' });
+}
 
-  await page.goto(`${baseURL}/market`, { waitUntil: 'domcontentloaded' });
-
-  // The grid container always renders; cards may be zero (no empty-state
-  // component exists), so assert the container, not a card count.
+test(localizedTitle("【应用市场浏览 / UI】 ND-UI-006 市场网格渲染", "ND-UI-006 market grid renders"), async ({ page, recorder }) => {
+  await openMarket(page);
   await expect(page.locator('.app-center')).toBeVisible({ timeout: 15_000 });
   await recorder.step(page, '应用市场网格');
-
-  const cards = page.locator('.tab.tab-market-clickable');
-  const cardCount = await cards.count();
-  if (cardCount > 0) {
-    // Open the first card's kebab menu → 详情. Element Plus keeps every
-    // card's dropdown menu in the DOM (teleported to body); only the opened
-    // one is visible, so filter to the visible menu item.
-    await cards.first().locator('.card-menu-trigger').click();
-    await page.locator('.el-dropdown-menu__item:visible', { hasText: '详情' }).first().click();
-    await expect(page).toHaveURL(/\/market\/detail/, { timeout: 10_000 });
-    await expect(page.locator('.detail')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText('基本信息')).toBeVisible();
-    await recorder.step(page, '应用详情页');
-  } else {
-    // No apps published on this instance — the grid still renders correctly.
-    expect(cardCount).toBe(0);
-  }
 });
 
-test(localizedTitle("【应用市场与应用生命周期 / UI】 我的应用程序视图显示创建者/历史申请选项卡和创建按钮", "my-apps view shows creator/request-history tabs and the create button"), async ({
+test(localizedTitle("【应用市场浏览 / UI】 ND-UI-007 卡片打开详情页", "ND-UI-007 a published app card opens its details"), async ({ page, recorder }) => {
+  if (process.env.NODE_TEST_DATABASE) {
+    await withPublication(async ({ app, approve }) => {
+      await approve();
+      await openMarket(page, app.name);
+    });
+  } else {
+    await openMarket(page);
+  }
+  const card = page.locator('.tab.tab-market-clickable').first();
+  await expect(card, '市场需要至少一个已上线的应用').toBeVisible({ timeout: 15_000 });
+  await card.locator('.card-menu-trigger').click();
+  await page.getByRole('menuitem', { name: '详情', exact: true }).click();
+  // Without a wallet extension, the route guard waits up to five seconds
+  // for provider discovery before accepting the seeded SIWE session.
+  await expect(page).toHaveURL(/\/market\/detail\?uid=[^&]+/, { timeout: 10_000 });
+  await expect(page.locator('.detail')).toBeVisible();
+  await expect(page.getByText('基本信息')).toBeVisible();
+  await recorder.step(page, '应用详情页');
+});
+
+test(localizedTitle("【应用市场与应用生命周期 / UI】 ND-UI-008 我的应用程序视图显示创建者/历史申请选项卡和创建按钮", "ND-UI-008 my-apps view shows creator/request-history tabs and the create button"), async ({
   page,
   recorder,
 }) => {
