@@ -33,14 +33,15 @@
 | [2026-11-27 09:19](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-19-58+0800/index.html) | 本地源码，首次启用隔离审批和数据库场景 | `2e2a59c` / `d7a20dc` | 54 | 5 | 2 |
 | [2026-11-27 09:23](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-23-14+0800/index.html) | 本地源码、隔离数据库 | `d6eba97` / `d7a20dc` | 59 | 0 | 2 |
 | [2026-11-27 09:32](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-32-25+0800/index.html) | 本地源码、隔离数据库，重复批次 | `7f653d7` / `d7a20dc` | 59 | 0 | 2 |
+| [2026-11-28 10:52](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-28_10-52-50+0800/index.html) | 本地源码、隔离数据库，启用真实机器人投递 | `18f3573` / `d7a20dc` | 59 | 2 | 0 |
+| [2026-11-28 11:02](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-28_11-02-41+0800/index.html) | 本地源码、隔离数据库，使用 Node Web 构建产物 | `dbe1aa2` / `d7a20dc` | 61 | 0 | 0 |
 
-GPU 上的 PostgreSQL、Redis 和 Mailpit 可访问，Node 测试由 Tester 临时拉起源码 API 和 Web。Node 单项目批次创建专用 PostgreSQL 数据库和每批一次性 vault、管理员钱包。服务运行自动迁移后执行用例，结束时清除数据库及临时凭证。最后两轮各运行 61 个场景，以一个 worker、零重试完成，每轮均为 59 通过、0 失败、2 跳过。数据库断连、审核批准、发布及下线用例均已实际执行。两轮已执行场景通过率为 100%（59/59），全场景通过比例为 96.7%（59/61）。
+GPU 上的 PostgreSQL、Redis 和 Mailpit 可访问，Node 测试由 Tester 临时拉起源码 API 和 Web。Node 单项目批次创建专用 PostgreSQL 数据库和每批一次性 vault、管理员钱包。服务运行自动迁移后执行用例，结束时清除数据库及临时凭证。数据库断连、审核批准、发布及下线用例均已实际执行。
 
 WebAuthn 初始失败由 WebAuthn origin 与浏览器 origin 不匹配导致。后续统一以 `localhost` 配置 Node Web、WebAuthn RP 和浏览器入口。市场详情首次失败是断言没有等待无钱包插件环境中的 Provider 发现窗口。通过 role 选择菜单并调整路由断言超时后复测通过。草稿初始跳转失败原因仍未确认，同场景后续通过。首次新增隔离数据库用例时有五项 fixture 失败，调整数据初始状态与签名载荷后通过。
 
-| 尚未完成的场景 | 需要补齐的证据 |
-| --- | --- |
-| `ND-API-035` | 配置真实钉钉群机器人的 webhook URL 和加签密钥，并验证群内收到消息 |
-| `ND-API-036` | 配置真实飞书群机器人的 webhook URL 和加签密钥，并验证群内收到消息 |
+11 月 28 日 10:52 批次中，钉钉 `ND-API-035` 和飞书 `ND-API-036` 均收到平台成功响应，结束了因缺少真实机器人配置而跳过的状态。本轮两项浏览器测试失败。`ND-E2E-001` 草稿 API 返回成功，页面留在编辑页。`ND-UI-007` 已进入详情路由，详情组件在断言时限内未渲染。同期 Vite 开发服务器记录了依赖优化触发的页面重载。
 
-Node 用例文档包含 58 个唯一业务 ID，均已实现。Playwright 列出 61 个执行场景，其中 3 个冒烟检查没有单独的业务 ID，`ND-UI-002` 有两个执行场景，另有一个场景同时覆盖 `ND-UI-001` 和 `ND-UI-004`。已检查 GPU 上 Tester 的 `/opt/deploy/tester/.env.local`，以下配置项均未设置：`NODE_DINGTALK_WEBHOOK_URL`、`NODE_DINGTALK_WEBHOOK_SECRET`、`NODE_FEISHU_WEBHOOK_URL`、`NODE_FEISHU_WEBHOOK_SECRET`。Node 功能用例与产品缺陷排查已完成，严格的全场景 100% 门禁仍需实际运行上述两个外部集成场景。
+11:02 批次由 Tester 构建同一份 Node Web 源码并通过 Vite Preview 提供页面，消除了开发服务器在浏览器测试期间的依赖优化重载。两个浏览器场景沿用原断言，均通过。钉钉、飞书、Passkey 和邮箱 OTP 也在同一轮通过。本轮使用一个 worker、零重试，61 个执行场景全部首次通过。
+
+Node 用例文档包含 58 个唯一业务 ID，均已实现。Playwright 列出 61 个执行场景，其中 3 个冒烟检查没有单独的业务 ID，`ND-UI-002` 有两个执行场景，另有一个场景同时覆盖 `ND-UI-001` 和 `ND-UI-004`。真实机器人用例从 Tester 的 `.env.local` 读取 `NODE_DINGTALK_WEBHOOK_URL`、`NODE_DINGTALK_WEBHOOK_SECRET`、`NODE_FEISHU_WEBHOOK_URL` 和 `NODE_FEISHU_WEBHOOK_SECRET`。
