@@ -45,3 +45,15 @@ WebAuthn 初始失败由 WebAuthn origin 与浏览器 origin 不匹配导致。�
 11:02 批次由 Tester 构建同一份 Node Web 源码并通过 Vite Preview 提供页面，消除了开发服务器在浏览器测试期间的依赖优化重载。两个浏览器场景沿用原断言，均通过。钉钉、飞书、Passkey 和邮箱 OTP 也在同一轮通过。本轮使用一个 worker、零重试，61 个执行场景全部首次通过。
 
 Node 用例文档包含 58 个唯一业务 ID，均已实现。Playwright 列出 61 个执行场景，其中 3 个冒烟检查没有单独的业务 ID，`ND-UI-002` 有两个执行场景，另有一个场景同时覆盖 `ND-UI-001` 和 `ND-UI-004`。真实机器人用例从 Tester 的 `.env.local` 读取 `NODE_DINGTALK_WEBHOOK_URL`、`NODE_DINGTALK_WEBHOOK_SECRET`、`NODE_FEISHU_WEBHOOK_URL` 和 `NODE_FEISHU_WEBHOOK_SECRET`。
+
+## Router
+
+| GPU 批次 | 检出版本 | 通过 | 失败 | 跳过 |
+| --- | --- | ---: | ---: | ---: |
+| [2026-11-28 12:23](https://tester.tidukongjian.com/report/projects/router/runs/2026-11-28_12-23-58+0800/index.html) | Tester `e044b06`，Router 社区 main `d3fe91c4` | 100 | 0 | 17 |
+| [2026-11-28 12:53](https://tester.tidukongjian.com/report/projects/router/runs/2026-11-28_12-53-44+0800/index.html) | Tester `8db437c`，Router PR #318 `abe41366` | 115 | 2 | 0 |
+| [2026-11-28 13:02](https://tester.tidukongjian.com/report/projects/router/runs/2026-11-28_13-02-34+0800/index.html) | Tester `dcd7a22`，Router PR #318 `abe41366` | 116 | 1 | 0 |
+
+各批次使用 Node `d7a20dc`。候选批次使用批次专用 PostgreSQL 数据库、一个 worker 和零重试。13:02 的测试代码与 Tester PR #50 中的 `b619a90` 文件树相同。Responses 的七个场景、个人渠道的九个场景、告警迁移、钱包登录、订单全流程均已执行。RT-API-037 从订单详情取得额度，验证支付回调首次履约、重复回调只入账一次、失败回调保持余额。
+
+唯一失败的执行项是分组路由。GR-E2E-001 至 013 共用一个 Playwright 用例。配置 B→A 后上游实际命中 A，且 Token API 未返回 `auto_failover`。Router 社区源码已实现分组顺序存取，设计文档将实际跨组中继列为阶段三。整组保留在全量报告中，候选基线仍未达到 117/117。
