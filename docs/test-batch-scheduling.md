@@ -13,7 +13,7 @@
 | Tester 控制台 | 全量或勾选的一个/多个项目 | `POST /api/run` | 全量、单项目、多项目均作为一个批次入队。同一来源、范围和模式已有活动或等待批次时复用 |
 | Tester 自身 `main` 更新 | 全量测试范围 | Tester watcher | Tester 代码更新用完整测试范围验证，不作为产品项目增量批次 |
 
-`main` watcher 只处理项目清单中启用且有已验证隔离部署适配器的项目。当前部署适配器覆盖 Book、Chat、Marketplace、Router、Wallet。启用状态不决定项目是否出现在全量 Playwright 范围内。新增适配器前需要有可重复部署、健康检查和清理流程。
+`main` watcher 只处理项目清单中启用且有已验证隔离部署适配器的项目。当前部署适配器覆盖 Book、Chat、Marketplace、Router、Wallet。旧项目键 `books` 会规范化为 `book`；没有部署适配器的配置项会自动保持 watcher 关闭，但仍可手动单项目测试，也会保留在全量 Playwright 范围内。新增适配器前需要有可重复部署、健康检查和清理流程。
 
 制品模式下，Watcher 先用固定 SHA 更新并验证产品，再直接调用当前安装包内的项目 runner。源码开发模式则先准备 Tester 的上游 Git worktree，再运行项目用例。标准安装包不包含 `.git`，部署适配器不能从制品目录启动 Tester Git worktree。
 

@@ -9,7 +9,7 @@
 
 2026-11-28 确认 Tester service `0.1.26` 正在运行，`health-check.sh --level readiness` 的控制服务和 runner 两项均通过。每日全量计划已设置为 03:00 Asia/Shanghai，控制服务日志确认调度已启用；main watcher 和产品源码部署开关保持启用。配置修改前已执行项目配置备份。此次没有核验 `tester-web` 制品版本、Nginx 配置或所有产品服务，因此它们的现场状态仍以 2026-11-25 快照为准。
 
-最新全量报告仍是 2026-11-25，结果为 197 通过、413 失败、186 跳过，共 796 项。GPU 在 2026-11-28 检出的 Router main 更新批次完成了源码部署、构建和健康检查，但打包版 Tester 随后从无 `.git` 的安装目录执行 Git worktree 准备，导致用例 runner 失败。当前制品仍受此问题影响，本次 PR 改为直接运行包内项目 runner，升级后需手动重跑该批次范围。Router 最新本地源码测试仍为 116/117，唯一失败在 `group-route-order.spec.ts` 的分组路由场景。Tester readiness 只检查控制 API 和 runner，不会逐个检查所有产品服务。
+最新全量报告仍是 2026-11-25，结果为 197 通过、413 失败、186 跳过，共 796 项。11-28 的 Router、Marketplace、Wallet main 批次完成产品构建或部署后，打包版 Tester 从无 `.git` 的安装目录执行 Git worktree 准备，导致用例 runner 失败。Book 的 main 批次使用了旧项目名 `books`，部署适配器拒绝该名称；Agent 被配置为 watcher 项目，但没有部署适配器，也因此失败。本次 PR 将 `books` 规范化为 `book`、禁用没有适配器的 watcher 项目，并让制品模式使用包内 runner。当前 GPU 制品仍有上述问题，升级后需手动重跑相应范围。Router 最近本地源码测试仍为 116/117，唯一失败在 `group-route-order.spec.ts` 的分组路由场景。Tester readiness 只检查控制 API 和 runner，不会逐个检查所有产品服务。
 
 公共中间件、Node API/Web、Warehouse、Chat、Social、Project、Knowledge 和 Orchestrator 的状态没有在 2026-11-28 重新核验。2026-11-25 快照记录这些服务存在未启动或配置未就绪的项目，因此不能据本次 Tester readiness 推断全项目 E2E 已可运行。
 
