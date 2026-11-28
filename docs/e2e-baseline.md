@@ -6,35 +6,35 @@
 
 首次通过 `yeying-tester overview` 采集的最近全量批次为 `2026-11-25_22-40-12+0800`。报告汇总 796 项，197 通过、413 失败、186 跳过。项目计数来自可归属的历史 JUnit 结果。该批次的运行模式、被测版本和重试细节没有保存。 [全量报告](https://tester.tidukongjian.com/report/runs/2026-11-25_22-40-12+0800/index.html)
 
-| 产品 | 通过 | 失败 | 跳过 | 备注 |
-| --- | ---: | ---: | ---: | --- |
-| Book | 28 | 2 | 5 | 该批次仍使用历史标识 `books` |
-| Chat | 3 | 65 | 26 | |
-| Marketplace | 53 | 0 | 5 | |
-| Node | 0 | 51 | 9 | 51 个失败均为连接拒绝 |
-| Orchestrator | 0 | 0 | 10 | 只有跳过记录 |
-| Project | 1 | 84 | 59 | |
-| Router | 61 | 40 | 16 | |
-| Social | 1 | 63 | 26 | |
-| Wallet | 50 | 37 | 7 | |
-| Warehouse | 0 | 71 | 23 | |
-| Knowledge | — | — | — | 当前批次无可归属证据 |
+| 产品         | 通过 | 失败 | 跳过 | 备注                         |
+| ------------ | ---: | ---: | ---: | ---------------------------- |
+| Book         |   28 |    2 |    5 | 该批次仍使用历史标识 `books` |
+| Chat         |    3 |   65 |   26 |                              |
+| Marketplace  |   53 |    0 |    5 |                              |
+| Node         |    0 |   51 |    9 | 51 个失败均为连接拒绝        |
+| Orchestrator |    0 |    0 |   10 | 只有跳过记录                 |
+| Project      |    1 |   84 |   59 |                              |
+| Router       |   61 |   40 |   16 |                              |
+| Social       |    1 |   63 |   26 |                              |
+| Wallet       |   50 |   37 |    7 |                              |
+| Warehouse    |    0 |   71 |   23 |                              |
+| Knowledge    |    — |    — |    — | 当前批次无可归属证据         |
 
 以上表格仅使用本次全量归属结果。单产品历史报告保留各自的批次和运行条件。
 
 ## Node
 
-| 批次 | 模式 | Tester / Node 提交 | 通过 | 失败 | 跳过 |
-| --- | --- | --- | ---: | ---: | ---: |
-| [2026-11-27 08:47](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_08-47-27+0800/index.html) | 本地源码 | `db1b1c6` / `d7a20dc` | 49 | 2 | 9 |
-| [2026-11-27 08:53](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_08-53-34+0800/index.html) | 本地源码，Tester 候选代码 | `8882d69` / `d7a20dc` | 54 | 0 | 6 |
-| [2026-11-27 09:04](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-04-23+0800/index.html) | 本地源码，Tester 候选代码 | `3273676` / `d7a20dc` | 54 | 1 | 6 |
-| [2026-11-27 09:13](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-13-04+0800/index.html) | 本地源码，Tester 候选代码 | `76e9185` / `d7a20dc` | 55 | 0 | 6 |
-| [2026-11-27 09:19](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-19-58+0800/index.html) | 本地源码，首次启用隔离审批和数据库场景 | `2e2a59c` / `d7a20dc` | 54 | 5 | 2 |
-| [2026-11-27 09:23](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-23-14+0800/index.html) | 本地源码、隔离数据库 | `d6eba97` / `d7a20dc` | 59 | 0 | 2 |
-| [2026-11-27 09:32](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-32-25+0800/index.html) | 本地源码、隔离数据库，重复批次 | `7f653d7` / `d7a20dc` | 59 | 0 | 2 |
-| [2026-11-28 10:52](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-28_10-52-50+0800/index.html) | 本地源码、隔离数据库，启用真实机器人投递 | `18f3573` / `d7a20dc` | 59 | 2 | 0 |
-| [2026-11-28 11:02](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-28_11-02-41+0800/index.html) | 本地源码、隔离数据库，使用 Node Web 构建产物 | `dbe1aa2` / `d7a20dc` | 61 | 0 | 0 |
+| 批次                                                                                                              | 模式                                         | Tester / Node 提交    | 通过 | 失败 | 跳过 |
+| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | --------------------- | ---: | ---: | ---: |
+| [2026-11-27 08:47](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_08-47-27+0800/index.html) | 本地源码                                     | `db1b1c6` / `d7a20dc` |   49 |    2 |    9 |
+| [2026-11-27 08:53](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_08-53-34+0800/index.html) | 本地源码，Tester 候选代码                    | `8882d69` / `d7a20dc` |   54 |    0 |    6 |
+| [2026-11-27 09:04](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-04-23+0800/index.html) | 本地源码，Tester 候选代码                    | `3273676` / `d7a20dc` |   54 |    1 |    6 |
+| [2026-11-27 09:13](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-13-04+0800/index.html) | 本地源码，Tester 候选代码                    | `76e9185` / `d7a20dc` |   55 |    0 |    6 |
+| [2026-11-27 09:19](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-19-58+0800/index.html) | 本地源码，首次启用隔离审批和数据库场景       | `2e2a59c` / `d7a20dc` |   54 |    5 |    2 |
+| [2026-11-27 09:23](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-23-14+0800/index.html) | 本地源码、隔离数据库                         | `d6eba97` / `d7a20dc` |   59 |    0 |    2 |
+| [2026-11-27 09:32](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-27_09-32-25+0800/index.html) | 本地源码、隔离数据库，重复批次               | `7f653d7` / `d7a20dc` |   59 |    0 |    2 |
+| [2026-11-28 10:52](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-28_10-52-50+0800/index.html) | 本地源码、隔离数据库，启用真实机器人投递     | `18f3573` / `d7a20dc` |   59 |    2 |    0 |
+| [2026-11-28 11:02](https://tester.tidukongjian.com/report/projects/node/runs/2026-11-28_11-02-41+0800/index.html) | 本地源码、隔离数据库，使用 Node Web 构建产物 | `dbe1aa2` / `d7a20dc` |   61 |    0 |    0 |
 
 GPU 上的 PostgreSQL、Redis 和 Mailpit 可访问，Node 测试由 Tester 临时拉起源码 API 和 Web。Node 单项目批次创建专用 PostgreSQL 数据库和每批一次性 vault、管理员钱包。服务运行自动迁移后执行用例，结束时清除数据库及临时凭证。数据库断连、审核批准、发布及下线用例均已实际执行。
 
@@ -48,12 +48,29 @@ Node 用例文档包含 58 个唯一业务 ID，均已实现。Playwright 列出
 
 ## Router
 
-| GPU 批次 | 检出版本 | 通过 | 失败 | 跳过 |
-| --- | --- | ---: | ---: | ---: |
-| [2026-11-28 12:23](https://tester.tidukongjian.com/report/projects/router/runs/2026-11-28_12-23-58+0800/index.html) | Tester `e044b06`，Router 社区 main `d3fe91c4` | 100 | 0 | 17 |
-| [2026-11-28 12:53](https://tester.tidukongjian.com/report/projects/router/runs/2026-11-28_12-53-44+0800/index.html) | Tester `8db437c`，Router PR #318 `abe41366` | 115 | 2 | 0 |
-| [2026-11-28 13:02](https://tester.tidukongjian.com/report/projects/router/runs/2026-11-28_13-02-34+0800/index.html) | Tester `dcd7a22`，Router PR #318 `abe41366` | 116 | 1 | 0 |
+| GPU 批次                                                                                                            | 检出版本                                      | 通过 | 失败 | 跳过 |
+| ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---: | ---: | ---: |
+| [2026-11-28 12:23](https://tester.tidukongjian.com/report/projects/router/runs/2026-11-28_12-23-58+0800/index.html) | Tester `e044b06`，Router 社区 main `d3fe91c4` |  100 |    0 |   17 |
+| [2026-11-28 12:53](https://tester.tidukongjian.com/report/projects/router/runs/2026-11-28_12-53-44+0800/index.html) | Tester `8db437c`，Router PR #318 `abe41366`   |  115 |    2 |    0 |
+| [2026-11-28 13:02](https://tester.tidukongjian.com/report/projects/router/runs/2026-11-28_13-02-34+0800/index.html) | Tester `dcd7a22`，Router PR #318 `abe41366`   |  116 |    1 |    0 |
 
 各批次使用 Node `d7a20dc`。候选批次使用批次专用 PostgreSQL 数据库、一个 worker 和零重试。13:02 的测试代码与 Tester PR #50 中的 `b619a90` 文件树相同。Responses 的七个场景、个人渠道的九个场景、告警迁移、钱包登录、订单全流程均已执行。RT-API-037 从订单详情取得额度，验证支付回调首次履约、重复回调只入账一次、失败回调保持余额。
 
 唯一失败的执行项是分组路由。GR-E2E-001 至 013 共用一个 Playwright 用例。配置 B→A 后上游实际命中 A，且 Token API 未返回 `auto_failover`。Router 社区源码已实现分组顺序存取，设计文档将实际跨组中继列为阶段三。整组保留在全量报告中，候选基线仍未达到 117/117。
+
+## Book
+
+| 批次                                                                                                               | 模式                  | Tester / Book 提交    | 通过 | 失败 | 跳过 |
+| ------------------------------------------------------------------------------------------------------------------ | --------------------- | --------------------- | ---: | ---: | ---: |
+| [2026-11-27 09:31](https://tester.tidukongjian.com/report/projects/books/runs/2026-11-27_09-31-22+0800/index.html) | 本地源码，Book PR #26 | `7f653d7` / `6d0be18` |   31 |    0 |    4 |
+
+Book 基线发现 BK-DATA-028 的 Windows 开发手册含 CRLF。已将其转换为 LF 并提交 Book PR #26。BK-DATA-033/034 改为验证当前 VitePress 阅读器并构建首页和 API 规范页面，构建通过。剩余跳过项为可选站点在线检查和按当前源数据触发的条件场景。
+
+## Marketplace
+
+| 批次                                                                                                                     | 模式                       | Tester / Marketplace 提交 | 通过 | 失败 | 跳过 |
+| ------------------------------------------------------------------------------------------------------------------------ | -------------------------- | ------------------------- | ---: | ---: | ---: |
+| [2026-11-27 09:15](https://tester.tidukongjian.com/report/projects/marketplace/runs/2026-11-27_09-15-57+0800/index.html) | 本地源码                   | `8882d69` / `d023eda`     |   53 |    0 |    5 |
+| [2026-11-27 09:30](https://tester.tidukongjian.com/report/projects/marketplace/runs/2026-11-27_09-30-28+0800/index.html) | 本地源码，远端冒烟网络异常 | `7f653d7` / `d023eda`     |   53 |    3 |    2 |
+
+Marketplace 的文件和 schema 测试直接读取本地仓库。09:30 批次错误地把可选在线冒烟自动指向 GitHub Raw，GPU 出网连接被重置，导致三项远端请求失败，属于环境连通问题。已移除自动启用在线冒烟的行为，后续只在明确配置站点地址时运行这些检查。

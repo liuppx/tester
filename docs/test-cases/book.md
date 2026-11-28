@@ -9,18 +9,18 @@
 
 ## 覆盖总览
 
-| 模块 | 用例数 | 已实现 | 待实现 |
-| --- | --- | --- | --- |
-| 一、目录结构与 SUMMARY 解析 | 6 | 6 | 0 |
-| 二、链接完整性(死链) | 7 | 5 | 2 |
-| 三、章节文件与孤儿检测 | 5 | 5 | 0 |
-| 四、锚点与交叉引用 | 3 | 3 | 0 |
-| 五、资源引用(图片/资产) | 3 | 2 | 1 |
-| 六、Markdown 基本合法性 | 4 | 4 | 0 |
-| 七、多集合索引一致性 | 4 | 4 | 0 |
-| 八、构建配置 | 2 | 2 | 0 |
-| 九、可选在线站点冒烟 | 1 | 1 | 0 |
-| **合计** | **35** | **32** | **3** |
+| 模块                        | 用例数 | 已实现 | 待实现 |
+| --------------------------- | ------ | ------ | ------ |
+| 一、目录结构与 SUMMARY 解析 | 6      | 6      | 0      |
+| 二、链接完整性(死链)        | 7      | 5      | 2      |
+| 三、章节文件与孤儿检测      | 5      | 5      | 0      |
+| 四、锚点与交叉引用          | 3      | 3      | 0      |
+| 五、资源引用(图片/资产)     | 3      | 2      | 1      |
+| 六、Markdown 基本合法性     | 4      | 4      | 0      |
+| 七、多集合索引一致性        | 4      | 4      | 0      |
+| 八、构建配置                | 2      | 2      | 0      |
+| 九、可选在线站点冒烟        | 1      | 1      | 0      |
+| **合计**                    | **35** | **32** | **3**  |
 
 > 待实现的 3 条(BK-DATA-009 / BK-DATA-012 / BK-DATA-023)均为**已实现但捕获到 book 仓库真实缺陷**,
 > 对应 spec 以 `test.fixme` 记录缺陷、保持 runner 绿色;修复源仓库后去掉 fixme 即转正。
@@ -30,6 +30,7 @@
 ## 一、目录结构与 SUMMARY 解析
 
 ### BK-DATA-001 book 仓库存在且至少含一个 markdown 文档
+
 - 优先级:P0
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/summary.spec.ts
@@ -40,6 +41,7 @@
 - 预期结果:根路径存在;`.md` 文件数量 > 0(实际约 220+ 篇)
 
 ### BK-DATA-002 agent/SUMMARY.md 存在、非空且以 Markdown 列表组织目录
+
 - 优先级:P0
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/structure.spec.ts:11
@@ -51,6 +53,7 @@
 - 预期结果:文件存在、非空,且为 `- [标题](链接)` 形式的目录列表(现有 spec 在缺失时 skip 而非失败,需补充硬断言)
 
 ### BK-DATA-003 SUMMARY.md 可解析出章节链接
+
 - 优先级:P0
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/summary.spec.ts
@@ -61,6 +64,7 @@
 - 预期结果:解析出 ≥ 5 条指向 `.md` 的章节链接(实际 21 条)
 
 ### BK-DATA-004 SUMMARY 章节编号单调有序
+
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/structure.spec.ts:23
@@ -71,6 +75,7 @@
 - 预期结果:章节数字前缀按 SUMMARY 出现顺序单调不减,无错位或缺号(00 前言、01-16 正文、99 附录)
 
 ### BK-DATA-005 SUMMARY 覆盖三部分骨架标题
+
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/structure.spec.ts:40
@@ -80,6 +85,7 @@
 - 预期结果:三部分骨架标题均存在,且各自后续跟随对应章节,结构与 README 描述的"理论与方法 / 项目实践与对照 / 最佳实践与方法沉淀"一致
 
 ### BK-DATA-006 顶层三大文档集合目录均存在且非空
+
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/structure.spec.ts:61
@@ -94,6 +100,7 @@
 ## 二、链接完整性(死链)
 
 ### BK-DATA-007 SUMMARY.md 每个章节链接目标文件存在(无死链)
+
 - 优先级:P0
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/links.spec.ts:15
@@ -104,6 +111,7 @@
 - 预期结果:21 条章节链接全部指向真实存在的文件,无死链
 
 ### BK-DATA-008 SUMMARY.md 链接均为仓库内相对路径
+
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/links.spec.ts:28
@@ -114,6 +122,7 @@
 - 预期结果:所有目录链接为相对路径(如 `./chapters/01-….md`),便于移植与构建,不含机器绝对路径
 
 ### BK-DATA-009 agent/README.md 内 SUMMARY 链接指向的路径存在
+
 - 优先级:P0
 - 类型:DATA
 - 状态:⬜ 待实现(已实现,`test.fixme` 记录真实缺陷)— products/book/tests/links.spec.ts:40。**真实缺陷**:`agent/README.md` 第 26 行 `[SUMMARY.md](/Users/liuxin2/Workspace/books/agent/SUMMARY.md)` 为机器绝对路径且缺少 `opensource/` 段,指向不存在的文件(死链);修复方向:改为相对路径 `./SUMMARY.md`
@@ -124,6 +133,7 @@
 - 预期结果:应指向真实存在的 SUMMARY。**当前为已知缺陷**:链接写死为 `/Users/liuxin2/Workspace/books/agent/SUMMARY.md`(缺少 `opensource/` 段),该路径不存在 → 死链;用例应捕获此失败,修复方向为改为相对路径 `./SUMMARY.md`
 
 ### BK-DATA-010 yeying 总览内所有相对链接目标存在
+
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/links.spec.ts:57
@@ -134,6 +144,7 @@
 - 预期结果:入口/贡献/协作/规范/产品/工程等所有导航链接均无死链(含 9 个单产品说明链接)
 
 ### BK-DATA-011 payment 索引文档内链接目标存在
+
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/links.spec.ts
@@ -144,6 +155,7 @@
 - 预期结果:README 指向的"知识架构与维护指南""发布导航""角色阅读导航""跨章索引""章节模板"等链接及跨章索引条目全部有效
 
 ### BK-DATA-012 全仓库站内 .md 链接全量死链扫描
+
 - 优先级:P2
 - 类型:DATA
 - 状态:⬜ 待实现(已实现,`test.fixme` 记录真实缺陷)— products/book/tests/links.spec.ts:94。**真实缺陷**:全仓库死链全量扫描发现唯一死链 `agent/README.md -> /Users/liuxin2/Workspace/books/agent/SUMMARY.md`(与 BK-DATA-009 同因);其余约 1000+ 条内链均有效
@@ -154,6 +166,7 @@
 - 预期结果:全仓库(agent/payment/yeying,约 1000+ 条内链)无死链;发现的死链按文件+行号汇总报告
 
 ### BK-DATA-013 外部 http(s) 链接格式合法
+
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/links.spec.ts:118
@@ -168,6 +181,7 @@
 ## 三、章节文件与孤儿检测
 
 ### BK-DATA-014 agent 章节文件无孤儿(均被 SUMMARY 引用)
+
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/chapters.spec.ts:22
@@ -178,6 +192,7 @@
 - 预期结果:每个章节文件都被 SUMMARY 引用,无"存在于磁盘但未进目录"的孤儿章节
 
 ### BK-DATA-015 SUMMARY 引用的章节文件都真实存在(反向校验)
+
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/chapters.spec.ts:29
@@ -188,6 +203,7 @@
 - 预期结果:引用集合 ⊆ 磁盘集合(与 BK-DATA-007 互补,双向一致,不多不少)
 
 ### BK-DATA-016 每个章节文件非空且含标题
+
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/chapters.spec.ts:38
@@ -198,6 +214,7 @@
 - 预期结果:所有章节非空且含标题;不存在空壳占位文件
 
 ### BK-DATA-017 章节文件名编号与 SUMMARY 顺序对应
+
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/chapters.spec.ts:49
@@ -208,6 +225,7 @@
 - 预期结果:目录顺序中的编号与文件名前缀一致,无标题与文件张冠李戴
 
 ### BK-DATA-018 yeying 单产品说明文件齐全且被总览引用
+
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/chapters.spec.ts:67
@@ -222,6 +240,7 @@
 ## 四、锚点与交叉引用
 
 ### BK-DATA-019 跨文件链接的锚点在目标文件内存在
+
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/anchors.spec.ts:14
@@ -233,6 +252,7 @@
 - 预期结果:所有带 `#` 锚点的跨文件链接都能定位到目标文件的真实标题,无失效锚点
 
 ### BK-DATA-020 同文档内 #锚点 指向存在的标题
+
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/anchors.spec.ts:36
@@ -243,6 +263,7 @@
 - 预期结果:文内目录/回顶等锚点跳转均有效
 
 ### BK-DATA-021 标题重复导致的锚点歧义检测
+
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/anchors.spec.ts:52
@@ -257,6 +278,7 @@
 ## 五、资源引用(图片/资产)
 
 ### BK-DATA-022 markdown 图片引用目标文件存在
+
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/resources.spec.ts:20
@@ -267,6 +289,7 @@
 - 预期结果:所有图片引用指向真实存在的资源,无坏图链(当前 markdown 未引用任何本地图片,用例在有引用时生效)
 
 ### BK-DATA-023 仓库图片/资产无孤儿
+
 - 优先级:P2
 - 类型:DATA
 - 状态:⬜ 待实现(已实现,`test.fixme` 记录真实缺陷)— products/book/tests/resources.spec.ts:40。**真实缺陷**:`yeying/2A068D22-0E72-47EB-AEFC-D598509BBFFB.png` 未被任何 markdown 引用(全仓库 0 条图片引用)→ 孤儿资产;修复方向:删除该文件或补充引用
@@ -277,6 +300,7 @@
 - 预期结果:不存在未被引用的孤儿资产。**当前真实发现**:`yeying/2A068D22-0E72-47EB-AEFC-D598509BBFFB.png` 未被任何 markdown 引用 → 应报告为孤儿资产(清理或补引用)
 
 ### BK-DATA-024 图片替代文本非空
+
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/resources.spec.ts:62
@@ -290,6 +314,7 @@
 ## 六、Markdown 基本合法性
 
 ### BK-DATA-025 所有 markdown 为合法 UTF-8
+
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/markdown.spec.ts:13
@@ -300,6 +325,7 @@
 - 预期结果:全部文件为合法 UTF-8,含中文标题的文件名与内容均无乱码
 
 ### BK-DATA-026 markdown 链接语法闭合
+
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/markdown.spec.ts:27
@@ -310,6 +336,7 @@
 - 预期结果:链接语法闭合,无残缺链接标记
 
 ### BK-DATA-027 代码围栏成对闭合
+
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/markdown.spec.ts:42
@@ -319,6 +346,7 @@
 - 预期结果:围栏数量为偶数,代码块均正确闭合,无"吞掉后文"的未闭合围栏
 
 ### BK-DATA-028 换行风格一致(无 CRLF 混入)
+
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/markdown.spec.ts:52
@@ -332,6 +360,7 @@
 ## 七、多集合索引一致性
 
 ### BK-DATA-029 yeying 总览表产品与单产品目录一一对应
+
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/consistency.spec.ts:10
@@ -342,6 +371,7 @@
 - 预期结果:表格产品条目与磁盘文件集合完全一致,不多不少
 
 ### BK-DATA-030 payment 发布导航版本链接齐全
+
 - 优先级:P1
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/consistency.spec.ts
@@ -352,6 +382,7 @@
 - 预期结果:发布导航版本文件齐全,最新版被 README 正确引用,导航内链接无死链
 
 ### BK-DATA-031 payment 章节元信息/跨章索引引用一致
+
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/consistency.spec.ts
@@ -362,6 +393,7 @@
 - 预期结果:元信息总表与跨章索引所列章节均真实存在,无悬空引用
 
 ### BK-DATA-032 README 顶层提及 YeYing 社区
+
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/summary.spec.ts
@@ -375,30 +407,33 @@
 
 ## 八、构建配置
 
-### BK-DATA-033 检测构建配置并断言"纯 SUMMARY 目录型仓库"契约
+### BK-DATA-033 文档目录和 VitePress 阅读器配置齐全
+
 - 优先级:P2
 - 类型:DATA
-- 状态:✅ 已实现 — products/book/tests/build.spec.ts:17
+- 状态:✅ 已实现 — products/book/tests/build.spec.ts
 - 前置条件:仓库可读
 - 步骤:
-  1. 查找 `book.toml`(mdBook)/`book.json`(GitBook legacy)/`.gitbook.yaml`/`mkdocs.yml`
-- 预期结果:当前仓库无任何构建配置 → 断言其为"仅有 SUMMARY.md 目录、无构建工具"的形态,避免误判为损坏;若日后新增配置,用例应提示需扩展构建校验
+  1. 核对 Agent 的 `SUMMARY.md`、VitePress 配置及 `reader/package.json` 的构建入口。
+- 预期结果:目录索引和实际阅读器构建配置齐全。
 
-### BK-DATA-034 存在构建配置时可产出 HTML
+### BK-DATA-034 VitePress 阅读器产出 HTML
+
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/build.spec.ts:29
-- 前置条件:仓库存在受支持的构建配置(如 `book.toml`)
+- 前置条件:Book 仓库的 `reader/` 依赖已安装。
 - 步骤:
-  1. 执行对应构建命令(如 `mdbook build`)
-  2. 检查输出目录生成 HTML
-- 预期结果:构建成功并产出 HTML;当前无配置,用例在检测不到配置时 skip,不误报失败
+  1. 执行 `npm run build` 并输出至临时目录。
+  2. 检查首页与 API 规范页面均生成 HTML。
+- 预期结果:VitePress 构建成功,两类页面都可发布。
 
 ---
 
 ## 九、可选在线站点冒烟
 
 ### BK-DATA-035 (可选)BOOK_BASE_URL 在线文档站点可达
+
 - 优先级:P2
 - 类型:DATA
 - 状态:✅ 已实现 — products/book/tests/summary.spec.ts
