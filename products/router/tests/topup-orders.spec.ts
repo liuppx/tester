@@ -19,10 +19,12 @@
  * refresh → cancel flow runs for real. That branch is implemented below and
  * self-cleans by cancelling the order it creates.
  */
+import { Wallet } from 'ethers';
 import { localizedTitle } from '../../../shared/title';
-import { test, expect, baseURLFor, envFor } from '../fixtures';
+import { test } from '../helpers/topup-catalog';
+import { expect, baseURLFor, envFor } from '../fixtures';
 import { apiContext } from '../../../shared/api';
-import { acquireRouterToken } from '../helpers/auth';
+import { acquireRouterToken, loginWithWallet } from '../helpers/auth';
 
 function skipIfNoService() {
   test.skip(!baseURLFor('router'), 'ROUTER_BASE_URL not configured');
@@ -61,7 +63,7 @@ test.describe(localizedTitle("【令牌、充值与余额】充值订单生命�
   });
 
   // RT-API-032 (P1)
-  test(localizedTitle("【令牌、充值与余额 / API】 POST /user/topup/orders 创建 balance_topup 订单", "POST /user/topup/orders creates a balance_topup order"), async () => {
+  test(localizedTitle("【令牌、充值与余额 / API】 POST /user/topup/orders 创建 balance_topup 订单", "POST /user/topup/orders creates a balance_topup order"), async ({ catalog }) => {
     skipIfNoService();
     skipIfNoKey();
     const baseURL = baseURLFor('router')!;
@@ -71,9 +73,11 @@ test.describe(localizedTitle("【令牌、充值与余额】充值订单生命�
     const ctx = await apiContext(baseURL, { Authorization: `Bearer ${token}` });
     try {
       const plans = (await (await ctx.get('/api/v1/public/user/topup/plans')).json()) as {
-        data?: Array<{ id?: string }>;
+        success?: boolean; message?: string; data?: Array<{ id?: string }>;
       };
-      const planId = String(plans.data?.[0]?.id ?? '').trim();
+      expect(plans.success, plans.message).toBe(true);
+      const planId = catalog ? plans.data?.find(p => p.id === catalog.planId)?.id : plans.data?.[0]?.id;
+      if (catalog) expect(planId).toBe(catalog.planId);
       test.skip(!planId, 'no top-up plan available to order');
 
       const res = await ctx.post('/api/v1/public/user/topup/orders', {
@@ -170,34 +174,52 @@ test.describe(localizedTitle("【令牌、充值与余额】充值订单生命�
   });
 });
 
-// RT-API-037 (P2) — order status-machine coverage
-// (created→pending→paid→fulfilled, plus failed/canceled terminals).
-//
-// DEGRADED SKIP on this deployment. Driving an order through its status machine
-// requires (a) creating a real order — which under `top_up_mode=api` registers
-// it with the external payment provider (the boundary this suite does not
-// cross) — and (b) a stubbable payment callback to advance created→pending→paid
-// →fulfilled. Neither is reachable against the live external-pay deployment, so
-// the transition coverage cannot be exercised end-to-end here. The reachable
-// slices of the machine are already asserted elsewhere: creation returns
-// created|pending (RT-API-032), refresh normalizes to a known status
-// (RT-API-034), and cancel moves a pending order to canceled while rejecting an
-// already-paid one (RT-API-035) — all in the redirect-mode branch above.
-test(localizedTitle("【充值与订单生命周期 / API】 RT-API-037 订单状态流转覆盖(created→pending→paid→fulfilled 及失败/取消分支)", "order status transitions follow the state machine (RT-API-037)"), async () => {
-  skipIfNoService();
-  skipIfNoKey();
+test(localizedTitle(
+  '【充值与订单生命周期 / API】 RT-API-037 支付回调履约一次，失败订单不入账',
+  'RT-API-037 payment callbacks credit a fulfilled order once and leave failed orders uncredited',
+), async ({ catalog }) => {
+  test.skip(!catalog, 'Requires the local disposable Router and its per-run callback token');
   const baseURL = baseURLFor('router')!;
-  test.skip(
-    await topUpModeIsExternal(baseURL),
-    'top_up_mode=api: advancing an order through created→pending→paid→fulfilled needs a real ' +
-      'external-payment order + a stubbed payment callback (out of scope); reachable slices are ' +
-      'covered by RT-API-032/034/035',
-  );
-  // On a redirect-mode deployment the create→refresh→cancel slices above already
-  // exercise the reachable transitions; a full paid→fulfilled drive still needs a
-  // payment callback we do not stub, so there is nothing further to assert here.
-  test.info().annotations.push({
-    type: 'boundary',
-    description: 'status-machine transitions verified only to the reachable create/refresh/cancel slices',
-  });
+  const wallet = await loginWithWallet(baseURL, Wallet.createRandom().privateKey);
+  const user = await apiContext(baseURL, { Authorization: `Bearer ${wallet.token}` });
+  const orders = '/api/v1/public/user/topup/orders';
+  const callback = async (id: string, status: string) => {
+    const res = await user.post('/api/v1/public/topup/callback', {
+      headers: { 'X-Topup-Callback-Token': catalog!.callbackToken },
+      data: { order_id: id, status },
+    });
+    const body = await res.json();
+    expect(body.success, body.message).toBe(true);
+    expect(body.data.id).toBe(id);
+    return body.data.status;
+  };
+  const create = async () => {
+    const body = await (await user.post(orders, {
+      data: { business_type: 'balance_topup', plan_id: catalog!.planId },
+    })).json();
+    expect(body.success, body.message).toBe(true);
+    expect(['created', 'pending']).toContain(body.data.status);
+    expect(body.data.quota).toBeGreaterThan(0);
+    return body.data;
+  };
+  const balance = async (): Promise<number> => {
+    const body = await (await user.get('/api/v1/public/user/topup/balance/summary')).json();
+    expect(body.success, body.message).toBe(true);
+    expect(typeof body.data.topup_balance_amount).toBe('number');
+    return body.data.topup_balance_amount;
+  };
+  try {
+    const initial = await balance();
+    const paid = await create();
+    expect(await callback(paid.id, 'pending')).toBe('pending');
+    expect(await callback(paid.id, 'paid')).toBe('fulfilled');
+    expect(await balance()).toBe(initial + paid.quota);
+    expect(await callback(paid.id, 'paid')).toBe('fulfilled');
+    expect(await balance()).toBe(initial + paid.quota);
+    const failed = await create();
+    expect(await callback(failed.id, 'failed')).toBe('failed');
+    expect(await balance()).toBe(initial + paid.quota);
+  } finally {
+    await user.dispose();
+  }
 });

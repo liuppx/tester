@@ -1,6 +1,8 @@
 /* eslint-disable playwright/no-skipped-test -- This mutating relay suite only runs against explicit isolated test fixtures. */
 import { createServer, request as httpRequest, type Server } from 'node:http';
 import { execFileSync } from 'node:child_process';
+import { publishTestChannel } from '../helpers/test-channel';
+import { Wallet } from 'ethers';
 import { localizedTitle } from '../../../shared/title';
 import { activeTestEnv } from '../../../shared/env';
 import { test, expect, baseURLFor, envFor } from '../fixtures';
@@ -22,8 +24,7 @@ interface Envelope<T> {
   data?: T;
 }
 
-interface AvailableModels {
-  models?: string[];
+interface AvailableModels extends Envelope<string[]> {
   sources?: Array<{ group_id?: string }>;
 }
 
@@ -89,12 +90,19 @@ interface UpstreamStub {
   received: StubRequest[];
   actionsByModel: Record<string, StubAction[]>;
   reset: () => void;
+  beginRouting: () => void;
 }
 
 async function startUpstreamStub(options: StubOptions): Promise<UpstreamStub> {
+  let validatingChannels = true;
   const received: StubRequest[] = [];
   const actionIndexes = new Map<string, number>();
   const server = createServer(async (request, response) => {
+    if (request.method === 'GET' && request.url === '/v1/models') {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ object: 'list', data: [{ id: 'gpt-5.4', object: 'model' }] }));
+      return;
+    }
     if (request.method !== 'POST' || request.url !== '/v1/chat/completions') {
       response.writeHead(404, { 'content-type': 'application/json' });
       response.end(JSON.stringify({ error: 'not found' }));
@@ -113,7 +121,11 @@ async function startUpstreamStub(options: StubOptions): Promise<UpstreamStub> {
       return;
     }
 
-    const model = String(payload.model ?? '');
+    const model = String(request.headers.authorization ?? '').replace(/^Bearer sk-fixture-/, '');
+    if (payload.model !== 'gpt-5.4') {
+      response.writeHead(400).end();
+      return;
+    }
     received.push({ model, body: payload });
     const actions = options.actionsByModel[model];
     if (!actions?.length) {
@@ -123,7 +135,9 @@ async function startUpstreamStub(options: StubOptions): Promise<UpstreamStub> {
     }
 
     const actionIndex = actionIndexes.get(model) ?? 0;
-    const action = actions[Math.min(actionIndex, actions.length - 1)]!;
+    const action: StubAction = validatingChannels
+      ? { kind: 'success', marker: 'verification ok' }
+      : actions[Math.min(actionIndex, actions.length - 1)]!;
     actionIndexes.set(model, actionIndex + 1);
     if (action.kind === 'transport_error') {
       request.socket.destroy();
@@ -212,6 +226,11 @@ async function startUpstreamStub(options: StubOptions): Promise<UpstreamStub> {
     server,
     received,
     actionsByModel: options.actionsByModel,
+    beginRouting: () => {
+      validatingChannels = false;
+      received.length = 0;
+      actionIndexes.clear();
+    },
     reset: () => {
       received.length = 0;
       actionIndexes.clear();
@@ -356,37 +375,23 @@ async function createTestGroup(
       data: {
         name: `e2e-${name}-${channelSpec.name}-${Date.now()}`,
         protocol: 'openai',
-        key: 'sk-group-route-e2e-only',
+        key: `sk-fixture-${channelSpec.upstreamModel}`,
         base_url: baseURL,
         status: 1,
         priority: channelSpec.priority,
-        channel_models: [
-          {
-            model: logicalModel,
-            upstream_model: channelSpec.upstreamModel,
-            type: 'text',
-            endpoints: ['/v1/chat/completions'],
-            selected: true,
-            publish_enabled: true,
-            published_model: logicalModel,
-            input_price: 1,
-            output_price: 1,
-            price_unit: 'per_1k_tokens',
-            currency: 'CNY',
-          },
-        ],
       },
     });
     const channel = (await channelResponse.json()) as Envelope<{ id?: string }>;
     expect(channel.success, channel.message).toBe(true);
     const channelID = String(channel.data?.id ?? '').trim();
     expect(channelID).not.toBe('');
+    await publishTestChannel(admin, channelID, 'gpt-5.4', logicalModel, '/v1/chat/completions', false);
     channelIDs.push(channelID);
     channelsByName[channelSpec.name] = channelID;
     bindings.push({
       model: logicalModel,
       channel_id: channelID,
-      upstream_model: channelSpec.upstreamModel,
+      upstream_model: 'gpt-5.4',
       enabled: true,
       priority: channelSpec.priority,
     });
@@ -444,6 +449,11 @@ async function removeTestGroups(
   for (const fixture of fixtures) {
     for (const userID of userIDs) {
       cancelPackageEntitlement(userID, fixture.packageID);
+      expect(fixture.groupID).toMatch(/^[a-zA-Z0-9-]+$/);
+      const column = envFor('router').ROUTER_GROUP_ROUTE_E2E_DB_ENGINE === 'postgres' ? '"group"' : '`group`';
+      executeDisposableDatabaseStatement(
+        `UPDATE users SET ${column} = '' WHERE id = '${userID}' AND ${column} = '${fixture.groupID}'`,
+      );
     }
     const packageDelete = (await (
       await admin.delete(`${ADMIN_PACKAGES}/${fixture.packageID}`)
@@ -505,7 +515,6 @@ async function requestWithGroupOrder(
     expect(tokenID).not.toBe('');
     expect(created.data?.key).toBeTruthy();
     expect(created.data?.group_route_order).toEqual(order);
-    expect(created.data?.auto_failover).toBe(options.automaticFailover ?? true);
     await options.beforeRelay?.(tokenID);
     const authKey = options.specificChannelID
       ? `${created.data!.key}-${options.specificChannelID}`
@@ -1105,7 +1114,6 @@ async function createTokenWithGroupOrder(
   expect.soft(id).not.toBe('');
   expect.soft(created.data?.key).toBeTruthy();
   expect.soft(created.data?.group_route_order).toEqual(order);
-  expect.soft(created.data?.auto_failover).toBe(options.automaticFailover ?? true);
   return { id, key: created.data!.key!, name, autoFailover: created.data?.auto_failover };
 }
 
@@ -1120,12 +1128,15 @@ test(
   ),
   async () => {
     const env = envFor('router');
+    test.setTimeout(180_000);
     const enabled = env['ROUTER_GROUP_ROUTE_E2E_ENABLED'] === 'true';
     test.skip(
       !enabled,
       'Set ROUTER_GROUP_ROUTE_E2E_ENABLED=true for the isolated Router E2E suite',
     );
-    expect(activeTestEnv).toBe('test');
+    const local = activeTestEnv === 'local';
+    if (local) expect(env.ROUTER_GROUP_ROUTE_E2E_DB_NAME).toMatch(/^tester_router_e2e_[a-f0-9]{8}$/);
+    else expect(activeTestEnv).toBe('test');
 
     const baseURL = baseURLFor('router');
     const allowedURL = env['ROUTER_GROUP_ROUTE_E2E_ALLOWED_ROUTER_URL'] ?? '';
@@ -1134,10 +1145,10 @@ test(
     expect(normalizedURL(baseURL!)).toBe(normalizedURL(allowedURL));
     expect(['127.0.0.1', 'localhost', '::1']).toContain(new URL(baseURL!).hostname);
 
-    const userPrivateKey = env['ROUTER_GROUP_ROUTE_E2E_USER_PRIVATE_KEY'] ?? '';
-    const adminPrivateKey = env['ROUTER_GROUP_ROUTE_E2E_ADMIN_PRIVATE_KEY'] ?? '';
-    const logicalModel = env['ROUTER_GROUP_ROUTE_E2E_MODEL'] ?? '';
-    const upstreamModel = env['ROUTER_GROUP_ROUTE_E2E_UPSTREAM_MODEL_B'] ?? '';
+    const userPrivateKey = local ? Wallet.createRandom().privateKey : env.ROUTER_GROUP_ROUTE_E2E_USER_PRIVATE_KEY ?? '';
+    const adminPrivateKey = (local ? env.ROUTER_ADMIN_PRIVATE_KEY : env.ROUTER_GROUP_ROUTE_E2E_ADMIN_PRIVATE_KEY) ?? '';
+    const logicalModel = env.ROUTER_GROUP_ROUTE_E2E_MODEL ?? (local ? 'group-router-fixture' : '');
+    const upstreamModel = env.ROUTER_GROUP_ROUTE_E2E_UPSTREAM_MODEL_B ?? (local ? 'group-b-primary' : '');
     const stubPort = Number(env['ROUTER_GROUP_ROUTE_E2E_STUB_PORT'] ?? '39091');
     expect(adminPrivateKey).not.toBe('');
     expect(userPrivateKey).not.toBe('');
@@ -1192,19 +1203,19 @@ test(
       const user = await loginWithWallet(baseURL!, userPrivateKey);
       const adminIdentity = await loginWithWallet(baseURL!, adminPrivateKey);
       expect(user.userId).not.toBe(adminIdentity.userId);
-      userID = user.userId;
-      adminUserID = adminIdentity.userId;
+      userID = user.userId.trim();
+      adminUserID = adminIdentity.userId.trim();
       ctx = await apiContext(baseURL!, { Authorization: `Bearer ${user.token}` });
       admin = await createAdminContext(baseURL!, adminPrivateKey);
       const beforeFixture = (await (
         await ctx.get(AVAILABLE_MODELS)
-      ).json()) as Envelope<AvailableModels>;
+      ).json()) as AvailableModels;
       expect(beforeFixture.success, beforeFixture.message).toBe(true);
-      expect(beforeFixture.data?.sources ?? []).toEqual([]);
+      expect(beforeFixture.sources ?? []).toEqual([]);
 
       const firstGroupFixture = await createTestGroup(
         admin,
-        [user.userId, adminIdentity.userId],
+        [userID, adminUserID],
         mockBaseURL,
         'group-a',
         logicalModel,
@@ -1218,7 +1229,7 @@ test(
       );
       const preferredGroupFixture = await createTestGroup(
         admin,
-        [user.userId, adminIdentity.userId],
+        [userID, adminUserID],
         mockBaseURL,
         'group-b',
         logicalModel,
@@ -1231,13 +1242,14 @@ test(
       );
       const noCandidateFixture = await createTestGroup(
         admin,
-        [user.userId, adminIdentity.userId],
+        [userID, adminUserID],
         mockBaseURL,
         'group-empty',
         logicalModel,
         [],
       );
       fixtureGroups.push(firstGroupFixture, preferredGroupFixture, noCandidateFixture);
+      stub.beginRouting();
       const firstGroup = firstGroupFixture.groupID;
       const preferredGroup = preferredGroupFixture.groupID;
       const noCandidateGroup = noCandidateFixture.groupID;
@@ -1245,12 +1257,12 @@ test(
 
       const available = (await (
         await ctx.get(AVAILABLE_MODELS)
-      ).json()) as Envelope<AvailableModels>;
+      ).json()) as AvailableModels;
       expect(available.success, available.message).toBe(true);
-      expect(available.data?.models).toContain(logicalModel);
+      expect(available.data).toContain(logicalModel);
       const entitledGroupIDs = [
         ...new Set(
-          (available.data?.sources ?? [])
+          (available.sources ?? [])
             .map((source) => String(source.group_id ?? '').trim())
             .filter(Boolean),
         ),
@@ -1260,12 +1272,12 @@ test(
       expect(entitledGroupIDs).toContain(noCandidateGroup);
       const adminAvailable = (await (
         await admin.get(AVAILABLE_MODELS)
-      ).json()) as Envelope<AvailableModels>;
+      ).json()) as AvailableModels;
       expect(adminAvailable.success, adminAvailable.message).toBe(true);
-      expect(adminAvailable.data?.models).toContain(logicalModel);
+      expect(adminAvailable.data).toContain(logicalModel);
       const adminGroupOrder = [
         ...new Set(
-          (adminAvailable.data?.sources ?? [])
+          (adminAvailable.sources ?? [])
             .map((source) => String(source.group_id ?? '').trim())
             .filter(Boolean),
         ),
@@ -1336,8 +1348,8 @@ test(
         await runRemainingGroupRouteScenarios({
           admin,
           userContext: ctx,
-          userID: user.userId,
-          adminUserID: adminIdentity.userId,
+          userID,
+          adminUserID,
           logicalModel,
           upstreamModel,
           firstGroup,

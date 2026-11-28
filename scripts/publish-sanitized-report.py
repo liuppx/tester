@@ -14,6 +14,7 @@ DEPLOY_ROOT = REPO.parent
 SOURCE = Path(os.environ.get('TESTER_REPORT_SOURCE', str(REPO / 'reports/index.html')))
 TARGET = Path(os.environ.get('TESTER_REPORT_TARGET', '/data/test-results/index.html'))
 ENV_FILES = [
+    Path(os.environ.get('TESTER_ENV_FILE') or REPO / '.env.local'),
     REPO / '.env.local',
     DEPLOY_ROOT / 'chat/.env',
     DEPLOY_ROOT / 'warehouse/.env',
@@ -34,7 +35,8 @@ SECRET_SHAPES = [
 
 
 def configured_secrets() -> list[bytes]:
-    secrets = set()
+    secrets = {value.encode() for name, value in os.environ.items()
+               if name.startswith('ROUTER_') and SECRET_NAME.search(name) and len(value) >= 8}
     for path in ENV_FILES:
         if not path.exists():
             continue

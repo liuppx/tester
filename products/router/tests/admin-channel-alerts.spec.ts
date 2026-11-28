@@ -144,14 +144,6 @@ test(localizedTitle("【渠道账务与告警管理 / API】 管理员可确认�
     // acknowledge → status acknowledged, acknowledged_at/by set
     const ackRes = await ctx.post(`${CH}/alerts/acknowledge`, { data: { ...ref, note: 'e2e ack' } });
     const ack = (await ackRes.json()) as Envelope<AlertState>;
-    // The alert-state feature needs its own migrated table; when a deployment
-    // has not migrated it the handler returns「channel alert state table is not
-    // ready」. That is an environment precondition, not a defect — skip cleanly
-    // rather than fake a pass (the read feeds in RT-API-075 still run).
-    test.skip(
-      !ack.success && /table is not ready/.test(ack.message ?? ''),
-      'channel_alert_states table is not migrated on this deployment',
-    );
     expect(ack.success, ack.message).toBe(true);
     expect(ack.data?.alert_type).toBe('billing');
     expect(ack.data?.alert_key).toBe(ref.alert_key);

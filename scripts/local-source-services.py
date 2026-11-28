@@ -23,7 +23,7 @@ import socket
 import subprocess
 import sys
 import time
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import unquote, urlparse, urlunparse
 
 from local_test_readiness import DEFAULT_CONFIG, LOOPBACK_HOSTS, read_env, select_projects
 
@@ -66,7 +66,7 @@ def private_yaml_copy(source: Path, target: Path, updates: dict[str, dict[str, s
         for key, value in values.items():
             match_at = next((index for index in range(header + 1, end) if re.match(rf"^\s+{re.escape(key)}:\s*", lines[index])), None)
             indent = "  "
-            encoded = json.dumps(value) if isinstance(value, str) else str(value)
+            encoded = json.dumps(value)
             rendered = f"{indent}{key}: {encoded}"
             if match_at is None:
                 insertion.append(rendered)
@@ -112,6 +112,20 @@ def dsn_with_database(dsn: str, database: str) -> str:
     if not re.fullmatch(r"tester_router_e2e_[a-f0-9]{8}", database):
         raise RuntimeError("invalid isolated Router database name")
     return urlunparse(parsed._replace(path="/" + database))
+
+
+def router_fixture_env(config: Path, database: str, url: str) -> dict[str, str]:
+    dsn = urlparse(yaml_scalar(config, "database", "sql_dsn"))
+    if (dsn.hostname not in {"127.0.0.1", "localhost", "::1"} or dsn.path != "/" + database
+            or not dsn.username or not dsn.password or not re.fullmatch(r"tester_router_e2e_[a-f0-9]{8}", database)):
+        raise RuntimeError("Router fixtures require the newly created loopback PostgreSQL database")
+    fixture = {
+        "ENABLED": "true", "DATABASE_DISPOSABLE": "true", "ALLOWED_ROUTER_URL": url,
+        "DB_ENGINE": "postgres", "DB_HOST": dsn.hostname, "DB_PORT": str(dsn.port or 5432),
+        "DB_NAME": database, "DB_USER": unquote(dsn.username), "DB_PASSWORD": unquote(dsn.password),
+    }
+    return {f"ROUTER_{suite}_E2E_{key}": value for suite in ("RESPONSES", "GROUP_ROUTE")
+            for key, value in fixture.items()}
 
 
 def create_router_test_database(source_config: Path, database: str) -> None:
@@ -575,6 +589,14 @@ def wait_port(url: str, timeout: float | None = None) -> None:
     raise RuntimeError(f"service did not open {parsed.hostname}:{parsed.port} within {int(wait_seconds)}s")
 
 
+def verify_router_listener(url: str) -> None:
+    port = urlparse(url).port
+    listeners = subprocess.check_output(["ss", "-H", "-ltn", f"sport = :{port}"], text=True)
+    addresses = [line.split()[3].rsplit(":", 1)[0].strip("[]") for line in listeners.splitlines()]
+    if not addresses or any(host not in {"127.0.0.1", "::1"} for host in addresses):
+        raise RuntimeError(f"Router must listen only on loopback for a local test (port {port})")
+
+
 def start(args: argparse.Namespace) -> int:
     config = json.loads(args.config.read_text(encoding="utf-8"))
     projects = select_projects(config, args.project)
@@ -660,6 +682,7 @@ def start(args: argparse.Namespace) -> int:
     node_redirect_updates: list[dict[str, str]] = []
     node_config = None
     node_test_env = {}
+    router_test_env = {}
     try:
         if projects == ["node"]:
             database = f"tester_node_e2e_{secrets.token_hex(8)}"
@@ -669,6 +692,20 @@ def start(args: argparse.Namespace) -> int:
         if database_names.get("router"):
             create_router_test_database(sources["router"] / "config.yaml", database_names["router"])
             local_databases.append({"engine": "postgres", "name": database_names["router"]})
+            if "router" in projects:
+                router_config = sources["router"] / "config.yaml"
+                router_test_env = router_fixture_env(router_config, database_names["router"], overrides["ROUTER_BASE_URL"])
+                callback_token = secrets.token_urlsafe(32)
+                private_yaml_copy(router_config, router_config, {
+                    "database": {"log_sql_dsn": ""},
+                    "rate_limit": {"critical_rate_limit_duration_seconds": 2},
+                    "operation": {"top_up_mode": "redirect", "top_up_link": overrides["ROUTER_BASE_URL"] + "/fixture-cashier",
+                                  "top_up_sign_secret": secrets.token_urlsafe(32), "top_up_callback_token": callback_token,
+                                  "top_up_api_create_url": "", "top_up_api_query_url": ""},
+                    "notify": {"provider": "", "webhook_url": "", "secret": "", "token": ""},
+                })
+                router_test_env["ROUTER_LOCAL_TOPUP_CALLBACK_TOKEN"] = callback_token
+
         for name in services:
             if name in middleware_names:
                 continue
@@ -698,6 +735,33 @@ def start(args: argparse.Namespace) -> int:
             started_groups.add(group)
             if url_key:
                 wait_port(overrides[url_key])
+            if name == "router-api":
+                verify_router_listener(overrides[url_key])
+            if name == "router-api" and router_test_env:
+                # The opposite startup flags need a separate process and schema.
+                with socket.socket() as listener:
+                    listener.bind(("127.0.0.1", 0))
+                    restricted_port = listener.getsockname()[1]
+                restricted_db = f"tester_router_e2e_{secrets.token_hex(4)}"
+                create_router_test_database(router_config, restricted_db)
+                local_databases.append({"engine": "postgres", "name": restricted_db})
+                restricted_config = args.runtime / "configs/router-restricted.yaml"
+                private_yaml_copy(router_config, restricted_config, {
+                    "server": {"port": restricted_port},
+                    "auth": {"auto_register_enabled": False},
+                    "feature": {"disable_openai_compat": True},
+                    "database": {"sql_dsn": dsn_with_database(yaml_scalar(router_config, "database", "sql_dsn"), restricted_db)},
+                })
+                restricted_command = ["build/router", "--config", str(restricted_config), "--port", str(restricted_port)]
+                with (logs / "router-restricted.log").open("a", encoding="utf-8") as stream:
+                    restricted = subprocess.Popen(restricted_command, cwd=cwd, env=process_env,
+                                                  stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
+                started.append({"name": "router-restricted", "pid": restricted.pid, "cwd": str(cwd),
+                                "command": restricted_command})
+                restricted_url = f"http://127.0.0.1:{restricted_port}"
+                wait_port(restricted_url)
+                verify_router_listener(restricted_url)
+                router_test_env["ROUTER_RESTRICTED_BASE_URL"] = restricted_url
             if name == "node-api" and "router" in sources:
                 callback_url = yaml_scalar(sources["router"] / "config.yaml", "identity", "callback_url")
                 app_id = yaml_scalar(sources["router"] / "config.yaml", "identity", "app_id")
@@ -740,7 +804,7 @@ def start(args: argparse.Namespace) -> int:
     }
     args.manifest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     args.manifest.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    exports = {**overrides, **node_test_env, "TESTER_LOCAL_SOURCE_MANIFEST": str(args.manifest)}
+    exports = {**overrides, **node_test_env, **router_test_env, "TESTER_LOCAL_SOURCE_MANIFEST": str(args.manifest)}
     args.env_output.write_text("".join(f"export {key}={shlex.quote(value)}\n" for key, value in exports.items()), encoding="utf-8")
     args.env_output.chmod(0o600)
     print(f"Started {len(started)} local source services for {', '.join(projects)}")

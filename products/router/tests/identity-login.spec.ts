@@ -231,7 +231,8 @@ test.describe(localizedTitle("【钱包身份登录(真实 Node + Mailpit)】Rou
 
   test(localizedTitle("【钱包身份登录(真实 Node + Mailpit) / API】 RT-API-068 未关联身份在关闭自动注册时被拒", "RT-API-068: unlinked identity is rejected when auto-register is disabled"), async ({}, testInfo) => {
     testInfo.setTimeout(150_000);
-    const routerBase = ROUTER_BASE!;
+    const restrictedURL = process.env.ROUTER_RESTRICTED_BASE_URL;
+    const routerBase = restrictedURL || ROUTER_BASE!;
     const nodeUrl = resolveNodeUrl();
     await requireNodeReachable(nodeUrl);
 
@@ -251,17 +252,18 @@ test.describe(localizedTitle("【钱包身份登录(真实 Node + Mailpit)】Rou
         presentation: vp,
       });
       test.skip(
-        login.ok,
+        !restrictedURL && login.ok,
         'AutoRegisterEnabled=true on this deployment: an unlinked identity auto-registers instead of being rejected; rejection branch unreachable',
       );
 
       // Auto-register is OFF → the unlinked identity must be refused with the
       // specific controlled message, not a 5xx or a generic error.
+      expect(login.ok).toBe(false);
       expect(login.data?.token, 'no token is issued for a rejected login').toBeFalsy();
       expect(
         login.message || '',
         `expected the unlinked-account rejection message, got: ${login.message}`,
-      ).toMatch(/未找到钱包身份关联的账户|请先绑定|自动注册/);
+      ).toMatch(/此钱包尚未关联 Router 账户|未找到钱包身份关联的账户/);
     } finally {
       await teardownWalletContext(ctx);
     }

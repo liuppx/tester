@@ -1,9 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { setTimeout as wait } from 'node:timers/promises';
+import { publishTestChannel, successful } from './test-channel';
 import { randomUUID } from 'node:crypto';
 import { createServer, type Server, type ServerResponse } from 'node:http';
 import { Wallet } from 'ethers';
-import type { APIRequestContext, APIResponse } from '@playwright/test';
 import { apiContext } from '../../../shared/api';
 import { activeTestEnv, baseURLFor, requireEnv } from '../../../shared/env';
 import { loginWithWallet } from './auth';
@@ -165,30 +164,6 @@ async function startUpstream() {
   };
 }
 
-async function successful<T>(response: APIResponse, label: string): Promise<T> {
-  const body = (await response.json()) as { success?: boolean; data: T; message?: string };
-  if (!response.ok() || !body.success) {
-    throw new Error(`${label}: HTTP ${response.status()} ${body.message ?? ''}`);
-  }
-  return body.data;
-}
-
-async function waitForTask(admin: APIRequestContext, taskID: string) {
-  const deadline = Date.now() + 15_000;
-  do {
-    const task = await successful<{ status: string; error_message?: string }>(
-      await admin.get(`/api/v1/admin/tasks/${taskID}`),
-      'Read channel task',
-    );
-    if (task.status === 'succeeded') return;
-    if (task.status === 'failed' || task.status === 'canceled') {
-      throw new Error(`Channel task ${task.status}: ${task.error_message ?? ''}`);
-    }
-    await wait(250);
-  } while (Date.now() < deadline);
-  throw new Error('Channel task did not complete within 15 seconds');
-}
-
 export async function withResponsesFixture(
   run: (fixture: {
     routerURL: string;
@@ -215,7 +190,8 @@ export async function withResponsesFixture(
     routerURL.replace(/\/+$/, '') !== allowedURL.replace(/\/+$/, '') ||
     !['mysql', 'postgres'].includes(databaseEngine ?? '') ||
     !['127.0.0.1', 'localhost', '::1'].includes(databaseHost ?? '') ||
-    !/^tester_router_responses_[a-f0-9]{8}$/.test(databaseName) ||
+    !(/^tester_router_responses_[a-f0-9]{8}$/.test(databaseName) ||
+      (activeTestEnv === 'local' && /^tester_router_e2e_[a-f0-9]{8}$/.test(databaseName))) ||
     !/^\d+$/.test(databasePort ?? '') ||
     !databaseUser ||
     !databasePassword
@@ -272,55 +248,7 @@ export async function withResponsesFixture(
         'Create Responses channel',
       );
       fixtureRows.channelIDs.push(channel.id);
-      const channelPath = `/api/v1/admin/channel/${channel.id}`;
-      const { task } = await successful<{ task: { id: string } }>(
-        await admin.post(`${channelPath}/refresh`, { data: { action: 'models' } }),
-        'Refresh Responses channel models',
-      );
-      await waitForTask(admin, task.id);
-      await successful(
-        await admin.put(`${channelPath}/models`, {
-          data: {
-            channel_models: [
-              {
-                model: upstreamModel,
-                upstream_model: upstreamModel,
-                provider: 'openai',
-                type: 'text',
-                endpoints: [responsesPath],
-                selected: true,
-                input_price: 1,
-                output_price: 1,
-                price_unit: 'per_1k_tokens',
-                currency: 'CNY',
-              },
-            ],
-          },
-        }),
-        'Enable Responses channel model',
-      );
-      await successful(
-        await admin.put(`${channelPath}/endpoints`, {
-          data: { model: upstreamModel, endpoint: responsesPath, enabled: true },
-        }),
-        'Enable Responses channel endpoint',
-      );
-      const { tasks } = await successful<{ tasks: Array<{ id: string }> }>(
-        await admin.post(`${channelPath}/tests`, {
-          data: {
-            target_configs: [{ model: upstreamModel, endpoint: responsesPath, is_stream: true }],
-          },
-        }),
-        'Verify Responses channel endpoint',
-      );
-      if (tasks.length !== 1) throw new Error('Expected one Responses verification task');
-      await waitForTask(admin, tasks[0]!.id);
-      await successful(
-        await admin.put(`${channelPath}/models/publish`, {
-          data: { model: upstreamModel, publish_enabled: true, published_model: model },
-        }),
-        'Publish Responses channel model',
-      );
+      await publishTestChannel(admin, channel.id, upstreamModel, model, responsesPath, true);
       bindings.push({
         model,
         channel_id: channel.id,
