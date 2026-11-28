@@ -1383,7 +1383,7 @@ Stub --> Router: 可控状态码和响应标记
 Router --> Tester: 响应、路由和结算结果
 Tester -> DB: 销毁一次性测试数据库
 note bottom of Tester
-  只有 TEST_ENV=test 且保护开关启用时运行
+  本地源码运行器或显式配置的隔离测试环境
   生产和共享真实账务地址必须被拒绝
 end note
 @enduml
@@ -1391,7 +1391,7 @@ end note
 
 ### 测试环境与数据边界
 
-- 仅在 Tester 的 `TEST_ENV=test` 下，对专用测试 Router 实例和可重建的独立测试数据库运行。测试环境使用专用钱包、管理员身份、API Token、测试权益和测试分组。Tester 必须检查当前加载的是 `.env.test`，不允许把 `ROUTER_BASE_URL` 指向生产或共享真实账务环境。
+- GPU 本地源码批次使用 `TEST_ENV=local`。运行器分配回环地址和一次性 PostgreSQL 数据库，从 Tester 配置读取管理员身份，并为普通用户创建临时钱包。独立运行可用 `TEST_ENV=test`，需显式提供专用数据库和测试钱包。
 - 被测分组和渠道必须由测试夹具独占。受控上游 stub 返回可区分的组/渠道标记，并记录收到的请求次数与请求内容摘要。stub 必须能从 Router 主机访问，不依赖真实模型供应商。
 - 运行需要显式环境保护开关 `ROUTER_GROUP_ROUTE_E2E_ENABLED=true`、`TEST_ENV=test`、精确允许的隔离 `ROUTER_BASE_URL`、专用测试身份和可销毁的测试数据库。开关缺失、测试环境标记不符、目标 URL 不匹配、stub 不可达或无法确保数据清理时必须 fail closed，不得改测真实渠道。
 - 优先通过 Router 管理 API 建立和清理测试组、模型、渠道、权益与 Token。若当前 API 不能安全创建完整夹具，只能在一次性测试数据库初始化时 seed。禁止直接修改生产或共享数据库。运行结束校验夹具已清除，或销毁一次性测试数据库。
@@ -1427,17 +1427,17 @@ end note
 
 ### 自动化实现和执行条件
 
-`products/router/tests/group-route-order.spec.ts` 将 13 个验收场景放在一个串行隔离运行中，并包含空 `group_route_order` 的兼容回归检查。它会启动可按上游模型排队返回 HTTP 故障、传输断开、SSE 响应和客户端断连的 stub，通过管理 API 建立夹具、分配套餐权益，逐个创建 Token 并执行真实中继请求。每个场景的期望值用 soft assertion 汇总，避免首个产品缺陷使后续场景没有运行。运行失败仍会清理 Token、套餐、分组和渠道。
+`products/router/tests/group-route-order.spec.ts` 将 13 个验收场景放在一个串行隔离运行中，并包含空 `group_route_order` 的兼容回归检查。它会启动可按渠道返回 HTTP 故障、传输断开、SSE 响应和客户端断连的 stub，通过管理 API 建立夹具、分配套餐权益，逐个创建 Token 并执行真实中继请求。每个场景的期望值用 soft assertion 汇总，避免首个产品缺陷使后续场景没有运行。运行失败仍会清理 Token、套餐、分组和渠道。
 
 运行前，测试用户和管理员账号需使用独立测试身份。普通测试用户应没有已有权益和个人渠道。测试 Router 必须连接专用的一次性数据库，并且 Tester 配置的数据库引擎、主机、端口、库名和凭据必须指向同一实例。GR-E2E-003 需要数据库客户端执行精确的订阅状态更新，因为 Router 没有单条套餐分配撤销 API。用例执行完成后会通过 Router API 删除订阅关联的套餐、分组和渠道。
 
-A、B 组都发布同一个 `ROUTER_GROUP_ROUTE_E2E_MODEL` 并映射到不同上游模型。B 组主候选与 `ROUTER_GROUP_ROUTE_E2E_UPSTREAM_MODEL_B` 一致。A、B 组至少分别配置两个渠道候选，用于同组切换和失败后继续尝试。候选使用 `per_1k_tokens` 价格和套餐额度。创建的渠道 Base URL 指向 `http://127.0.0.1:<ROUTER_GROUP_ROUTE_E2E_STUB_PORT>`。
+A、B 组通过管理 API 把上游目录中的 `gpt-5.4` 发布为同一逻辑模型。stub 用每条渠道的测试密钥区分候选，B 组主候选使用 `ROUTER_GROUP_ROUTE_E2E_UPSTREAM_MODEL_B` 标记。A、B 组至少分别配置两个渠道候选，用于同组切换和失败后继续尝试。候选使用 `per_1k_tokens` 价格和套餐额度。创建的渠道 Base URL 指向 `http://127.0.0.1:<ROUTER_GROUP_ROUTE_E2E_STUB_PORT>`。
 
 该用例需要 Tester 与 Router 共享测试机的 loopback 网络空间。stub 只绑定 `127.0.0.1`，不对外监听。若 Router 在隔离容器内运行，应通过受控的 loopback/host 网络配置让 Router 能访问该地址。
 
 套餐分配没有单独的撤销 API。用例执行后会删除 Token 并关闭 stub，分组、渠道、套餐和订阅数据由一次性数据库销毁清理，不能在共享数据库中运行。
 
-该用例需要以下 `.env.test` 配置：
+独立运行时可在 `.env.test` 中配置这些值。GPU 本地源码批次由运行器生成对应的私有配置。
 
 ```dotenv
 TEST_ENV=test

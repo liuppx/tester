@@ -199,8 +199,11 @@ test(localizedTitle(
     })).json();
     expect(body.success, body.message).toBe(true);
     expect(['created', 'pending']).toContain(body.data.status);
-    expect(body.data.quota).toBeGreaterThan(0);
-    return body.data;
+    const detail = await (await user.get(`${orders}/${body.data.id}`)).json();
+    expect(detail.success, detail.message).toBe(true);
+    expect(detail.data.id).toBe(body.data.id);
+    expect(detail.data.quota).toBeGreaterThan(0);
+    return detail.data;
   };
   const balance = async (): Promise<number> => {
     const body = await (await user.get('/api/v1/public/user/topup/balance/summary')).json();

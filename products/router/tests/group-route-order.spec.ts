@@ -858,7 +858,7 @@ async function runRemainingGroupRouteScenarios(context: GroupRouteScenarioContex
   stub.actionsByModel[upstreamModel] = [{ kind: 'success', marker: 'served-by:group-b' }];
 
   const streamToken = await createTokenWithGroupOrder(userContext, orderBFirst, logicalModel, {
-    tokenName: `gr008-client-abort-${Date.now()}`,
+    tokenName: `gr008-abort-${Date.now()}`,
   });
   stub.actionsByModel[upstreamModel] = [{ kind: 'stream_hold', marker: 'partial-from-b' }];
   const clientAbort = await abortStreamingRequestAfterFirstChunk(
@@ -1294,7 +1294,7 @@ test(
       ];
       const preferredOrderResult = await requestWithGroupOrder(ctx, order, logicalModel);
       const preferredOrderCalls = stub.received.map((request) => request.model);
-      const routeLogs = await listUserLogs(ctx, preferredOrderResult.tokenName);
+      const routeLogs = await waitForUserLogs(ctx, preferredOrderResult.tokenName, rows => rows.some(row => Number(row.type) === 2));
       const preferredSuccessLog = routeLogs.find((row) => Number(row.type) === 2);
       stub.reset();
 

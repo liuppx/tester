@@ -6,7 +6,7 @@ import { acquireAdminToken } from './auth';
 
 type Catalog = { planId: string; packageId: string; callbackToken: string };
 
-export const test = base.extend<{}, { catalog: Catalog | undefined }>({
+export const test = base.extend<object, { catalog: Catalog | undefined }>({
   catalog: [async ({}, use) => {
     const callbackToken = process.env.ROUTER_LOCAL_TOPUP_CALLBACK_TOKEN;
     if (!callbackToken) return use(undefined);
