@@ -9,6 +9,7 @@
 | 了解运行配置、环境变量模板、依赖清单与备份归属 | [配置说明](configuration.md) |
 | 使用社区 main 源码启动产品并执行 E2E | [本地源码测试模式](local-source-mode.md) |
 | 理解钱包授权、控制页面、队列和源码 watcher | [控制服务与授权](test-control.md) |
+| 了解定时、main 更新、手动触发和批次恢复 | [Tester 触发与测试批次设计](test-batch-scheduling.md) |
 | 接入 Web、管理、Skill 分析和探活 API | [接口说明](api.md) · [OpenAPI 契约](openapi.yaml) |
 | 查看报告、计划任务和失败的判读规则 | [报告与调度](test-machine-report.md) |
 | 核对产品的首轮证据和复测进展 | [E2E 基线](e2e-baseline.md) |

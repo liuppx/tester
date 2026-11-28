@@ -66,12 +66,16 @@
               <div><p class="eyebrow">RUN TESTS</p><h2>运行测试</h2></div>
               <span id="service-status" class="service-indicator"><i></i>控制服务在线</span>
             </div>
-            <label for="scope">测试范围</label>
-            <select id="scope"><option value="">请选择项目或全量测试</option></select>
+            <fieldset class="scope-picker">
+              <legend>测试范围</legend>
+              <label class="scope-full"><input id="full-scope" type="checkbox">全量项目</label>
+              <div id="project-options" class="project-options" aria-label="选择要测试的项目"></div>
+              <p class="field-hint">可选择一个或多个项目。全量测试会覆盖当前安全配置中的全部项目。</p>
+            </fieldset>
             <p id="selected-status" class="selection-status" aria-live="polite"></p>
             <div class="run-actions">
               <button id="run" class="button button-primary" disabled>运行测试</button>
-              <button id="rerun" class="button button-secondary" disabled hidden>重跑上次</button>
+              <button id="rerun" class="button button-secondary" disabled hidden>重跑所选范围</button>
             </div>
             <p id="message" class="feedback" role="status" aria-live="polite"></p>
           </article>
@@ -82,7 +86,7 @@
               <span id="queue-count" class="queue-count">空闲</span>
             </div>
             <div id="queue-list" class="queue-list" aria-live="polite"></div>
-            <p class="queue-note">任务按顺序执行，同一测试范围的重复请求会合并。</p>
+            <p class="queue-note">不同触发共用一个串行队列。相同范围的重复请求会合并，批次会记录触发来源与项目结果。</p>
           </article>
         </section>
 

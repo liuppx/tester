@@ -1,4 +1,5 @@
-const scope = document.querySelector("#scope");
+const fullScope = document.querySelector("#full-scope");
+const projectOptions = document.querySelector("#project-options");
 const runButton = document.querySelector("#run");
 const rerunButton = document.querySelector("#rerun");
 const selectedStatus = document.querySelector("#selected-status");
@@ -11,52 +12,62 @@ let csrfToken = "";
 let submitting = false;
 let refreshing = false;
 
-function scopeKey(value) {
-  return value === "__full__" ? "__full__" : value;
+function selectedProjects() {
+  return [...projectOptions.querySelectorAll("input[data-project]:checked")]
+    .map((input) => input.dataset.project);
 }
 
-function selectedInfo() {
-  if (!statusData || !scope.value) return null;
-  return scope.value === "__full__" ? statusData.full : statusData.projects[scope.value];
+function selection() {
+  return { full: fullScope.checked, projects: selectedProjects() };
 }
 
-function hasPreviousRun(value, info) {
-  if (info?.last) return true;
-  return Boolean(overviewData?.history?.some((item) => item.project === scopeKey(value)));
+function previousProjectRun(project) {
+  const info = statusData?.projects?.[project];
+  return info?.last || overviewData?.history?.find((item) => item.project === project);
 }
 
-function previousRun(value, info) {
-  return info?.last || overviewData?.history?.find((item) => item.project === scopeKey(value));
+function selectedBusy() {
+  const current = selection();
+  if (current.full) return statusData?.full?.busy || false;
+  return current.projects.some((project) => statusData?.projects?.[project]?.busy);
 }
 
 function updateSelection() {
-  const selected = scope.value;
-  const info = selectedInfo();
-  const busy = Boolean(info?.busy);
-  const available = Boolean(info) && !busy && !submitting;
+  const current = selection();
+  const selected = current.full || current.projects.length > 0;
+  const busy = selectedBusy();
+  const available = Boolean(statusData) && selected && !busy && !submitting;
+  const hasHistory = current.full
+    ? Boolean(statusData?.full?.last || overviewData?.history?.some((item) => item.project === "__full__"))
+    : current.projects.length > 0 && current.projects.every((project) => Boolean(previousProjectRun(project)));
 
   runButton.disabled = !available;
-  rerunButton.hidden = !selected || !hasPreviousRun(selected, info);
+  rerunButton.hidden = !selected || !hasHistory;
   rerunButton.disabled = !available;
 
   if (!selected) {
-    selectedStatus.textContent = "选择项目运行增量测试，或选择全量测试覆盖所有项目。";
+    selectedStatus.textContent = "选择一个或多个项目运行增量测试，或选择全量测试。";
     return;
   }
 
   if (busy) {
-    selectedStatus.textContent = info.busy;
+    selectedStatus.textContent = "所选范围中有任务正在排队或运行。";
     return;
   }
 
-  const lastRun = previousRun(selected, info);
-  if (lastRun) {
-    const result = lastRun.result || lastRun.status || "结果未知";
-    selectedStatus.textContent = `上次运行：${result} · ${lastRun.finished_at || "时间未知"}`;
+  if (current.full) {
+    const lastRun = statusData?.full?.last || overviewData?.history?.find((item) => item.project === "__full__");
+    selectedStatus.textContent = lastRun
+      ? `全量测试上次运行：${lastRun.result || lastRun.status || "结果未知"} · ${lastRun.finished_at || "时间未知"}`
+      : "全量测试会运行安全配置中的全部项目。";
     return;
   }
 
-  selectedStatus.textContent = "当前范围没有运行中的任务，可以开始测试。";
+  selectedStatus.textContent = `${current.projects.length} 个项目将组成一个测试批次。`;
+  if (hasHistory && current.projects.length === 1) {
+    const lastRun = previousProjectRun(current.projects[0]);
+    selectedStatus.textContent = `上次运行：${lastRun.result || lastRun.status || "结果未知"} · ${lastRun.finished_at || "时间未知"}`;
+  }
 }
 
 function renderQuality(data) {
@@ -141,6 +152,18 @@ function renderQueue(queue) {
     list.append(createQueueItem(task, `排队第 ${index + 1} 项${deferred}`, "pending"));
   });
 
+  const recent = (queue?.recent || []).filter((item) => item.result);
+  if (recent.length) {
+    const heading = document.createElement("p");
+    heading.className = "queue-section-label";
+    heading.textContent = "最近完成的批次";
+    list.append(heading);
+    recent.slice(0, 5).forEach((item) => {
+      const date = item.finished_at ? new Date(item.finished_at).toLocaleString() : "时间未知";
+      list.append(createQueueItem(item, `${item.result} · ${date}`, "recent"));
+    });
+  }
+
   if (!taskCount) {
     const empty = document.createElement("p");
     empty.className = "queue-empty muted";
@@ -157,10 +180,21 @@ function createQueueItem(task, state, kind) {
   marker.setAttribute("aria-hidden", "true");
   const details = document.createElement("div");
   const title = document.createElement("strong");
-  title.textContent = task.project === "__full__" ? "全量测试" : task.project;
+  const names = task.projects || [];
+  title.textContent = task.scope === "full" || task.project === "__full__"
+    ? "全量测试"
+    : names.length > 1 ? `${names.length} 个项目 · ${names.slice(0, 3).join("、")}${names.length > 3 ? "…" : ""}`
+      : names[0] || task.project;
   const meta = document.createElement("span");
   meta.className = "muted";
-  meta.textContent = `${state} · ${task.mode === "deploy" ? "部署并测试" : "测试"}`;
+  const triggers = { manual: "手动", main: "main 更新", "daily-schedule": "定时全量", "tester-main": "Tester 更新" };
+  const batchId = task.batch_id || task.id;
+  const batch = batchId ? ` · 批次 ${batchId.slice(0, 8)}` : "";
+  const revisions = Object.entries(task.target_shas || {}).slice(0, 2)
+    .map(([project, revision]) => `${project}@${revision.slice(0, 7)}`);
+  if (task.target_sha && task.source === "tester-main") revisions.push(`tester@${task.target_sha.slice(0, 7)}`);
+  const revisionLabel = revisions.length ? ` · ${revisions.join("、")}` : "";
+  meta.textContent = `${state} · ${triggers[task.source] || task.source || "测试"}触发 · ${task.mode === "deploy" ? "部署并测试" : "测试"}${batch}${revisionLabel}`;
   details.append(title, meta);
   row.append(marker, details);
   return row;
@@ -249,10 +283,23 @@ async function loadUsers() {
 }
 
 function updateStatusControls(data) {
-  const previous = scope.value;
-  scope.replaceChildren(new Option("请选择项目或全量测试", ""), new Option("全量测试", "__full__"));
-  for (const name of Object.keys(data.projects || {})) scope.add(new Option(name, name));
-  scope.value = previous;
+  const selected = new Set(selectedProjects());
+  projectOptions.replaceChildren();
+  for (const name of Object.keys(data.projects || {})) {
+    const label = document.createElement("label");
+    label.className = "scope-option";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.dataset.project = name;
+    input.checked = selected.has(name);
+    const title = document.createElement("span");
+    title.textContent = name;
+    label.append(input, title);
+    projectOptions.append(label);
+  }
+  if (fullScope.checked) {
+    projectOptions.querySelectorAll("input[data-project]").forEach((input) => { input.checked = false; });
+  }
   renderProjects(data);
   renderQueue(data.queue);
   updateSelection();
@@ -302,21 +349,23 @@ async function refresh() {
 }
 
 async function submitRun(isRerun) {
-  if (!scope.value || submitting || selectedInfo()?.busy) return;
-  const selected = scope.value;
+  const current = selection();
+  if ((!current.full && !current.projects.length) || submitting || selectedBusy()) return;
   submitting = true;
   message.textContent = isRerun ? "正在提交重跑请求…" : "正在提交测试请求…";
   updateSelection();
 
   try {
+    const body = current.full ? { scope: "full" } : { scope: "projects", projects: current.projects };
     const response = await fetch("/api/run", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Tester-CSRF": csrfToken },
-      body: JSON.stringify(selected === "__full__" ? { scope: "full" } : { project: selected }),
+      body: JSON.stringify(body),
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "测试请求提交失败，请稍后重试。");
-    message.textContent = `${selected === "__full__" ? "全量测试" : selected} 已加入队列。相同范围的并发请求会合并。`;
+    const label = current.full ? "全量测试" : `${current.projects.length} 个项目的测试批次`;
+    message.textContent = `${label}已加入队列。`;
     await refresh();
   } catch (error) {
     message.textContent = error.message || "请求失败，请检查网络后重试。";
@@ -326,7 +375,14 @@ async function submitRun(isRerun) {
   }
 }
 
-scope.addEventListener("change", updateSelection);
+fullScope.addEventListener("change", () => {
+  if (fullScope.checked) projectOptions.querySelectorAll("input[data-project]").forEach((input) => { input.checked = false; });
+  updateSelection();
+});
+projectOptions.addEventListener("change", (event) => {
+  if (event.target.matches("input[data-project]:checked")) fullScope.checked = false;
+  updateSelection();
+});
 runButton.addEventListener("click", () => submitRun(false));
 rerunButton.addEventListener("click", () => submitRun(true));
 

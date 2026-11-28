@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import re
 import sys
 
 
@@ -24,6 +25,9 @@ def main():
     data = {
         "run": run,
         "project": project or "__full__",
+        "batch_id": os.environ.get("TESTER_BATCH_ID")
+        if re.fullmatch(r"[0-9a-f]{24}", os.environ.get("TESTER_BATCH_ID", "")) else None,
+        "batch_project": os.environ.get("TESTER_BATCH_PROJECT") or None,
         "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "stage": stage,
         "mode": "local-source" if local_source else "deployed",

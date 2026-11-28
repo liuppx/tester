@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time as clock_time, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import hashlib
 import json
 import mimetypes
 import os
@@ -34,7 +35,10 @@ RUNNER = REPO / "scripts/deploy-and-test-project.sh"
 FULL_RUNNER = REPO / "scripts/run-full-on-test-machine.sh"
 TESTER_MAIN_RUNNER = REPO / "scripts/test-tester-main.sh"
 FULL = "__full__"
+MULTI_PROJECT = "__batch__"
 TESTER_MAIN_KEY = "__tester_main__"
+PROJECT_ALIASES = {"books": "book"}
+DEPLOYMENT_ADAPTERS = {"book", "chat", "marketplace", "router", "wallet"}
 ORIGIN = os.environ.get("TESTER_CONTROL_ORIGIN", "https://tester.tidukongjian.com")
 AUTH_DATABASE = Path(os.environ.get("TESTER_AUTH_DATABASE", str(PRIVATE / "tester-auth.sqlite3")))
 ADMIN_DID = os.environ.get("TESTER_ADMIN_DID", "").strip()
@@ -85,23 +89,42 @@ def next_daily_run(now_at: datetime, run_at: clock_time, zone: ZoneInfo) -> date
     return candidate
 
 
+def next_scheduled_daily_run(now_at: datetime, run_at: clock_time, zone: ZoneInfo,
+                             scheduled_date: str | None) -> datetime:
+    local_now = now_at.astimezone(zone)
+    today = local_now.date()
+    today_target = datetime.combine(today, run_at, tzinfo=zone)
+    if today_target <= local_now and (scheduled_date is None or scheduled_date < today.isoformat()):
+        return today_target
+    return next_daily_run(now_at, run_at, zone)
+
+
 def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def load_config() -> dict[str, dict]:
     raw = json.loads(CONFIG.read_text(encoding="utf-8"))
-    projects = raw.get("projects")
-    if not isinstance(projects, dict) or not projects:
+    configured = raw.get("projects")
+    if not isinstance(configured, dict) or not configured:
         raise ValueError("No Tester projects configured")
-    for name, value in projects.items():
+    projects = {}
+    for configured_name, value in configured.items():
+        name = PROJECT_ALIASES.get(configured_name, configured_name)
         if not name.replace("-", "").isalnum() or not isinstance(value, dict):
             raise ValueError("Invalid project configuration")
+        if name in projects:
+            raise ValueError(f"Duplicate project configuration: {name}")
         repo = Path(value.get("repo", ""))
-        if not repo.is_absolute() or (
-            value.get("enabled", False) and not (repo / ".git").exists()
-        ):
-            raise ValueError(f"Project repository is missing: {name}")
+        if not repo.is_absolute():
+            raise ValueError(f"Project repository path must be absolute: {name}")
+        if value.get("enabled", False) and name not in DEPLOYMENT_ADAPTERS and not LOCAL_SOURCE_MODE:
+            value = {**value, "enabled": False,
+                     "reason": "Tester does not have a verified source-update adapter for this project."}
+        elif value.get("enabled", False) and not (repo / ".git").exists():
+            value = {**value, "enabled": False,
+                     "reason": "Configured main checkout is missing; update its repository path before enabling the watcher."}
+        projects[name] = value
     return projects
 
 
@@ -129,6 +152,19 @@ def load_state() -> dict:
     if state.get("active"):
         state["pending"].insert(0, state["active"])
         state["active"] = None
+    state["seen"] = {PROJECT_ALIASES.get(name, name): sha for name, sha in state.get("seen", {}).items()}
+    scheduled_date = state.get("daily_scheduled_date")
+    try:
+        if scheduled_date is not None:
+            date.fromisoformat(scheduled_date)
+    except (TypeError, ValueError):
+        scheduled_date = None
+    state["daily_scheduled_date"] = scheduled_date
+    for item in state.get("pending", []):
+        normalize_batch_item(item)
+    for item in state.get("recent", []):
+        normalize_batch_item(item)
+    if state.get("pending") or state.get("recent"):
         save_state(state)
     return state
 
@@ -301,39 +337,112 @@ def git_sha(repo: str, remote: bool) -> str:
     return value
 
 
-def enqueue(project: str, source: str, target_sha: str | None = None,
-            mode: str = "deploy") -> dict:
+def normalize_batch_item(item: dict) -> dict:
+    project = item.get("project")
     if project == FULL:
+        item.setdefault("scope", "full")
+        item.setdefault("projects", [])
+    elif "projects" not in item:
+        item["projects"] = [PROJECT_ALIASES.get(project, project)] if project else []
+        item["scope"] = "projects"
+        if item.get("target_sha") and item["projects"]:
+            item.setdefault("target_shas", {})[item["projects"][0]] = item["target_sha"]
+    else:
+        item["projects"] = [PROJECT_ALIASES.get(name, name) for name in item["projects"]]
+        item.setdefault("scope", "projects")
+        item.setdefault("target_shas", {})
+    item.setdefault("target_shas", {})
+    item.setdefault("results", {})
+    if item.get("scope") == "projects" and len(item["projects"]) > 1:
+        item["project"] = MULTI_PROJECT
+    elif item.get("scope") == "projects" and item["projects"]:
+        item["project"] = item["projects"][0]
+    return item
+
+
+def _enqueue_batch_locked(projects: list[str] | None, source: str,
+                          target_shas: dict[str, str] | None = None,
+                          mode: str = "test", target_sha: str | None = None,
+                          schedule_date: str | None = None) -> dict:
+    is_full = projects is None
+    canonical = sorted({PROJECT_ALIASES.get(name, name) for name in (projects or [])})
+    if not is_full and (not canonical or any(name not in PROJECTS for name in canonical)):
+        raise ValueError("Unknown or empty project batch")
+    if is_full:
         mode = "test"
-    elif project not in PROJECTS:
-        raise ValueError(f"Unknown project: {project}")
-    if ARTIFACT_MODE and mode == "deploy" and not (ALLOW_ARTIFACT_SOURCE_DEPLOY or LOCAL_SOURCE_MODE):
-        raise ValueError("Artifact mode does not deploy product source checkouts")
     if mode not in ("test", "deploy"):
         raise ValueError("Unknown test mode")
-    if project != FULL and mode == "deploy" and not LOCAL_SOURCE_MODE and not PROJECTS[project].get("enabled", False):
-        raise ValueError(f"Deployment adapter is not enabled for {project}")
-    # An active run has already selected its commit. A newer main commit must
-    # remain in the queue rather than rewriting the running request's SHA.
-    active = STATE["active"]
-    if active and active["project"] == project and active.get("mode", "deploy") == mode:
-        if source not in ("main", "tester-main") or not target_sha or target_sha == active.get("target_sha"):
+    if mode == "deploy" and not LOCAL_SOURCE_MODE:
+        unsupported = [name for name in canonical
+                       if name not in DEPLOYMENT_ADAPTERS or not PROJECTS[name].get("enabled", False)]
+        if unsupported:
+            raise ValueError("Deployment adapter is not enabled for " + ", ".join(unsupported))
+    if ARTIFACT_MODE and mode == "deploy" and not (ALLOW_ARTIFACT_SOURCE_DEPLOY or LOCAL_SOURCE_MODE):
+        raise ValueError("Artifact mode does not deploy product source checkouts")
+    revisions = {PROJECT_ALIASES.get(name, name): sha for name, sha in (target_shas or {}).items()}
+    if target_sha and len(canonical) == 1:
+        revisions.setdefault(canonical[0], target_sha)
+    if any(not re.fullmatch(r"[0-9a-f]{40}", sha) for sha in revisions.values()):
+        raise ValueError("Invalid target commit")
+    if target_sha and not re.fullmatch(r"[0-9a-f]{40}", target_sha):
+        raise ValueError("Invalid target commit")
+
+    # Keep one pending main-change batch and merge later poll results into it.
+    # The active batch is immutable because its projects may already be running.
+    active = normalize_batch_item(STATE["active"]) if STATE["active"] else None
+    if source == "main" and not is_full:
+        active_revisions = (active or {}).get("target_shas", {})
+        revisions = {name: sha for name, sha in revisions.items()
+                     if active is None or name not in active["projects"]
+                     or sha != active_revisions.get(name)}
+        if not revisions:
+            return active
+    elif active and active.get("scope") == ("full" if is_full else "projects") \
+            and active.get("projects", []) == canonical and active.get("mode") == mode:
+        if source == "daily-schedule" and schedule_date == active.get("schedule_date"):
+            return active
+        if source not in ("main", "tester-main", "daily-schedule"):
+            return active
+        if source == "tester-main" and target_sha == active.get("target_sha"):
             return active
     for item in STATE["pending"]:
-        if item["project"] == project and item.get("mode", "deploy") == mode:
-            if source in ("main", "tester-main") and target_sha:
+        normalize_batch_item(item)
+        if source == "main" and item.get("source") == "main" and item.get("mode") == mode:
+            changed_projects = [
+                name for name, sha in revisions.items()
+                if item.get("target_shas", {}).get(name) != sha
+            ]
+            item["target_shas"].update(revisions)
+            for name in changed_projects:
+                item.get("results", {}).pop(name, None)
+            item["projects"] = sorted(item["target_shas"])
+            item["project"] = item["projects"][0] if len(item["projects"]) == 1 else MULTI_PROJECT
+            item.pop("retry_at", None)
+            item.pop("deferred_until", None)
+            save_state(STATE)
+            return item
+        if item.get("scope") == ("full" if is_full else "projects") and item.get("project") == (
+            FULL if is_full else (canonical[0] if len(canonical) == 1 else MULTI_PROJECT)
+        ) and item.get("projects", []) == canonical and item.get("source") == source and item.get("mode") == mode:
+            if source == "daily-schedule" and item.get("schedule_date") != schedule_date:
+                continue
+            if source == "tester-main" and target_sha:
                 item["target_sha"] = target_sha
-                item["source"] = source
-                item.pop("retry_at", None)
-                item.pop("deferred_until", None)
+            if source == "daily-schedule" and schedule_date:
+                item["schedule_date"] = schedule_date
                 save_state(STATE)
             return item
     item = {
         "id": secrets.token_hex(12),
-        "project": project,
+        "project": FULL if is_full else canonical[0] if len(canonical) == 1 else MULTI_PROJECT,
+        "scope": "full" if is_full else "projects",
+        "projects": canonical,
+        "target_shas": revisions,
+        "results": {},
         "mode": mode,
         "source": source,
         "target_sha": target_sha,
+        "schedule_date": schedule_date,
         "queued_at": now(),
     }
     STATE["pending"].append(item)
@@ -341,28 +450,60 @@ def enqueue(project: str, source: str, target_sha: str | None = None,
     return item
 
 
+def enqueue_batch(projects: list[str] | None, source: str,
+                  target_shas: dict[str, str] | None = None,
+                  mode: str = "test", target_sha: str | None = None,
+                  schedule_date: str | None = None) -> dict:
+    with MUTEX:
+        return _enqueue_batch_locked(projects, source, target_shas, mode, target_sha, schedule_date)
+
+
+def enqueue(project: str, source: str, target_sha: str | None = None,
+            mode: str = "deploy") -> dict:
+    if project == FULL:
+        return enqueue_batch(None, source, mode="test", target_sha=target_sha)
+    return enqueue_batch([project], source,
+                         target_shas={project: target_sha} if target_sha else None,
+                         mode=mode, target_sha=target_sha)
+
+
 def poll_main() -> None:
     if not WATCH_UPSTREAM_MAIN:
         return
+    changes = {}
+    seen_updates = {}
     for name, config in PROJECTS.items():
         if not config.get("enabled", False):
             continue
         try:
             remote_sha = git_sha(config["repo"], remote=True)
             local_sha = git_sha(config["repo"], remote=False)
+            previous = STATE["seen"].get(name)
+            if (previous is not None and remote_sha != previous) or (
+                previous is None and remote_sha != local_sha
+            ):
+                changes[name] = remote_sha
+            seen_updates[name] = remote_sha
             with MUTEX:
-                previous = STATE["seen"].get(name)
-                if (previous is not None and remote_sha != previous) or (
-                    previous is None and remote_sha != local_sha
-                ):
-                    enqueue(name, "main", remote_sha)
-                STATE["seen"][name] = remote_sha
                 STATE["poll_errors"].pop(name, None)
-                save_state(STATE)
+                if name not in changes:
+                    STATE["seen"][name] = remote_sha
+                    save_state(STATE)
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             with MUTEX:
                 STATE["poll_errors"][name] = f"{type(error).__name__}: upstream main check failed"
                 save_state(STATE)
+    with MUTEX:
+        if changes:
+            try:
+                enqueue_batch(list(changes), "main", changes, mode="deploy")
+            except ValueError:
+                for name in changes:
+                    STATE["poll_errors"][name] = "upstream change could not be queued for source testing"
+                save_state(STATE)
+                return
+        STATE["seen"].update(seen_updates)
+        save_state(STATE)
 
 
 def poll_tester_main() -> None:
@@ -489,31 +630,20 @@ def cooldown_until(project: str) -> float | None:
 
 
 def execute(item: dict) -> bool:
+    normalize_batch_item(item)
     project = item["project"]
-    mode = "test" if project == FULL else item.get("mode", "deploy")
+    mode = "test" if item.get("scope") == "full" else item.get("mode", "deploy")
     item.pop("retry_at", None)
     item.pop("deferred_until", None)
-    eligible = cooldown_until("router" if project == FULL else project)
-    if eligible is not None:
-        item["retry_at"] = eligible
-        item["deferred_until"] = datetime.fromtimestamp(eligible).astimezone().isoformat(timespec="minutes")
-        with MUTEX:
-            save_state(STATE)
-        return False
-    item.pop("deferred_until", None)
-    target_sha = None
-    if mode == "deploy":
-        try:
-            target_sha = git_sha(PROJECTS[project]["repo"], remote=True)
-        except (OSError, ValueError, subprocess.SubprocessError):
-            return False
-        item["target_sha"] = target_sha
+    if item.get("scope") == "full":
+        projects = [FULL]
+    else:
+        projects = item["projects"]
     with MUTEX:
         save_state(STATE)
     LOG_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
     log_path = LOG_DIR / f"{item['id']}.log"
     environment = os.environ.copy()
-    environment["TESTER_REQUEST_ID"] = item["id"]
     environment["TESTER_TRIGGER"] = item["source"]
     try:
         with log_path.open("w", encoding="utf-8") as log:
@@ -522,44 +652,100 @@ def execute(item: dict) -> bool:
                 metadata = REPO / "release.json"
                 if metadata.exists():
                     environment["TESTER_SOURCE_SHA"] = json.loads(metadata.read_text())["source_commit"]
-                if project != FULL and mode == "deploy" and not LOCAL_SOURCE_MODE:
-                    # The Tester artifact is released by Deployer, while the
-                    # packaged control service still watches approved product
-                    # mains and updates their isolated test deployments.
-                    command = [str(RUNNER), project, target_sha]
+            reports = {}
+            for child_project in projects:
+                target_sha = item.get("target_shas", {}).get(child_project)
+                if child_project == FULL:
+                    target_sha = item.get("target_sha")
+                if mode == "deploy" and child_project != FULL and not target_sha:
+                    try:
+                        target_sha = git_sha(PROJECTS[child_project]["repo"], remote=True)
+                        item.setdefault("target_shas", {})[child_project] = target_sha
+                    except (OSError, ValueError, subprocess.SubprocessError):
+                        return False
+
+                previous = item.get("results", {}).get(child_project)
+                if previous and previous.get("completed"):
+                    reports[child_project] = previous.get("report")
+                    continue
+
+                cooldown_key = "router" if child_project == FULL else child_project
+                eligible = cooldown_until(cooldown_key)
+                if eligible is not None:
+                    item["retry_at"] = eligible
+                    item["deferred_until"] = datetime.fromtimestamp(eligible).astimezone().isoformat(timespec="minutes")
+                    with MUTEX:
+                        save_state(STATE)
+                    return False
+
+                child_id = item["id"] if len(projects) == 1 else hashlib.sha256(
+                    f"{item['id']}:{child_project}".encode()
+                ).hexdigest()[:24]
+                child_env = environment.copy()
+                child_env["TESTER_REQUEST_ID"] = child_id
+                child_env["TESTER_BATCH_ID"] = item["id"]
+                child_env["TESTER_BATCH_PROJECT"] = child_project
+                child_env["TESTER_TRIGGER"] = item["source"]
+                if target_sha:
+                    child_env["TESTER_TARGET_SHA"] = target_sha
+
+                if ARTIFACT_MODE and child_project != FULL and mode == "deploy" and not LOCAL_SOURCE_MODE:
+                    command = [str(RUNNER), child_project, target_sha]
+                elif child_project == FULL and item["source"] == "tester-main":
+                    command = [str(TESTER_MAIN_RUNNER), target_sha]
+                elif ARTIFACT_MODE:
+                    command = [str(FULL_RUNNER)] + ([] if child_project == FULL else [child_project])
+                elif mode == "test":
+                    command = [str(TESTER_MAIN_RUNNER)] + ([] if child_project == FULL else ["--project", child_project])
                 else:
-                    command = [str(FULL_RUNNER)] + ([] if project == FULL else [project])
-            elif project == FULL and item["source"] == "tester-main":
-                command = [str(TESTER_MAIN_RUNNER), item["target_sha"]]
-            elif mode == "test":
-                command = [str(TESTER_MAIN_RUNNER)] + ([] if project == FULL else ["--project", project])
-            else:
-                command = [str(RUNNER), project, target_sha]
-            result = subprocess.run(
-                command,
-                cwd=REPO,
-                env=environment,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                timeout=9700,
-                check=False,
-            )
-        if result.returncode == 75:
-            return False
-        summary = latest_summary(project)
-        published = bool(
-            summary
-            and summary.get("request_id") == item["id"]
-            and (summary.get("tester_sha") == item["target_sha"]
-                 if item["source"] == "tester-main"
-                 else mode == "test" or summary.get("target_sha") == target_sha)
-        )
+                    command = [str(RUNNER), child_project, target_sha]
+
+                result = subprocess.run(
+                    command, cwd=REPO, env=child_env, stdout=log,
+                    stderr=subprocess.STDOUT, timeout=9700, check=False,
+                )
+                if result.returncode == 75:
+                    return False
+
+                summary = latest_summary(child_project)
+                published = bool(
+                    summary and summary.get("request_id") == child_id
+                    and (summary.get("tester_sha") == target_sha
+                         if item["source"] == "tester-main"
+                         else mode == "test" or summary.get("target_sha") == target_sha)
+                )
+                report = None
+                if published:
+                    report = (f"/report/runs/{summary['run']}/index.html" if child_project == FULL
+                              else f"/report/projects/{child_project}/runs/{summary['run']}/index.html")
+                    reports[child_project] = report
+                child_result = summary.get("status") if published and result.returncode == 0 else (
+                    "failed" if published else "deploy_or_runner_failed"
+                )
+                item.setdefault("results", {})[child_project] = {
+                    "completed": True,
+                    "result": child_result,
+                    "target_sha": target_sha,
+                    "report": report,
+                    "finished_at": now(),
+                    "counts": {key: summary.get(key) for key in ("tests", "passed", "failed", "skipped")}
+                    if published else None,
+                }
+                with MUTEX:
+                    save_state(STATE)
+
+        results = item.get("results", {})
+        batch_result = "passed" if all(
+            results.get(name, {}).get("result") == "passed" for name in projects
+        ) else ("failed" if all(
+            results.get(name, {}).get("result") != "deploy_or_runner_failed" for name in projects
+        ) else "deploy_or_runner_failed")
         record = {
             **item,
             "finished_at": now(),
-            "result": summary["status"] if published else "deploy_or_runner_failed",
-            "report": (f"/report/runs/{summary['run']}/index.html" if project == FULL
-                       else f"/report/projects/{project}/runs/{summary['run']}/index.html") if published else None,
+            "result": batch_result,
+            "reports": reports,
+            "report": reports.get(FULL) or (reports.get(projects[0]) if len(projects) == 1 else None),
             "log": str(log_path),
         }
         with MUTEX:
@@ -619,17 +805,30 @@ def worker() -> None:
 def daily_scheduler(schedule: tuple[clock_time, ZoneInfo]) -> None:
     run_at, zone = schedule
     while True:
-        target = next_daily_run(datetime.now(timezone.utc), run_at, zone)
+        with MUTEX:
+            scheduled_date = STATE.get("daily_scheduled_date")
+        target = next_scheduled_daily_run(datetime.now(timezone.utc), run_at, zone, scheduled_date)
         delay = max(1, (target - datetime.now(zone)).total_seconds())
         time.sleep(delay)
-        with MUTEX:
-            item = enqueue(FULL, "daily-schedule")
-        print(f"Tester daily full run queued: {item['id']} for {target.isoformat()}", flush=True)
+        item = enqueue_daily_run(target)
+        if item:
+            print(f"Tester daily full run queued: {item['id']} for {target.isoformat()}", flush=True)
+
+
+def enqueue_daily_run(target: datetime) -> dict | None:
+    scheduled_date = target.date().isoformat()
+    with MUTEX:
+        previous_date = STATE.get("daily_scheduled_date")
+        if previous_date is not None and previous_date >= scheduled_date:
+            return None
+        STATE["daily_scheduled_date"] = scheduled_date
+        return enqueue_batch(None, "daily-schedule", schedule_date=scheduled_date)
 
 
 def overview_payload(include_history: bool = True) -> dict:
     """Use published counts and an allowlist: never expose private runner paths."""
-    fields = {"id", "project", "source", "started_at", "finished_at", "result", "report"}
+    fields = {"id", "project", "projects", "scope", "source", "started_at",
+              "finished_at", "result", "report", "reports", "results"}
     def public_record(item):
         return {key: value for key, value in (item or {}).items() if key in fields}
 
@@ -643,11 +842,14 @@ def overview_payload(include_history: bool = True) -> dict:
         active = (STATE["active"] or {}).get("project")
         projects = {}
         for name in PROJECTS:
-            last = next((item for item in recent if item.get("project") == name), None)
+            last = next((item for item in recent
+                         if item.get("project") == name or name in item.get("projects", [])), None)
             published = latest_summary(name) or {}
             projects[name] = {
                 "status": (last or {}).get("result", published.get("status", "pending")),
-                "busy": name == active or name in pending,
+                "busy": (name == active or name in pending
+                         or name in (STATE["active"] or {}).get("projects", [])
+                         or any(name in item.get("projects", []) for item in STATE["pending"])),
                 "last": last,
             }
     metadata_path = REPO / "release.json"
@@ -948,14 +1150,22 @@ class Handler(BaseHTTPRequestHandler):
         with MUTEX:
             def state_for(project: str, config: dict | None = None) -> dict:
                 busy = None
-                if STATE["active"] and STATE["active"]["project"] == project:
+                active_item = normalize_batch_item(STATE["active"]) if STATE["active"] else None
+                project_active = active_item and (
+                    active_item.get("project") == project or project in active_item.get("projects", [])
+                )
+                pending_items = [item for item in STATE["pending"] if (
+                    item.get("project") == project or project in item.get("projects", [])
+                )]
+                if project_active:
                     busy = ("正在部署或测试" if STATE["active"].get("mode", "deploy") == "deploy"
                             and project != FULL else "正在测试")
-                elif any(item["project"] == project for item in STATE["pending"]):
-                    pending = next(item for item in STATE["pending"] if item["project"] == project)
+                elif pending_items:
+                    pending = pending_items[0]
                     busy = ("已排队，预计重试 " + pending["deferred_until"]
                             if pending.get("deferred_until") else "已排队")
-                last = next((item for item in STATE["recent"] if item["project"] == project), None)
+                last = next((item for item in STATE["recent"]
+                             if item.get("project") == project or project in item.get("projects", [])), None)
                 if last:
                     last = {key: value for key, value in last.items() if key != "log"}
                 result = {"busy": busy, "last": last}
@@ -973,9 +1183,17 @@ class Handler(BaseHTTPRequestHandler):
             def public_task(item: dict | None) -> dict | None:
                 if not item:
                     return None
+                normalize_batch_item(item)
                 return {
+                    "batch_id": item.get("id"),
                     "project": item.get("project"),
+                    "projects": item.get("projects", []),
+                    "scope": item.get("scope"),
+                    "source": item.get("source"),
                     "mode": item.get("mode", "deploy"),
+                    "target_sha": item.get("target_sha"),
+                    "target_shas": item.get("target_shas", {}),
+                    "schedule_date": item.get("schedule_date"),
                     "queued_at": item.get("queued_at"),
                     "deferred_until": item.get("deferred_until"),
                 }
@@ -984,6 +1202,16 @@ class Handler(BaseHTTPRequestHandler):
                 "parallelism": 1,
                 "active": public_task(STATE["active"]),
                 "pending": [public_task(item) for item in STATE["pending"]],
+                "recent": [
+                    {
+                        "batch_id": item.get("id"),
+                        **{key: value for key, value in item.items()
+                           if key in ("id", "project", "projects", "scope", "source", "mode",
+                                      "target_sha", "target_shas", "schedule_date", "queued_at",
+                                      "finished_at", "result", "reports", "results")},
+                    }
+                    for item in STATE["recent"][:12]
+                ],
             }
         self.json_reply(200, {"full": full, "projects": values, "queue": queue})
 
@@ -1130,17 +1358,29 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("请求内容不正确")
             if body.get("mode", "test") != "test":
                 raise ValueError("手动测试仅支持当前环境")
-            if body.get("scope") == "full" and "project" not in body:
-                project = FULL
+            scope = body.get("scope")
+            if scope == "full":
+                if "project" in body or "projects" in body:
+                    raise ValueError("全量测试不能同时指定项目")
+                item = enqueue_batch(None, "manual")
+            elif "projects" in body:
+                selected_projects = body["projects"]
+                if scope != "projects" or not isinstance(selected_projects, list) \
+                        or any(not isinstance(name, str) for name in selected_projects):
+                    raise ValueError("测试项目列表无效")
+                item = enqueue_batch(selected_projects, "manual", mode="test")
             else:
-                project = body["project"]
-            if not isinstance(project, str) or (project != FULL and project not in PROJECTS):
-                raise ValueError("未知项目")
-            if project == FULL and body.get("scope") != "full":
-                raise ValueError("请选择测试范围")
-            with MUTEX:
-                item = enqueue(project, "manual", mode="test")
-            self.json_reply(202, {"id": item["id"], "status": "queued"})
+                if scope not in (None, "projects"):
+                    raise ValueError("测试范围无效")
+                project = body.get("project")
+                if not isinstance(project, str) or project not in PROJECTS:
+                    raise ValueError("未知项目")
+                item = enqueue_batch([project], "manual", mode="test")
+            self.json_reply(202, {
+                "id": item["id"], "batch_id": item["id"],
+                "status": "queued", "scope": item.get("scope"),
+                "projects": item.get("projects", []),
+            })
         except (ValueError, KeyError, json.JSONDecodeError) as error:
             self.json_reply(400, {"error": str(error)})
 

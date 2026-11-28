@@ -171,6 +171,34 @@ class ServiceContractTests(unittest.TestCase):
             self.assertEqual(json.loads(git("show", "v0.2.0:package.json"))["version"], "0.2.0")
             self.assertEqual(git("show", "v0.2.0:scripts/artifact-versions.conf"), "tester-service 7.8.9")
 
+    def test_deployed_project_runs_use_the_packaged_tester_runner(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as folder:
+            tester = Path(folder)
+            scripts = tester / "scripts"
+            scripts.mkdir()
+            helper = scripts / "run-project-tests-after-deploy.sh"
+            shutil.copy2(ROOT / "scripts/run-project-tests-after-deploy.sh", helper)
+            helper.chmod(0o755)
+            for name in ("run-full-on-test-machine.sh", "test-tester-main.sh"):
+                runner = scripts / name
+                runner.write_text(
+                    "#!/usr/bin/env bash\n"
+                    "printf '%s\\n' \"$0\" \"$@\" > \"$TESTER_TEST_DISPATCH_OUTPUT\"\n",
+                    encoding="utf-8",
+                )
+                runner.chmod(0o755)
+
+            for artifact_mode, expected in (
+                ("1", [str(scripts / "run-full-on-test-machine.sh"), "router"]),
+                ("0", [str(scripts / "test-tester-main.sh"), "--project", "router"]),
+            ):
+                output = tester / "dispatch.txt"
+                environment = dict(os.environ, TESTER_ARTIFACT_MODE=artifact_mode,
+                                   TESTER_TEST_DISPATCH_OUTPUT=str(output))
+                subprocess.run([str(helper), "router"], env=environment, check=True)
+                self.assertEqual(output.read_text(encoding="utf-8").splitlines(), expected)
+
     def test_e2e_report_parser_keeps_skips_and_stable_ids(self):
         report = {"suites": [{"title": "root", "specs": [
             {"title": "RT-API-001 fixture", "file": "products/router/tests/x.spec.ts", "line": 2,

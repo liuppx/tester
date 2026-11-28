@@ -76,4 +76,4 @@ done
 
 export CHAT_BASE_URL="http://127.0.0.1:$port"
 export TESTER_PARENT_LOCK_HELD=1 TESTER_TARGET_SHA="$sha"
-"$tester/scripts/test-tester-main.sh" --project chat
+"$tester/scripts/run-project-tests-after-deploy.sh" chat

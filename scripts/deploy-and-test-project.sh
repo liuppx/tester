@@ -93,7 +93,7 @@ if [[ "$deployment" == source ]]; then
         wallet) export WALLET_REPO_PATH="$repo" WALLET_EXTENSION_PATH="$repo" ;;
     esac
     export TESTER_PARENT_LOCK_HELD=1 TESTER_TARGET_SHA="$target_sha"
-    "$tester/scripts/test-tester-main.sh" --project "$project"
+    "$tester/scripts/run-project-tests-after-deploy.sh" "$project"
     exit $?
 fi
 
@@ -122,7 +122,7 @@ if [[ -f "$deployed_file" ]]; then
         export TESTER_PARENT_LOCK_HELD=1
         export TESTER_TARGET_SHA="$target_sha"
         if [[ -n "${deployed_note:-}" ]]; then export TESTER_BUILD_NOTE="$deployed_note"; fi
-        "$tester/scripts/test-tester-main.sh" --project "$project"
+        "$tester/scripts/run-project-tests-after-deploy.sh" "$project"
         exit $?
     fi
 fi
@@ -178,4 +178,4 @@ rm -f "$new_binary"
 
 export TESTER_PARENT_LOCK_HELD=1
 export TESTER_TARGET_SHA="$target_sha"
-"$tester/scripts/test-tester-main.sh" --project "$project"
+"$tester/scripts/run-project-tests-after-deploy.sh" "$project"
